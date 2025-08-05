@@ -88,6 +88,10 @@ export default function AnalysisWorkspace() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [bagNumber, setBagNumber] = useState('');
   const { toast } = useToast();
+  
+  // Manual override states
+  const [manualSize, setManualSize] = useState({});
+  const [manualGender, setManualGender] = useState({});
 
   const onDrop = useCallback(async (acceptedFiles) => {
     setError(null);
@@ -183,10 +187,14 @@ export default function AnalysisWorkspace() {
     setProgress(0);
 
     try {
-      // Create payload with just the base64 data
+      // Create payload with manual overrides
       const payload = {
         images: images.map(img => img.data),
-        bagNumber: bagNumber || `BAG-${Date.now()}`
+        bagNumber: bagNumber || `BAG-${Date.now()}`,
+        manualOverrides: {
+          size: manualSize,
+          gender: manualGender
+        }
       };
 
       // Check payload size
@@ -257,7 +265,7 @@ export default function AnalysisWorkspace() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Analysis Workspace</h1>
+          <h1 className="text-3xl font-bold text-black">Analysis Workspace</h1>
           <p className="text-gray-600 mt-1">Upload images to analyze and create eBay listings</p>
         </div>
         <Badge variant="secondary" className="text-lg px-4 py-2">
@@ -268,7 +276,7 @@ export default function AnalysisWorkspace() {
       {/* Bag Number Input */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-black">
             <Package className="h-5 w-5" />
             Bag Identification
           </CardTitle>
@@ -276,14 +284,14 @@ export default function AnalysisWorkspace() {
         <CardContent>
           <div className="flex gap-4 items-end">
             <div className="flex-1">
-              <Label htmlFor="bagNumber">Bag Number (Optional)</Label>
+              <Label htmlFor="bagNumber" className="text-black">Bag Number (Optional)</Label>
               <input
                 id="bagNumber"
                 type="text"
                 placeholder="e.g., BAG-001, Spring Collection"
                 value={bagNumber}
                 onChange={(e) => setBagNumber(e.target.value)}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
               />
             </div>
           </div>
@@ -339,7 +347,7 @@ export default function AnalysisWorkspace() {
       {images.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Uploaded Images</CardTitle>
+            <CardTitle className="text-black">Uploaded Images</CardTitle>
             <CardDescription>Review your images before analysis</CardDescription>
           </CardHeader>
           <CardContent>
@@ -398,13 +406,13 @@ export default function AnalysisWorkspace() {
       {analysisResults && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-black">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               Analysis Complete
             </CardTitle>
             <CardDescription>
               {analysisResults.items?.length || 0} items analyzed • 
-              Total value: £{analysisResults.totalEstimatedValue || 0} • 
+              Total value: £{analysisResults.summary?.totalEstimatedValue || 0} • 
               Tokens used: {analysisResults.tokensUsed || 0}
             </CardDescription>
           </CardHeader>
@@ -422,57 +430,139 @@ export default function AnalysisWorkspace() {
                 <TabsContent key={index} value={index.toString()} className="space-y-4">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <h3 className="font-semibold mb-3">Item Details</h3>
-                      <div className="space-y-2">
+                      <h3 className="font-semibold mb-3 text-black">Item Details</h3>
+                      <div className="space-y-3">
                         <div>
-                          <Label>Title</Label>
-                          <p className="text-sm text-gray-900">{item.title}</p>
+                          <Label className="text-black">SKU</Label>
+                          <p className="text-sm font-mono bg-gray-100 p-2 rounded text-black">{item.sku}</p>
                         </div>
                         <div>
-                          <Label>eBay Title</Label>
-                          <p className="text-sm text-gray-900">{item.ebayTitle}</p>
+                          <Label className="text-black">Title</Label>
+                          <p className="text-sm text-black">{item.title}</p>
                         </div>
                         <div>
-                          <Label>Brand</Label>
-                          <p className="text-sm text-gray-900">{item.brand}</p>
+                          <Label className="text-black">eBay Title</Label>
+                          <p className="text-sm text-black font-medium">{item.ebayTitle}</p>
+                          <p className="text-xs text-gray-500 mt-1">{item.ebayTitle.length}/80 characters</p>
                         </div>
                         <div>
-                          <Label>Condition</Label>
-                          <Badge variant={item.condition === 'EXCELLENT' ? 'default' : 'secondary'}>
-                            {item.condition}
-                          </Badge>
+                          <Label className="text-black">Brand</Label>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-black font-medium">{item.brand}</p>
+                            <Badge variant={item.brandTier === 'luxury' ? 'default' : 'secondary'}>
+                              {item.brandTier}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              ({Math.round(item.brandConfidence * 100)}% confidence)
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-black">Condition</Label>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={item.condition === 'NEW' ? 'default' : 
+                                          item.condition === 'EXCELLENT' ? 'default' : 'secondary'}>
+                              {item.condition}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              ({Math.round(item.conditionConfidence * 100)}% confidence)
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">{item.conditionDescription}</p>
+                        </div>
+                        <div>
+                          <Label className="text-black">Keywords</Label>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {item.keywords?.slice(0, 5).map((keyword, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {keyword}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
                     
                     <div>
-                      <h3 className="font-semibold mb-3">Pricing & Details</h3>
-                      <div className="space-y-2">
+                      <h3 className="font-semibold mb-3 text-black">Pricing & Manual Overrides</h3>
+                      <div className="space-y-3">
                         <div>
-                          <Label>Suggested Price</Label>
+                          <Label className="text-black">Suggested Price</Label>
                           <p className="text-2xl font-bold text-green-600">£{item.suggestedPrice}</p>
                           <p className="text-sm text-gray-500">
                             Range: £{item.priceRange?.min || 0} - £{item.priceRange?.max || 0}
                           </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Market Demand: {item.aiInsights?.marketDemand}
+                          </p>
                         </div>
+                        
+                        {/* Manual Size Override */}
                         <div>
-                          <Label>Size</Label>
-                          <p className="text-sm text-gray-900">{item.size || 'Not specified'}</p>
+                          <Label htmlFor={`size-${index}`} className="text-black">Size Override</Label>
+                          <Select
+                            value={manualSize[index] || item.size}
+                            onValueChange={(value) => {
+                              setManualSize(prev => ({ ...prev, [index]: value }));
+                            }}
+                          >
+                            <SelectTrigger id={`size-${index}`} className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="XS">XS</SelectItem>
+                              <SelectItem value="S">S</SelectItem>
+                              <SelectItem value="M">M</SelectItem>
+                              <SelectItem value="L">L</SelectItem>
+                              <SelectItem value="XL">XL</SelectItem>
+                              <SelectItem value="XXL">XXL</SelectItem>
+                              <SelectItem value="One Size">One Size</SelectItem>
+                              <SelectItem value="Custom">Custom</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
+                        
+                        {/* Manual Gender Override */}
                         <div>
-                          <Label>Color</Label>
-                          <p className="text-sm text-gray-900">{item.color || 'Multi'}</p>
+                          <Label htmlFor={`gender-${index}`} className="text-black">Gender Override</Label>
+                          <Select
+                            value={manualGender[index] || item.gender}
+                            onValueChange={(value) => {
+                              setManualGender(prev => ({ ...prev, [index]: value }));
+                            }}
+                          >
+                            <SelectTrigger id={`gender-${index}`} className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="womens">Women's</SelectItem>
+                              <SelectItem value="mens">Men's</SelectItem>
+                              <SelectItem value="unisex">Unisex</SelectItem>
+                              <SelectItem value="girls">Girls</SelectItem>
+                              <SelectItem value="boys">Boys</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <Label className="text-black">Color</Label>
+                          <p className="text-sm text-black">{item.color || 'Multi'}</p>
+                        </div>
+                        
+                        <div>
+                          <Label className="text-black">Material</Label>
+                          <p className="text-sm text-black">{item.material || 'Mixed Materials'}</p>
                         </div>
                       </div>
                     </div>
                   </div>
                   
                   <div>
-                    <Label>Description</Label>
+                    <Label className="text-black">Description</Label>
                     <Textarea
                       value={item.description}
                       readOnly
-                      className="min-h-[120px] mt-1"
+                      className="min-h-[120px] mt-1 text-black"
                     />
                   </div>
                   
@@ -489,7 +579,7 @@ export default function AnalysisWorkspace() {
                       }}
                       className="h-4 w-4"
                     />
-                    <Label className="cursor-pointer">Include in eBay listing</Label>
+                    <Label className="cursor-pointer text-black">Include in eBay listing</Label>
                   </div>
                 </TabsContent>
               ))}
