@@ -1,40 +1,17 @@
-import { Inter } from 'next/font/google'
-import { ClerkProvider } from '@clerk/nextjs'
-
-const inter = Inter({ subsets: ['latin'] })
-
-export const metadata = {
-  title: 'Fashion Analyzer Pro - Professional eBay Listing Creator',
-  description: 'AI-powered fashion analysis with professional dashboard, ruler detection, and subscription-based token system',
-}
-
-export default function RootLayout({ children }) {
-  return (
-    <ClerkProvider
-      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-      appearance={{
-        baseTheme: 'light',
-        variables: {
-          colorPrimary: '#2563eb',
-          colorBackground: '#ffffff',
-          colorInputBackground: '#f8fafc',
-          borderRadius: '8px'
-        },
-        elements: {
-          formButtonPrimary: 'bg-blue-600 hover:bg-blue-700 text-white',
-          card: 'shadow-xl border border-gray-200',
-          headerTitle: 'text-blue-900 font-bold',
-          headerSubtitle: 'text-gray-600'
-        }
-      }}
-    >
-      <html lang="en">
-        <body className={inter.className}>
-          <div className="min-h-screen bg-gray-50">
-            {children}
-          </div>
-        </body>
-      </html>
-    </ClerkProvider>
-  )
+// This is a placeholder Stripe route - ready for when you add Stripe
+export async function POST(request) {
+  try {
+    // For now, return a mock response
+    // When you're ready to integrate Stripe, we'll update this
+    return Response.json({
+      message: 'Stripe integration coming soon',
+      status: 'pending_setup'
+    })
+  } catch (error) {
+    console.error('Stripe checkout error:', error)
+    return Response.json(
+      { error: 'Failed to create checkout session' },
+      { status: 500 }
+    )
+  }
 }
