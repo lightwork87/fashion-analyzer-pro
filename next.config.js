@@ -1,43 +1,25 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    appDir: true,
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,POST,PUT,DELETE,OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
+    ]
   },
   images: {
-    domains: [
-      'images.unsplash.com',
-      'via.placeholder.com',
-      'picsum.photos'
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
     ],
-    formats: ['image/webp', 'image/avif'],
   },
-  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-    // Optimize for production
-    if (!dev && !isServer) {
-      config.optimization.splitChunks.cacheGroups = {
-        ...config.optimization.splitChunks.cacheGroups,
-        vendor: {
-          test: /[\\/]node_modules[\\/]/,
-          name: 'vendors',
-          chunks: 'all',
-        },
-      };
-    }
-    
-    return config;
-  },
-  env: {
-    CUSTOM_KEY: 'fashion-analyzer-pro',
-  },
-  poweredByHeader: false,
-  compress: true,
-  generateEtags: true,
-  pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
-  trailingSlash: false,
-  swcMinify: true,
-  compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
-  },
-};
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
