@@ -1,4 +1,4 @@
-// aiIntegration.js - Optimized with parallel processing
+// aiIntegration.js - Fixed with correct Claude model name
 import { getBrandInfo, findBrandInText, brandDatabase } from './brandDatabase';
 import { analyzeCondition } from './conditionAnalyzer';
 import { generateEbayTitle } from './titleGenerator';
@@ -102,7 +102,7 @@ Be accurate and conservative with pricing. If you see Roman numerals, it's likel
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-sonnet-20241022',
+        model: 'claude-3-5-sonnet-20241022',  // FIXED: Correct model name
         max_tokens: 4000,
         messages: [
           {
