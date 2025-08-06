@@ -1,4 +1,4 @@
-// aiIntegration.js - Modified to treat all images as one item
+// aiIntegration.js - Enhanced brand detection
 import { getBrandInfo, findBrandInText, brandDatabase } from './brandDatabase';
 import { analyzeCondition } from './conditionAnalyzer';
 import { generateEbayTitle } from './titleGenerator';
@@ -9,6 +9,40 @@ function cleanBase64(base64String) {
     return '';
   }
   return base64String.replace(/^data:image\/[a-z]+;base64,/, '');
+}
+
+// Clean brand name - remove unwanted punctuation
+function cleanBrandName(brandName) {
+  if (!brandName) return 'Unknown';
+  
+  // Remove unwanted punctuation and clean up
+  let cleaned = brandName
+    .replace(/[,!?']/g, '') // Remove commas, exclamation marks, question marks, apostrophes
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim();
+  
+  // Handle specific brand exceptions
+  const brandExceptions = {
+    'YSL': 'Yves Saint Laurent',
+    'LV': 'Louis Vuitton',
+    'D&G': 'Dolce & Gabbana',
+    'CK': 'Calvin Klein',
+    'A&F': 'Abercrombie & Fitch',
+    'H&M': 'H&M', // Keep as is
+    'M&S': 'Marks & Spencer'
+  };
+  
+  // Check if it matches a known abbreviation
+  const upperCleaned = cleaned.toUpperCase();
+  if (brandExceptions[upperCleaned]) {
+    return brandExceptions[upperCleaned];
+  }
+  
+  // Capitalize properly
+  return cleaned
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 // Analyze image with Google Vision API
@@ -97,6 +131,28 @@ All detected labels: ${allLabels.join(', ')}
 All detected logos: ${allLogos.join(', ')}
 Dominant colors: ${allColors.join(', ')}
 
+CRITICAL BRAND DETECTION RULES:
+1. Look for brand names on labels, tags, logos, buttons, zippers, and hardware
+2. Check neck labels, waist tags, care labels, and brand stamps
+3. Common brand indicators:
+   - Embroidered logos or text
+   - Metal hardware with brand names
+   - Distinctive patterns (Burberry check, LV monogram, Gucci stripes)
+   - Button/zipper engravings
+   - Inside tags and labels
+4. If you see abbreviations, expand them:
+   - YSL = Yves Saint Laurent
+   - LV = Louis Vuitton
+   - CK = Calvin Klein
+   - D&G = Dolce & Gabbana
+5. IMPORTANT: Remove ALL punctuation from brand names (no commas, apostrophes, exclamation marks, question marks)
+6. If multiple potential brands are visible, choose the primary/manufacturer brand
+7. Look for subtle brand indicators:
+   - Signature stitching patterns
+   - Specific button styles
+   - Hardware shapes
+   - Label colors and fonts
+
 IMPORTANT: This is ONE item shown from multiple angles. Analyze all images together to extract:
 - Brand name (check all images for brand tags, labels, logos)
 - Size (check neck labels, waist tags, size tags in all images)
@@ -108,9 +164,10 @@ IMPORTANT: This is ONE item shown from multiple angles. Analyze all images toget
 Please provide a SINGLE analysis combining information from ALL images in JSON format:
 {
   "brand": {
-    "name": "detected brand name or 'Unknown'",
+    "name": "detected brand name with NO punctuation or 'Unknown'",
     "confidence": 0.0 to 1.0,
-    "foundInImage": "which image number showed the brand"
+    "foundInImage": "which image number showed the brand",
+    "brandLocation": "where on item (neck label, waist tag, button, etc)"
   },
   "itemType": "specific item type (e.g., 'T-Shirt', 'Jeans', 'Dress')",
   "condition": {
@@ -135,7 +192,11 @@ Please provide a SINGLE analysis combining information from ALL images in JSON f
   "ebayCategory": "most appropriate eBay category"
 }
 
-Remember: This is ONE item. If you see different information in different images (like size tags), use the most reliable/clear one.`;
+Remember: 
+- This is ONE item. If you see different information in different images (like size tags), use the most reliable/clear one.
+- NEVER include punctuation in the brand name (no commas, apostrophes, !, ?)
+- If you see Roman numerals on minimalist clothing, it's likely OSKA brand
+- Look beyond obvious labels - check buttons, zippers, hardware for brand names`;
 
     // Create content array with all images
     const content = [
@@ -186,12 +247,26 @@ Remember: This is ONE item. If you see different information in different images
     
     // Parse JSON from Claude's response
     try {
-      return JSON.parse(responseContent);
+      const parsed = JSON.parse(responseContent);
+      
+      // Clean the brand name before returning
+      if (parsed.brand && parsed.brand.name) {
+        parsed.brand.name = cleanBrandName(parsed.brand.name);
+      }
+      
+      return parsed;
     } catch (e) {
       // If JSON parsing fails, try to extract JSON from the response
       const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(jsonMatch[0]);
+        
+        // Clean the brand name before returning
+        if (parsed.brand && parsed.brand.name) {
+          parsed.brand.name = cleanBrandName(parsed.brand.name);
+        }
+        
+        return parsed;
       }
       throw new Error('Could not parse Claude response as JSON');
     }
@@ -215,7 +290,7 @@ export async function processBatchImages(imageBase64Array) {
     console.log('Analyzing all images together with Claude AI...');
     const claudeAnalysis = await analyzeFashionItemWithClaude(allVisionData, imageBase64Array);
     
-    // Step 3: Generate eBay title
+    // Step 3: Generate eBay title (will also clean brand name)
     const ebayTitle = generateEbayTitle({
       brand: claudeAnalysis.brand.name,
       itemType: claudeAnalysis.itemType,
@@ -327,6 +402,11 @@ function generateDetailedDescription(analysis, imageCount) {
   
   if (analysis.keyFeatures && analysis.keyFeatures.length > 0) {
     parts.push(`Features: ${analysis.keyFeatures.join(', ')}`);
+  }
+  
+  // Add brand location info if available
+  if (analysis.brand.brandLocation) {
+    parts.push(`Brand verified on: ${analysis.brand.brandLocation}`);
   }
   
   return parts.join('\n');
