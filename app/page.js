@@ -146,7 +146,7 @@ export default function Home() {
             </label>
             
             <p className="mt-4 text-gray-600">
-              Upload up to 24 fashion items at once • Any size images will be automatically compressed
+              Upload multiple photos of the same item • All images will be analyzed as one listing
             </p>
           </div>
           
@@ -185,7 +185,7 @@ export default function Home() {
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">
-                Selected Images ({images.length})
+                Selected Images ({images.length} photos of one item)
               </h2>
               <button
                 onClick={clearAll}
@@ -235,10 +235,10 @@ export default function Home() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Analyzing {images.length} images...
+                  Analyzing {images.length} images as one item...
                 </span>
               ) : (
-                `Analyze ${images.length} Images`
+                `Analyze ${images.length} Images as One Item`
               )}
             </button>
           </div>
@@ -248,67 +248,105 @@ export default function Home() {
         {results && (
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4">
-              Analysis Results - {results.summary.totalItems} Items Found
+              Analysis Results
             </h2>
             
-            {results.items.length > 0 ? (
+            {results.items && results.items.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                  {results.items.map((item, index) => (
-                    <div key={index} className="border rounded-lg p-4 hover:shadow-lg transition-shadow">
-                      <div className="mb-3">
-                        <h3 className="font-semibold text-lg">{item.brand.name} {item.itemType}</h3>
-                        <p className="text-sm text-gray-600">SKU: {item.sku}</p>
-                      </div>
-                      
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Condition:</span>
-                          <span className="font-medium">{item.condition.score}/10</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Size:</span>
-                          <span className="font-medium">{item.size}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Color:</span>
-                          <span className="font-medium">{item.color}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Price Range:</span>
-                          <span className="font-medium text-green-600">£{item.estimatedPrice.min}-{item.estimatedPrice.max}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-                        <p className="font-semibold mb-1">eBay Title:</p>
-                        <p className="break-all">{item.ebayTitle}</p>
-                      </div>
-                      
-                      {item.keyFeatures && item.keyFeatures.length > 0 && (
-                        <div className="mt-3 text-xs">
-                          <p className="font-semibold mb-1">Key Features:</p>
-                          <p className="text-gray-600">{item.keyFeatures.join(', ')}</p>
-                        </div>
-                      )}
+                <div className="border rounded-lg p-6 mb-6">
+                  <div className="mb-4">
+                    <h3 className="font-semibold text-2xl">{results.items[0].brand.name} {results.items[0].itemType}</h3>
+                    <p className="text-sm text-gray-600 mt-1">SKU: {results.items[0].sku}</p>
+                    <p className="text-xs text-gray-500 mt-1">Analyzed from {results.items[0].imageCount} photos</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                    <div className="border-l-4 border-blue-500 pl-3">
+                      <p className="text-sm text-gray-600">Condition</p>
+                      <p className="font-semibold">{results.items[0].condition.score}/10</p>
+                      <p className="text-xs text-gray-600">{results.items[0].condition.description}</p>
                     </div>
-                  ))}
+                    <div className="border-l-4 border-green-500 pl-3">
+                      <p className="text-sm text-gray-600">Size</p>
+                      <p className="font-semibold">{results.items[0].size}</p>
+                    </div>
+                    <div className="border-l-4 border-purple-500 pl-3">
+                      <p className="text-sm text-gray-600">Color</p>
+                      <p className="font-semibold">{results.items[0].color}</p>
+                    </div>
+                    <div className="border-l-4 border-yellow-500 pl-3">
+                      <p className="text-sm text-gray-600">Material</p>
+                      <p className="font-semibold">{results.items[0].material}</p>
+                    </div>
+                    <div className="border-l-4 border-red-500 pl-3">
+                      <p className="text-sm text-gray-600">Gender</p>
+                      <p className="font-semibold">{results.items[0].gender}</p>
+                    </div>
+                    <div className="border-l-4 border-indigo-500 pl-3">
+                      <p className="text-sm text-gray-600">Price Range</p>
+                      <p className="font-semibold text-green-600">£{results.items[0].estimatedPrice.min}-{results.items[0].estimatedPrice.max}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Measurements if available */}
+                  {results.items[0].measurements && Object.keys(results.items[0].measurements).length > 0 && (
+                    <div className="mb-4 p-3 bg-gray-50 rounded">
+                      <p className="font-semibold text-sm mb-2">Measurements:</p>
+                      <div className="flex gap-4">
+                        {results.items[0].measurements.chest && (
+                          <span className="text-sm">Chest: {results.items[0].measurements.chest}</span>
+                        )}
+                        {results.items[0].measurements.length && (
+                          <span className="text-sm">Length: {results.items[0].measurements.length}</span>
+                        )}
+                        {results.items[0].measurements.shoulders && (
+                          <span className="text-sm">Shoulders: {results.items[0].measurements.shoulders}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Condition flaws if any */}
+                  {results.items[0].condition.flaws && results.items[0].condition.flaws.length > 0 && (
+                    <div className="mb-4 p-3 bg-yellow-50 rounded">
+                      <p className="font-semibold text-sm mb-2">Condition Notes:</p>
+                      <ul className="list-disc list-inside text-sm text-yellow-800">
+                        {results.items[0].condition.flaws.map((flaw, idx) => (
+                          <li key={idx}>{flaw}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  <div className="mb-4 p-4 bg-blue-50 rounded">
+                    <p className="font-semibold text-sm mb-2">eBay Title ({results.items[0].ebayTitle.length}/80 chars):</p>
+                    <p className="text-sm font-mono break-all">{results.items[0].ebayTitle}</p>
+                  </div>
+                  
+                  {results.items[0].keyFeatures && results.items[0].keyFeatures.length > 0 && (
+                    <div className="mb-4">
+                      <p className="font-semibold text-sm mb-2">Key Features:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {results.items[0].keyFeatures.map((feature, idx) => (
+                          <span key={idx} className="px-3 py-1 bg-gray-100 text-sm rounded-full">
+                            {feature}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="mt-4 p-4 bg-gray-100 rounded">
+                    <p className="font-semibold text-sm mb-2">Full Description:</p>
+                    <p className="text-sm whitespace-pre-line">{results.items[0].description}</p>
+                  </div>
                 </div>
                 
                 <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-6">
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-3xl font-bold text-blue-600">{results.summary.totalItems}</p>
-                      <p className="text-sm text-gray-600 mt-1">Items Detected</p>
-                    </div>
-                    <div>
-                      <p className="text-3xl font-bold text-green-600">£{results.summary.totalValue}</p>
-                      <p className="text-sm text-gray-600 mt-1">Total Value</p>
-                    </div>
-                    <div>
-                      <p className="text-3xl font-bold text-purple-600">£{results.summary.avgItemValue}</p>
-                      <p className="text-sm text-gray-600 mt-1">Average Value</p>
-                    </div>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-green-600">£{results.summary.avgItemValue}</p>
+                    <p className="text-sm text-gray-600 mt-1">Estimated Value</p>
+                    <p className="text-xs text-gray-500 mt-2">Based on {results.summary.totalImages} analyzed images</p>
                   </div>
                 </div>
               </>
@@ -319,13 +357,13 @@ export default function Home() {
             )}
             
             {results.errors && results.errors.length > 0 && (
-              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm font-semibold text-yellow-800 mb-2">
-                  {results.errors.length} image(s) could not be processed:
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm font-semibold text-red-800 mb-2">
+                  Analysis failed:
                 </p>
-                <ul className="text-xs text-yellow-700 space-y-1">
+                <ul className="text-xs text-red-700 space-y-1">
                   {results.errors.map((err, idx) => (
-                    <li key={idx}>Image {err.imageIndex + 1}: {err.error}</li>
+                    <li key={idx}>{err.error}</li>
                   ))}
                 </ul>
               </div>
