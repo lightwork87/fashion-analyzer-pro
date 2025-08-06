@@ -1,7 +1,7 @@
 // app/api/analyze-combined/route.js
 
 import { NextResponse } from 'next/server';
-import { analyzeItemImages } from './aiIntegration.js';
+import { processBatchImages } from './aiIntegration.js';
 import { generateEbayTitle, generateSearchKeywords } from './titleGenerator.js';
 import { getEbayConditionCode } from './conditionAnalyzer.js';
 
@@ -97,7 +97,7 @@ export async function POST(request) {
         };
         
         // Analyze with AI
-        const aiResult = await analyzeItemImages([images[index]], itemOverrides);
+        const aiResult = await processBatchImages([images[index]], itemOverrides);
         
         if (!aiResult || !aiResult.analysis) {
           throw new Error('AI analysis failed to return results');
