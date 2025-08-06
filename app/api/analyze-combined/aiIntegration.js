@@ -1,7 +1,7 @@
 // AI Integration for Fashion Analyzer Pro
 // Connects to Google Vision API and Claude API for real analysis
 
-import Anthropic from '@anthropic/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
