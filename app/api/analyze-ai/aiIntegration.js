@@ -1,4 +1,4 @@
-// aiIntegration.js - Enhanced size detection
+// aiIntegration.js - Fixed to remove size system indicators
 import { getBrandInfo, findBrandInText, brandDatabase } from './brandDatabase';
 import { analyzeCondition } from './conditionAnalyzer';
 import { generateEbayTitle } from './titleGenerator';
@@ -45,7 +45,7 @@ function cleanBrandName(brandName) {
     .join(' ');
 }
 
-// Standardize size format
+// Standardize size format - FIXED to not add system indicators
 function standardizeSize(sizeInfo) {
   if (!sizeInfo || !sizeInfo.detectedSize || sizeInfo.detectedSize === 'Not Visible') {
     return sizeInfo;
@@ -81,11 +81,7 @@ function standardizeSize(sizeInfo) {
     }
   }
   
-  // Format multi-system sizes (e.g., "M/38/10")
-  if (sizeInfo.sizeSystem && sizeInfo.sizeSystem !== 'Standard') {
-    size = `${size} (${sizeInfo.sizeSystem})`;
-  }
-  
+  // Return clean size without system indicators
   return {
     ...sizeInfo,
     detectedSize: size
@@ -255,7 +251,7 @@ Please provide a SINGLE analysis combining information from ALL images in JSON f
     "flaws": ["list any flaws seen in any image"]
   },
   "sizeInfo": {
-    "detectedSize": "primary size (e.g., 'M', '38', '10')",
+    "detectedSize": "primary size only (e.g., 'M', '38', '10') - NO system labels",
     "sizeSystem": "UK/US/EU/IT/Letter or 'Multi' if multiple shown",
     "allSizes": "if multiple systems shown (e.g., 'M/38/10')",
     "sizeLocation": "where size was found (neck label, waist tag, etc)",
@@ -283,6 +279,7 @@ Please provide a SINGLE analysis combining information from ALL images in JSON f
 Remember: 
 - This is ONE item. Use the clearest size tag if multiple images show size
 - NEVER include punctuation in the brand name
+- For detectedSize, return ONLY the size value (S, M, L, 38, 10, etc) without any system indicators
 - If measurements are shown with ruler/tape measure, note exact measurements
 - Report the most complete size information available across all images`;
 
