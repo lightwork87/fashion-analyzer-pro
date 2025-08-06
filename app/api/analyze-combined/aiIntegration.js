@@ -354,4 +354,4 @@ export function validateAPIConfiguration() {
     isValid: errors.length === 0,
     errors: errors
   };
-}
+}export { analyzeItemImages };
