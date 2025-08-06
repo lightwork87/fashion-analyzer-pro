@@ -1,4 +1,4 @@
-// aiIntegration.js - Enhanced brand detection
+// aiIntegration.js - Enhanced size detection
 import { getBrandInfo, findBrandInText, brandDatabase } from './brandDatabase';
 import { analyzeCondition } from './conditionAnalyzer';
 import { generateEbayTitle } from './titleGenerator';
@@ -43,6 +43,53 @@ function cleanBrandName(brandName) {
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
+}
+
+// Standardize size format
+function standardizeSize(sizeInfo) {
+  if (!sizeInfo || !sizeInfo.detectedSize || sizeInfo.detectedSize === 'Not Visible') {
+    return sizeInfo;
+  }
+  
+  let size = sizeInfo.detectedSize.toUpperCase().trim();
+  
+  // Common size standardizations
+  const sizeMap = {
+    'EXTRA SMALL': 'XS',
+    'XSMALL': 'XS',
+    'X-SMALL': 'XS',
+    'SMALL': 'S',
+    'MEDIUM': 'M',
+    'MED': 'M',
+    'LARGE': 'L',
+    'LRG': 'L',
+    'LGE': 'L',
+    'EXTRA LARGE': 'XL',
+    'XLARGE': 'XL',
+    'X-LARGE': 'XL',
+    'XX-LARGE': 'XXL',
+    'XXLARGE': 'XXL',
+    '2XL': 'XXL',
+    '3XL': 'XXXL',
+    '4XL': 'XXXXL'
+  };
+  
+  // Check if it's a word size that needs conversion
+  for (const [key, value] of Object.entries(sizeMap)) {
+    if (size.includes(key)) {
+      size = size.replace(key, value);
+    }
+  }
+  
+  // Format multi-system sizes (e.g., "M/38/10")
+  if (sizeInfo.sizeSystem && sizeInfo.sizeSystem !== 'Standard') {
+    size = `${size} (${sizeInfo.sizeSystem})`;
+  }
+  
+  return {
+    ...sizeInfo,
+    detectedSize: size
+  };
 }
 
 // Analyze image with Google Vision API
@@ -153,12 +200,44 @@ CRITICAL BRAND DETECTION RULES:
    - Hardware shapes
    - Label colors and fonts
 
+CRITICAL SIZE DETECTION RULES:
+1. Look for size tags in ALL typical locations:
+   - Neck labels (back of neck)
+   - Side seam tags
+   - Waistband tags (for bottoms)
+   - Care label tags
+   - Separate size tags
+2. Understand different sizing systems:
+   - Letter sizes: XS, S, M, L, XL, XXL, XXXL
+   - UK sizes: 6, 8, 10, 12, 14, 16, 18, 20
+   - US sizes: 0, 2, 4, 6, 8, 10, 12, 14
+   - EU sizes: 34, 36, 38, 40, 42, 44, 46, 48
+   - IT sizes: 38, 40, 42, 44, 46, 48, 50
+   - FR sizes: 34, 36, 38, 40, 42, 44
+   - Men's chest: 34", 36", 38", 40", 42", 44"
+   - Men's waist: 28", 30", 32", 34", 36", 38"
+3. If you see multiple sizing systems on one tag (e.g., "M/38/10"), report all
+4. Look for size indicators in text like:
+   - "Size M", "Taille 38", "Taglia 42", "Größe 40"
+   - Chest/bust measurements
+   - Length indicators (Regular, Long, Short)
+5. If you see a ruler or tape measure in any image:
+   - Note which measurements are visible
+   - Record the actual measurements shown
+   - This indicates seller provides exact measurements
+6. Common size locations by item type:
+   - Shirts/tops: Back neck label
+   - Pants/jeans: Back waistband
+   - Dresses: Side seam or back neck
+   - Outerwear: Inside left chest
+   - Shoes: Inside tongue or insole
+
 IMPORTANT: This is ONE item shown from multiple angles. Analyze all images together to extract:
 - Brand name (check all images for brand tags, labels, logos)
-- Size (check neck labels, waist tags, size tags in all images)
+- Size (check ALL possible locations across all images)
 - Condition (assess from all angles)
 - Material (check care labels in any image)
-- Measurements if visible
+- Measurements if ruler/tape measure visible
 - Any flaws or defects visible in any image
 
 Please provide a SINGLE analysis combining information from ALL images in JSON format:
@@ -175,7 +254,13 @@ Please provide a SINGLE analysis combining information from ALL images in JSON f
     "description": "brief condition description",
     "flaws": ["list any flaws seen in any image"]
   },
-  "size": "detected size or 'Not Visible'",
+  "sizeInfo": {
+    "detectedSize": "primary size (e.g., 'M', '38', '10')",
+    "sizeSystem": "UK/US/EU/IT/Letter or 'Multi' if multiple shown",
+    "allSizes": "if multiple systems shown (e.g., 'M/38/10')",
+    "sizeLocation": "where size was found (neck label, waist tag, etc)",
+    "foundInImage": "which image number showed the size"
+  },
   "color": "primary color(s)",
   "material": "detected material or 'Not Specified'",
   "gender": "Men's/Women's/Unisex",
@@ -185,18 +270,21 @@ Please provide a SINGLE analysis combining information from ALL images in JSON f
   },
   "keyFeatures": ["list", "of", "notable", "features", "from", "all", "images"],
   "measurements": {
-    "chest": "if visible",
-    "length": "if visible",
-    "shoulders": "if visible"
+    "chest": "if visible with ruler/tape",
+    "length": "if visible with ruler/tape",
+    "shoulders": "if visible with ruler/tape",
+    "waist": "if visible with ruler/tape",
+    "inseam": "if visible with ruler/tape",
+    "hasRuler": true/false
   },
   "ebayCategory": "most appropriate eBay category"
 }
 
 Remember: 
-- This is ONE item. If you see different information in different images (like size tags), use the most reliable/clear one.
-- NEVER include punctuation in the brand name (no commas, apostrophes, !, ?)
-- If you see Roman numerals on minimalist clothing, it's likely OSKA brand
-- Look beyond obvious labels - check buttons, zippers, hardware for brand names`;
+- This is ONE item. Use the clearest size tag if multiple images show size
+- NEVER include punctuation in the brand name
+- If measurements are shown with ruler/tape measure, note exact measurements
+- Report the most complete size information available across all images`;
 
     // Create content array with all images
     const content = [
@@ -254,6 +342,22 @@ Remember:
         parsed.brand.name = cleanBrandName(parsed.brand.name);
       }
       
+      // Handle old format for backward compatibility
+      if (parsed.size && !parsed.sizeInfo) {
+        parsed.sizeInfo = {
+          detectedSize: parsed.size,
+          sizeSystem: 'Standard',
+          allSizes: parsed.size,
+          sizeLocation: 'Not specified',
+          foundInImage: 'Not specified'
+        };
+      }
+      
+      // Standardize the size format
+      if (parsed.sizeInfo) {
+        parsed.sizeInfo = standardizeSize(parsed.sizeInfo);
+      }
+      
       return parsed;
     } catch (e) {
       // If JSON parsing fails, try to extract JSON from the response
@@ -264,6 +368,22 @@ Remember:
         // Clean the brand name before returning
         if (parsed.brand && parsed.brand.name) {
           parsed.brand.name = cleanBrandName(parsed.brand.name);
+        }
+        
+        // Handle old format for backward compatibility
+        if (parsed.size && !parsed.sizeInfo) {
+          parsed.sizeInfo = {
+            detectedSize: parsed.size,
+            sizeSystem: 'Standard',
+            allSizes: parsed.size,
+            sizeLocation: 'Not specified',
+            foundInImage: 'Not specified'
+          };
+        }
+        
+        // Standardize the size format
+        if (parsed.sizeInfo) {
+          parsed.sizeInfo = standardizeSize(parsed.sizeInfo);
         }
         
         return parsed;
@@ -290,11 +410,14 @@ export async function processBatchImages(imageBase64Array) {
     console.log('Analyzing all images together with Claude AI...');
     const claudeAnalysis = await analyzeFashionItemWithClaude(allVisionData, imageBase64Array);
     
+    // Extract size from new format
+    const size = claudeAnalysis.sizeInfo?.detectedSize || claudeAnalysis.size || 'Not Visible';
+    
     // Step 3: Generate eBay title (will also clean brand name)
     const ebayTitle = generateEbayTitle({
       brand: claudeAnalysis.brand.name,
       itemType: claudeAnalysis.itemType,
-      size: claudeAnalysis.size,
+      size: size,
       color: claudeAnalysis.color,
       gender: claudeAnalysis.gender,
       keyFeatures: claudeAnalysis.keyFeatures
@@ -306,17 +429,28 @@ export async function processBatchImages(imageBase64Array) {
     // Step 5: Generate description with all details
     const description = generateDetailedDescription(claudeAnalysis, imageBase64Array.length);
     
+    // Apply measurement-based pricing boost
+    let priceBoost = 1;
+    if (claudeAnalysis.measurements && claudeAnalysis.measurements.hasRuler) {
+      priceBoost = 1.35; // 35% boost for items with measurements
+      console.log('Applying 35% price boost for measured item');
+    }
+    
     // Create single result
     const item = {
       imageCount: imageBase64Array.length,
       brand: claudeAnalysis.brand,
       itemType: claudeAnalysis.itemType,
       condition: claudeAnalysis.condition,
-      size: claudeAnalysis.size,
+      size: size, // Keep simple size for compatibility
+      sizeInfo: claudeAnalysis.sizeInfo, // New detailed size info
       color: claudeAnalysis.color,
       material: claudeAnalysis.material,
       gender: claudeAnalysis.gender,
-      estimatedPrice: claudeAnalysis.estimatedPrice,
+      estimatedPrice: {
+        min: Math.round(claudeAnalysis.estimatedPrice.min * priceBoost),
+        max: Math.round(claudeAnalysis.estimatedPrice.max * priceBoost)
+      },
       keyFeatures: claudeAnalysis.keyFeatures,
       measurements: claudeAnalysis.measurements || {},
       ebayCategory: claudeAnalysis.ebayCategory,
@@ -375,7 +509,18 @@ function generateDetailedDescription(analysis, imageCount) {
   parts.push(`${analysis.brand.name} ${analysis.itemType}`);
   parts.push(`${imageCount} photos showing all angles`);
   
-  if (analysis.size !== 'Not Visible') {
+  // Enhanced size information
+  if (analysis.sizeInfo && analysis.sizeInfo.detectedSize !== 'Not Visible') {
+    if (analysis.sizeInfo.allSizes && analysis.sizeInfo.allSizes !== analysis.sizeInfo.detectedSize) {
+      parts.push(`Size: ${analysis.sizeInfo.allSizes}`);
+    } else {
+      parts.push(`Size: ${analysis.sizeInfo.detectedSize}`);
+    }
+    
+    if (analysis.sizeInfo.sizeLocation && analysis.sizeInfo.sizeLocation !== 'Not specified') {
+      parts.push(`Size tag location: ${analysis.sizeInfo.sizeLocation}`);
+    }
+  } else if (analysis.size && analysis.size !== 'Not Visible') {
     parts.push(`Size: ${analysis.size}`);
   }
   
@@ -395,8 +540,14 @@ function generateDetailedDescription(analysis, imageCount) {
     if (analysis.measurements.chest) measurements.push(`Chest: ${analysis.measurements.chest}`);
     if (analysis.measurements.length) measurements.push(`Length: ${analysis.measurements.length}`);
     if (analysis.measurements.shoulders) measurements.push(`Shoulders: ${analysis.measurements.shoulders}`);
+    if (analysis.measurements.waist) measurements.push(`Waist: ${analysis.measurements.waist}`);
+    if (analysis.measurements.inseam) measurements.push(`Inseam: ${analysis.measurements.inseam}`);
+    
     if (measurements.length > 0) {
       parts.push(`Measurements: ${measurements.join(', ')}`);
+      if (analysis.measurements.hasRuler) {
+        parts.push(`Exact measurements provided with ruler`);
+      }
     }
   }
   
