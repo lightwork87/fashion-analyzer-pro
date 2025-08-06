@@ -13,6 +13,7 @@
     "clean": "rm -rf .next node_modules/.cache"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.58.0",
     "@clerk/nextjs": "^5.7.5",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-label": "^2.1.7",

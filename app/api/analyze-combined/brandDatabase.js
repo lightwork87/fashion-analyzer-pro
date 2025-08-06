@@ -1,147 +1,555 @@
-// Comprehensive brand database with variations and categories
-export const brandDatabase = {
-  // Luxury Fashion
+// app/api/analyze-combined/brandDatabase.js
+
+/**
+ * Comprehensive Fashion Brand Database
+ * Includes brand tiers, variations, and market values
+ */
+
+// Brand database with tiers and variations
+export const BRAND_DATABASE = {
+  // LUXURY TIER - £500+ retail
   luxury: {
-    'GUCCI': ['GUCCI', 'GG', 'GG MARMONT', 'GUCCI ITALY', 'GUCCIO GUCCI'],
-    'LOUIS VUITTON': ['LOUIS VUITTON', 'LV', 'VUITTON', 'LOUIS V', 'LOUIS VUITTON PARIS'],
-    'CHANEL': ['CHANEL', 'CC', 'COCO CHANEL', 'CHANEL PARIS', 'GABRIELLE CHANEL'],
-    'PRADA': ['PRADA', 'PRADA MILANO', 'PRADA ITALY', 'PRADA SPORT', 'LINEA ROSSA'],
-    'HERMES': ['HERMES', 'HERMÈS', 'HERMES PARIS', 'HERMES FRANCE', 'H HERMES'],
-    'DIOR': ['DIOR', 'CHRISTIAN DIOR', 'CD', 'DIOR HOMME', 'BABY DIOR', 'DIOR PARIS'],
-    'VERSACE': ['VERSACE', 'GIANNI VERSACE', 'VERSACE JEANS', 'VERSUS VERSACE', 'VERSACE COLLECTION'],
-    'BURBERRY': ['BURBERRY', 'BURBERRY LONDON', 'BURBERRY BRIT', 'BURBERRYS', 'BURBERRY PRORSUM'],
-    'BALENCIAGA': ['BALENCIAGA', 'BALENCIAGA PARIS', 'BALENCIAGA BB'],
-    'SAINT LAURENT': ['SAINT LAURENT', 'YSL', 'YVES SAINT LAURENT', 'SAINT LAURENT PARIS', 'RIVE GAUCHE'],
-    'VALENTINO': ['VALENTINO', 'VALENTINO GARAVANI', 'VALENTINO ROMA', 'RED VALENTINO', 'MARIO VALENTINO'],
-    'GIVENCHY': ['GIVENCHY', 'GIVENCHY PARIS', 'GIVENCHY COUTURE'],
-    'FENDI': ['FENDI', 'FENDI ROMA', 'FENDI ITALY', 'FF', 'FENDI ZUCCA'],
-    'BOTTEGA VENETA': ['BOTTEGA VENETA', 'BOTTEGA', 'BV', 'BOTTEGA V'],
-    'CELINE': ['CELINE', 'CÉLINE', 'CELINE PARIS', 'OLD CELINE'],
-    'LOEWE': ['LOEWE', 'LOEWE MADRID', 'LOEWE SPAIN'],
-    'MCM': ['MCM', 'MCM WORLDWIDE', 'MCM MÜNCHEN', 'MODE CREATION MUNICH'],
-    'COACH': ['COACH', 'COACH NEW YORK', 'COACH 1941', 'COACH SIGNATURE'],
-    'MICHAEL KORS': ['MICHAEL KORS', 'MK', 'MICHAEL MICHAEL KORS', 'KORS'],
-    'TORY BURCH': ['TORY BURCH', 'TORY', 'TB', 'TORY SPORT'],
+    'Gucci': {
+      variations: ['GUCCI', 'GG', 'Gucci Made in Italy'],
+      category: ['bags', 'clothing', 'shoes', 'accessories'],
+      priceMultiplier: 1.5
+    },
+    'Louis Vuitton': {
+      variations: ['LV', 'LOUIS VUITTON', 'Louis Vuitton Paris'],
+      category: ['bags', 'clothing', 'accessories'],
+      priceMultiplier: 1.8
+    },
+    'Chanel': {
+      variations: ['CHANEL', 'CC', 'Chanel Paris'],
+      category: ['bags', 'clothing', 'jewelry', 'accessories'],
+      priceMultiplier: 2.0
+    },
+    'Hermès': {
+      variations: ['HERMÈS', 'HERMES', 'Hermès Paris'],
+      category: ['bags', 'clothing', 'accessories'],
+      priceMultiplier: 2.5
+    },
+    'Prada': {
+      variations: ['PRADA', 'Prada Milano'],
+      category: ['bags', 'clothing', 'shoes'],
+      priceMultiplier: 1.4
+    },
+    'Dior': {
+      variations: ['DIOR', 'Christian Dior', 'CD'],
+      category: ['bags', 'clothing', 'accessories'],
+      priceMultiplier: 1.6
+    },
+    'Saint Laurent': {
+      variations: ['YSL', 'SAINT LAURENT', 'Yves Saint Laurent'],
+      category: ['bags', 'clothing', 'shoes'],
+      priceMultiplier: 1.5
+    },
+    'Balenciaga': {
+      variations: ['BALENCIAGA', 'Balenciaga Paris'],
+      category: ['clothing', 'shoes', 'bags'],
+      priceMultiplier: 1.4
+    },
+    'Bottega Veneta': {
+      variations: ['BOTTEGA VENETA', 'BV'],
+      category: ['bags', 'clothing', 'shoes'],
+      priceMultiplier: 1.5
+    },
+    'Burberry': {
+      variations: ['BURBERRY', 'Burberry London', 'Burberry Brit'],
+      category: ['clothing', 'bags', 'accessories'],
+      priceMultiplier: 1.3
+    },
+    'Versace': {
+      variations: ['VERSACE', 'Versus Versace', 'Gianni Versace'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 1.3
+    },
+    'Fendi': {
+      variations: ['FENDI', 'FF', 'Fendi Roma'],
+      category: ['bags', 'clothing', 'accessories'],
+      priceMultiplier: 1.4
+    },
+    'Givenchy': {
+      variations: ['GIVENCHY', 'Givenchy Paris'],
+      category: ['clothing', 'bags', 'shoes'],
+      priceMultiplier: 1.4
+    },
+    'Valentino': {
+      variations: ['VALENTINO', 'Valentino Garavani', 'V'],
+      category: ['clothing', 'bags', 'shoes'],
+      priceMultiplier: 1.4
+    },
+    'Celine': {
+      variations: ['CELINE', 'CÉLINE', 'Celine Paris'],
+      category: ['bags', 'clothing', 'accessories'],
+      priceMultiplier: 1.5
+    },
+    'Loewe': {
+      variations: ['LOEWE', 'Loewe Madrid'],
+      category: ['bags', 'clothing'],
+      priceMultiplier: 1.4
+    },
+    'Alexander McQueen': {
+      variations: ['ALEXANDER MCQUEEN', 'McQueen', 'AMQ'],
+      category: ['clothing', 'shoes', 'accessories'],
+      priceMultiplier: 1.3
+    },
+    'Dolce & Gabbana': {
+      variations: ['DOLCE & GABBANA', 'D&G', 'Dolce Gabbana'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 1.3
+    },
+    'Tom Ford': {
+      variations: ['TOM FORD', 'TF'],
+      category: ['clothing', 'accessories', 'eyewear'],
+      priceMultiplier: 1.5
+    },
+    'Moncler': {
+      variations: ['MONCLER', 'Moncler Genius'],
+      category: ['outerwear', 'clothing'],
+      priceMultiplier: 1.4
+    }
   },
   
-  // Designer/Premium
+  // DESIGNER TIER - £150-500 retail
   designer: {
-    'MOSCHINO': ['MOSCHINO', 'LOVE MOSCHINO', 'MOSCHINO COUTURE', 'MOSCHINO JEANS'],
-    'DOLCE & GABBANA': ['DOLCE & GABBANA', 'D&G', 'DOLCE&GABBANA', 'DOLCE GABBANA'],
-    'ARMANI': ['ARMANI', 'GIORGIO ARMANI', 'EMPORIO ARMANI', 'ARMANI EXCHANGE', 'ARMANI JEANS'],
-    'MARC JACOBS': ['MARC JACOBS', 'MARC BY MARC JACOBS', 'MJ', 'THE MARC JACOBS'],
-    'ALEXANDER MCQUEEN': ['ALEXANDER MCQUEEN', 'MCQUEEN', 'AMQ', 'ALEXANDER MC QUEEN'],
-    'STELLA MCCARTNEY': ['STELLA MCCARTNEY', 'STELLA', 'STELLA MC CARTNEY'],
-    'KENZO': ['KENZO', 'KENZO PARIS', 'KENZO TIGER', 'KENZO EYE'],
-    'DSQUARED2': ['DSQUARED2', 'DSQUARED', 'D2', 'DSQUARED²'],
-    'OFF-WHITE': ['OFF-WHITE', 'OFF WHITE', 'OFF-WHITE C/O VIRGIL ABLOH', 'OFFWHITE'],
-    'PALM ANGELS': ['PALM ANGELS', 'PALM ANGELS MILANO'],
-    'BALMAIN': ['BALMAIN', 'BALMAIN PARIS', 'PIERRE BALMAIN'],
-    'ISABEL MARANT': ['ISABEL MARANT', 'ISABEL MARANT ÉTOILE', 'IM', 'MARANT'],
-    'ACNE STUDIOS': ['ACNE STUDIOS', 'ACNE', 'ACNE JEANS'],
-    'GANNI': ['GANNI', 'GANNI COPENHAGEN'],
-    'ZIMMERMANN': ['ZIMMERMANN', 'ZIMMERMANN AUSTRALIA'],
+    'Ralph Lauren': {
+      variations: ['RALPH LAUREN', 'Polo Ralph Lauren', 'RRL', 'Purple Label', 'RL'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 1.1
+    },
+    'Hugo Boss': {
+      variations: ['HUGO BOSS', 'BOSS', 'HUGO', 'Boss Orange'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 1.0
+    },
+    'Armani': {
+      variations: ['ARMANI', 'Giorgio Armani', 'Emporio Armani', 'Armani Exchange', 'EA7'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 1.1
+    },
+    'Michael Kors': {
+      variations: ['MICHAEL KORS', 'MK', 'Michael Michael Kors', 'MICHAEL'],
+      category: ['bags', 'clothing', 'accessories'],
+      priceMultiplier: 0.9
+    },
+    'Coach': {
+      variations: ['COACH', 'Coach New York', 'Coach 1941'],
+      category: ['bags', 'accessories'],
+      priceMultiplier: 1.0
+    },
+    'Marc Jacobs': {
+      variations: ['MARC JACOBS', 'Marc by Marc Jacobs', 'MJ'],
+      category: ['bags', 'clothing', 'accessories'],
+      priceMultiplier: 1.0
+    },
+    'Tory Burch': {
+      variations: ['TORY BURCH', 'TB'],
+      category: ['bags', 'clothing', 'shoes'],
+      priceMultiplier: 0.9
+    },
+    'Kate Spade': {
+      variations: ['KATE SPADE', 'Kate Spade New York', 'KSNY'],
+      category: ['bags', 'accessories', 'clothing'],
+      priceMultiplier: 0.9
+    },
+    'Tommy Hilfiger': {
+      variations: ['TOMMY HILFIGER', 'Tommy Jeans', 'Hilfiger', 'TH'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.8
+    },
+    'Calvin Klein': {
+      variations: ['CALVIN KLEIN', 'CK', 'Calvin Klein Jeans', 'CK Calvin Klein'],
+      category: ['clothing', 'underwear', 'accessories'],
+      priceMultiplier: 0.8
+    },
+    'Diesel': {
+      variations: ['DIESEL', 'Diesel Industry'],
+      category: ['denim', 'clothing'],
+      priceMultiplier: 0.9
+    },
+    'Moschino': {
+      variations: ['MOSCHINO', 'Love Moschino', 'Boutique Moschino'],
+      category: ['clothing', 'bags', 'accessories'],
+      priceMultiplier: 1.0
+    },
+    'Kenzo': {
+      variations: ['KENZO', 'Kenzo Paris'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 1.0
+    },
+    'Paul Smith': {
+      variations: ['PAUL SMITH', 'PS Paul Smith', 'Paul Smith London'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 1.0
+    },
+    'Ted Baker': {
+      variations: ['TED BAKER', 'Ted Baker London', 'TB'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.9
+    },
+    'AllSaints': {
+      variations: ['ALLSAINTS', 'All Saints'],
+      category: ['clothing', 'leather goods'],
+      priceMultiplier: 0.9
+    },
+    'Acne Studios': {
+      variations: ['ACNE STUDIOS', 'ACNE'],
+      category: ['clothing', 'denim'],
+      priceMultiplier: 1.1
+    },
+    'Ganni': {
+      variations: ['GANNI', 'Ganni Copenhagen'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 1.0
+    },
+    'Off-White': {
+      variations: ['OFF-WHITE', 'Off-White c/o Virgil Abloh', 'OFF'],
+      category: ['clothing', 'shoes', 'accessories'],
+      priceMultiplier: 1.2
+    },
+    'Stone Island': {
+      variations: ['STONE ISLAND', 'SI', 'Stone Island Junior'],
+      category: ['clothing', 'outerwear'],
+      priceMultiplier: 1.2
+    }
   },
   
-  // High Street & Contemporary
+  // HIGH STREET TIER - £30-150 retail
   highStreet: {
-    'ZARA': ['ZARA', 'ZARA BASIC', 'ZARA MAN', 'ZARA WOMAN', 'ZARA TRF'],
-    'COS': ['COS', 'COLLECTION OF STYLE', 'COS STORES'],
-    'MASSIMO DUTTI': ['MASSIMO DUTTI', 'MASSIMO', 'MD'],
-    '& OTHER STORIES': ['& OTHER STORIES', 'OTHER STORIES', '&OTHERSTORIES'],
-    'ARKET': ['ARKET', 'ARKET COPENHAGEN'],
-    'MANGO': ['MANGO', 'MNG', 'MANGO MAN', 'MANGO SUIT'],
-    'H&M': ['H&M', 'H & M', 'HENNES & MAURITZ', 'H&M CONSCIOUS'],
-    'UNIQLO': ['UNIQLO', 'UNIQLO U', 'GU'],
-    'TOPSHOP': ['TOPSHOP', 'TOPMAN', 'TOPSHOP UNIQUE'],
-    'URBAN OUTFITTERS': ['URBAN OUTFITTERS', 'UO', 'URBAN'],
-    'FREE PEOPLE': ['FREE PEOPLE', 'FP', 'FREE PEOPLE MOVEMENT'],
-    'ANTHROPOLOGIE': ['ANTHROPOLOGIE', 'ANTHRO'],
-    'REFORMATION': ['REFORMATION', 'REF'],
+    'Zara': {
+      variations: ['ZARA', 'Zara Woman', 'Zara Man', 'Zara Basic'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.6
+    },
+    'COS': {
+      variations: ['COS', 'Collection of Style'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.7
+    },
+    'Massimo Dutti': {
+      variations: ['MASSIMO DUTTI', 'MD'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.7
+    },
+    '& Other Stories': {
+      variations: ['& OTHER STORIES', 'Other Stories', '&OS'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.7
+    },
+    'Arket': {
+      variations: ['ARKET'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.7
+    },
+    'Mango': {
+      variations: ['MANGO', 'MNG', 'Mango Man'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.6
+    },
+    'H&M': {
+      variations: ['H&M', 'H&M Conscious', 'HM', 'Hennes & Mauritz'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.5
+    },
+    'Uniqlo': {
+      variations: ['UNIQLO', 'Uniqlo U'],
+      category: ['clothing', 'basics'],
+      priceMultiplier: 0.6
+    },
+    'Gap': {
+      variations: ['GAP', 'Gap Factory', 'GapKids'],
+      category: ['clothing', 'denim'],
+      priceMultiplier: 0.6
+    },
+    'Banana Republic': {
+      variations: ['BANANA REPUBLIC', 'BR'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.7
+    },
+    'J.Crew': {
+      variations: ['J.CREW', 'JCrew', 'J.Crew Factory'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.7
+    },
+    'Topshop': {
+      variations: ['TOPSHOP', 'Topshop Unique', 'Topshop Boutique'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.6
+    },
+    'Urban Outfitters': {
+      variations: ['URBAN OUTFITTERS', 'UO', 'BDG'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.6
+    },
+    'Anthropologie': {
+      variations: ['ANTHROPOLOGIE', 'Anthro'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.7
+    },
+    'Free People': {
+      variations: ['FREE PEOPLE', 'FP'],
+      category: ['clothing', 'boho'],
+      priceMultiplier: 0.7
+    },
+    'Reiss': {
+      variations: ['REISS', 'Reiss London'],
+      category: ['clothing', 'formalwear'],
+      priceMultiplier: 0.8
+    },
+    'Whistles': {
+      variations: ['WHISTLES'],
+      category: ['clothing', 'accessories'],
+      priceMultiplier: 0.7
+    },
+    'Jigsaw': {
+      variations: ['JIGSAW', 'Jigsaw London'],
+      category: ['clothing', 'knitwear'],
+      priceMultiplier: 0.7
+    }
   },
   
-  // Sportswear & Streetwear
+  // SPORTSWEAR TIER
   sportswear: {
-    'NIKE': ['NIKE', 'NIKE AIR', 'NIKE SB', 'NIKE ACG', 'JORDAN', 'AIR JORDAN'],
-    'ADIDAS': ['ADIDAS', 'ADIDAS ORIGINALS', 'ADIDAS PERFORMANCE', 'Y-3', 'YEEZY'],
-    'PUMA': ['PUMA', 'PUMA SPORT', 'PUMA SELECT'],
-    'REEBOK': ['REEBOK', 'RBK', 'REEBOK CLASSIC'],
-    'NEW BALANCE': ['NEW BALANCE', 'NB', 'NEW BALANCE ATHLETICS'],
-    'UNDER ARMOUR': ['UNDER ARMOUR', 'UA', 'UNDER ARMOR'],
-    'CHAMPION': ['CHAMPION', 'CHAMPION USA', 'CHAMPION REVERSE WEAVE'],
-    'FILA': ['FILA', 'FILA SPORT', 'FILA ITALIA'],
-    'NORTH FACE': ['THE NORTH FACE', 'NORTH FACE', 'TNF'],
-    'PATAGONIA': ['PATAGONIA', 'PATAGONIA OUTDOOR'],
-    'COLUMBIA': ['COLUMBIA', 'COLUMBIA SPORTSWEAR'],
-    'SUPREME': ['SUPREME', 'SUPREME NEW YORK'],
-    'BAPE': ['BAPE', 'A BATHING APE', 'AAPE'],
-    'STONE ISLAND': ['STONE ISLAND', 'SI', 'STONE ISLAND SHADOW'],
-    'STUSSY': ['STUSSY', 'STÜSSY', 'STUSSY WORLDWIDE'],
-  },
-  
-  // Denim Specialists
-  denim: {
-    'LEVIS': ['LEVI\'S', 'LEVIS', 'LEVI STRAUSS', 'LEVI\'S VINTAGE'],
-    'WRANGLER': ['WRANGLER', 'WRANGLER JEANS'],
-    'LEE': ['LEE', 'LEE JEANS', 'LEE RIDERS'],
-    'DIESEL': ['DIESEL', 'DIESEL INDUSTRY', 'DIESEL BLACK GOLD'],
-    'G-STAR': ['G-STAR', 'G-STAR RAW', 'GSTAR'],
-    'REPLAY': ['REPLAY', 'REPLAY JEANS'],
-    'TRUE RELIGION': ['TRUE RELIGION', 'TRUE RELIGION JEANS'],
-    'SEVEN FOR ALL MANKIND': ['7 FOR ALL MANKIND', 'SEVEN FOR ALL MANKIND', '7FAM'],
-    'CITIZENS OF HUMANITY': ['CITIZENS OF HUMANITY', 'COH'],
-    'AG JEANS': ['AG JEANS', 'AG ADRIANO GOLDSCHMIED', 'AG'],
-    'FRAME': ['FRAME', 'FRAME DENIM'],
-    'J BRAND': ['J BRAND', 'JBRAND'],
+    'Nike': {
+      variations: ['NIKE', 'Nike Air', 'Jordan', 'Nike SB', 'ACG'],
+      category: ['sportswear', 'shoes', 'accessories'],
+      priceMultiplier: 0.8
+    },
+    'Adidas': {
+      variations: ['ADIDAS', 'Adidas Originals', 'Y-3', 'Adidas Performance'],
+      category: ['sportswear', 'shoes', 'accessories'],
+      priceMultiplier: 0.8
+    },
+    'Lululemon': {
+      variations: ['LULULEMON', 'Lululemon Athletica', 'lulu'],
+      category: ['activewear', 'yoga'],
+      priceMultiplier: 0.9
+    },
+    'Under Armour': {
+      variations: ['UNDER ARMOUR', 'UA', 'Under Armor'],
+      category: ['sportswear', 'performance'],
+      priceMultiplier: 0.7
+    },
+    'The North Face': {
+      variations: ['THE NORTH FACE', 'TNF', 'North Face'],
+      category: ['outerwear', 'sportswear'],
+      priceMultiplier: 0.9
+    },
+    'Patagonia': {
+      variations: ['PATAGONIA'],
+      category: ['outerwear', 'sportswear'],
+      priceMultiplier: 0.9
+    },
+    'Columbia': {
+      variations: ['COLUMBIA', 'Columbia Sportswear'],
+      category: ['outerwear', 'sportswear'],
+      priceMultiplier: 0.7
+    },
+    'Puma': {
+      variations: ['PUMA', 'Puma Sport'],
+      category: ['sportswear', 'shoes'],
+      priceMultiplier: 0.7
+    },
+    'New Balance': {
+      variations: ['NEW BALANCE', 'NB'],
+      category: ['shoes', 'sportswear'],
+      priceMultiplier: 0.7
+    },
+    'ASICS': {
+      variations: ['ASICS', 'Onitsuka Tiger'],
+      category: ['shoes', 'sportswear'],
+      priceMultiplier: 0.7
+    },
+    'Reebok': {
+      variations: ['REEBOK', 'RBK'],
+      category: ['sportswear', 'shoes'],
+      priceMultiplier: 0.6
+    },
+    'Champion': {
+      variations: ['CHAMPION', 'Champion USA'],
+      category: ['sportswear', 'basics'],
+      priceMultiplier: 0.6
+    },
+    'Fila': {
+      variations: ['FILA', 'Fila Sport'],
+      category: ['sportswear', 'shoes'],
+      priceMultiplier: 0.6
+    },
+    'Gymshark': {
+      variations: ['GYMSHARK', 'Gym Shark'],
+      category: ['activewear', 'fitness'],
+      priceMultiplier: 0.7
+    },
+    'Outdoor Voices': {
+      variations: ['OUTDOOR VOICES', 'OV'],
+      category: ['activewear'],
+      priceMultiplier: 0.8
+    }
   }
 };
 
-// Helper function to detect brand with confidence
+/**
+ * Detect brand from text using fuzzy matching
+ * @param {string} text - Text to search for brands
+ * @returns {object} Detected brand info
+ */
 export function detectBrand(text) {
-  if (!text) return { brand: null, confidence: 0 };
+  if (!text) {
+    return { brand: null, confidence: 0, tier: 'unknown' };
+  }
   
   const upperText = text.toUpperCase();
-  let bestMatch = { brand: null, confidence: 0, category: null };
+  let bestMatch = null;
+  let highestConfidence = 0;
+  let detectedTier = 'unknown';
   
-  // Check each category
-  for (const [category, brands] of Object.entries(brandDatabase)) {
-    for (const [mainBrand, variations] of Object.entries(brands)) {
-      for (const variation of variations) {
-        if (upperText.includes(variation)) {
-          const confidence = variation.length / upperText.length;
-          if (confidence > bestMatch.confidence) {
-            bestMatch = {
-              brand: mainBrand,
-              confidence: Math.min(confidence * 1.5, 1), // Boost confidence, cap at 1
-              category
-            };
+  // Search through all tiers
+  for (const [tier, brands] of Object.entries(BRAND_DATABASE)) {
+    for (const [brandName, brandData] of Object.entries(brands)) {
+      // Check main brand name
+      if (upperText.includes(brandName.toUpperCase())) {
+        const confidence = 0.95;
+        if (confidence > highestConfidence) {
+          highestConfidence = confidence;
+          bestMatch = brandName;
+          detectedTier = tier;
+        }
+      }
+      
+      // Check variations
+      for (const variation of brandData.variations) {
+        if (upperText.includes(variation.toUpperCase())) {
+          const confidence = 0.9;
+          if (confidence > highestConfidence) {
+            highestConfidence = confidence;
+            bestMatch = brandName;
+            detectedTier = tier;
           }
         }
       }
     }
   }
   
-  return bestMatch;
+  // Check for partial matches if no exact match
+  if (!bestMatch) {
+    const words = upperText.split(/\s+/);
+    for (const [tier, brands] of Object.entries(BRAND_DATABASE)) {
+      for (const [brandName, brandData] of Object.entries(brands)) {
+        const brandWords = brandName.toUpperCase().split(/\s+/);
+        const matchingWords = brandWords.filter(word => words.includes(word));
+        
+        if (matchingWords.length >= brandWords.length * 0.5) {
+          const confidence = 0.7 * (matchingWords.length / brandWords.length);
+          if (confidence > highestConfidence) {
+            highestConfidence = confidence;
+            bestMatch = brandName;
+            detectedTier = tier;
+          }
+        }
+      }
+    }
+  }
+  
+  return {
+    brand: bestMatch,
+    confidence: highestConfidence,
+    tier: detectedTier
+  };
 }
 
-// Determine brand tier for pricing
+/**
+ * Get brand tier information
+ * @param {string} brand - Brand name
+ * @returns {string} Brand tier
+ */
 export function getBrandTier(brand) {
-  const brandUpper = brand?.toUpperCase();
+  if (!brand) return 'unknown';
   
-  // Check luxury brands
-  if (brandDatabase.luxury[brandUpper]) return 'luxury';
-  
-  // Check designer brands
-  if (brandDatabase.designer[brandUpper]) return 'designer';
-  
-  // Check high street
-  if (brandDatabase.highStreet[brandUpper]) return 'highStreet';
-  
-  // Check sportswear
-  if (brandDatabase.sportswear[brandUpper]) return 'sportswear';
-  
-  // Check denim
-  if (brandDatabase.denim[brandUpper]) return 'denim';
+  for (const [tier, brands] of Object.entries(BRAND_DATABASE)) {
+    if (brands[brand]) {
+      return tier;
+    }
+    // Check if it's a variation
+    for (const [brandName, brandData] of Object.entries(brands)) {
+      if (brandData.variations.some(v => v.toUpperCase() === brand.toUpperCase())) {
+        return tier;
+      }
+    }
+  }
   
   return 'unknown';
 }
+
+/**
+ * Get brand pricing multiplier
+ * @param {string} brand - Brand name
+ * @returns {number} Price multiplier
+ */
+export function getBrandPriceMultiplier(brand) {
+  if (!brand) return 1.0;
+  
+  for (const [tier, brands] of Object.entries(BRAND_DATABASE)) {
+    if (brands[brand]) {
+      return brands[brand].priceMultiplier || 1.0;
+    }
+  }
+  
+  return 1.0;
+}
+
+/**
+ * Get suggested retail price range for brand
+ * @param {string} brand - Brand name
+ * @param {string} itemType - Type of item
+ * @returns {object} Price range
+ */
+export function getBrandPriceRange(brand, itemType) {
+  const tier = getBrandTier(brand);
+  
+  // Base price ranges by tier and item type
+  const priceRanges = {
+    luxury: {
+      dress: { min: 800, max: 3000 },
+      jacket: { min: 1200, max: 4000 },
+      bag: { min: 1500, max: 8000 },
+      shoes: { min: 600, max: 1500 },
+      default: { min: 500, max: 2000 }
+    },
+    designer: {
+      dress: { min: 200, max: 600 },
+      jacket: { min: 300, max: 800 },
+      bag: { min: 250, max: 600 },
+      shoes: { min: 150, max: 400 },
+      default: { min: 150, max: 500 }
+    },
+    highStreet: {
+      dress: { min: 40, max: 120 },
+      jacket: { min: 60, max: 150 },
+      bag: { min: 30, max: 80 },
+      shoes: { min: 30, max: 80 },
+      default: { min: 30, max: 100 }
+    },
+    sportswear: {
+      jacket: { min: 80, max: 200 },
+      shoes: { min: 60, max: 150 },
+      default: { min: 40, max: 120 }
+    },
+    unknown: {
+      default: { min: 20, max: 80 }
+    }
+  };
+  
+  const tierPrices = priceRanges[tier] || priceRanges.unknown;
+  const itemPrices = tierPrices[itemType] || tierPrices.default;
+  
+  return itemPrices;
+}
+
+export default {
+  BRAND_DATABASE,
+  detectBrand,
+  getBrandTier,
+  getBrandPriceMultiplier,
+  getBrandPriceRange
+};
