@@ -1,3 +1,4 @@
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -6,44 +7,28 @@ import { processBatchImages } from './aiIntegration';
 
 console.log('🔴 Route file loaded!');
 
-// Helper function to compress image
-async function compressImage(base64String, maxSizeKB = 150) {
-  // If we're in Node.js environment, we need to use a different approach
-  try {
-    // For now, let's just check the size and reduce quality if needed
-    const sizeInBytes = (base64String.length * 3) / 4;
-    const sizeInKB = sizeInBytes / 1024;
-    
-    console.log(`Image size: ${sizeInKB.toFixed(2)}KB`);
-    
-    if (sizeInKB <= maxSizeKB) {
-      return base64String;
-    }
-    
-    // For server-side compression, we'll need to resize the image
-    // This is a simple approach - in production you'd use sharp or similar
-    console.log(`Image too large (${sizeInKB.toFixed(2)}KB), needs compression`);
-    
-    // For now, we'll just return the original and rely on client-side compression
-    return base64String;
-  } catch (error) {
-    console.error('Error in compression:', error);
-    return base64String;
-  }
-}
-
 export async function POST(request) {
   console.log('🚀 API Route: /api/analyze-ai called');
   
   try {
-    // IMPORTANT: Handle FormData, not JSON
+    // Log environment status
+    const envStatus = {
+      hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
+      hasGoogleKey: !!process.env.GOOGLE_CLOUD_VISION_API_KEY,
+      anthropicKeyLength: process.env.ANTHROPIC_API_KEY?.length || 0,
+      googleKeyLength: process.env.GOOGLE_CLOUD_VISION_API_KEY?.length || 0
+    };
+    console.log('Environment check:', envStatus);
+    
+    // Check content type
     const contentType = request.headers.get('content-type') || '';
     
     if (!contentType.includes('multipart/form-data')) {
       console.error('❌ Invalid content type:', contentType);
       return NextResponse.json({ 
         error: 'Invalid request',
-        details: 'Expected multipart/form-data' 
+        details: 'Expected multipart/form-data',
+        received: contentType
       }, { status: 400 });
     }
     
@@ -55,47 +40,41 @@ export async function POST(request) {
       if (key.startsWith('image') && value instanceof File) {
         console.log(`📸 Processing image: ${value.name}, size: ${(value.size / 1024 / 1024).toFixed(2)} MB`);
         
-        // Check file size before processing
+        // Check file size
         if (value.size > 5 * 1024 * 1024) {
-          console.warn(`⚠️ Image ${value.name} is larger than 5MB, will need compression`);
-        }
-        
-        // For very large images, we need to resize them first
-        // Let's create a compressed version
-        const bytes = await value.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        let base64 = buffer.toString('base64');
-        
-        // Check base64 size
-        const base64SizeKB = (base64.length * 3) / 4 / 1024;
-        console.log(`Base64 size: ${base64SizeKB.toFixed(2)} KB`);
-        
-        // If image is too large, we need to handle it differently
-        if (base64SizeKB > 4000) { // ~4MB in base64
-          console.error(`❌ Image too large for processing: ${base64SizeKB.toFixed(2)} KB`);
+          console.warn(`⚠️ Image ${value.name} is larger than 5MB`);
           return NextResponse.json({ 
             error: 'Image too large',
-            details: `Image must be under 5MB. Your image is ${(value.size / 1024 / 1024).toFixed(2)} MB. Please resize or compress the image before uploading.`,
-            suggestions: [
-              'Use a photo editor to resize the image to max 2000x2000 pixels',
-              'Save as JPEG with 80% quality',
-              'Use an online image compressor',
-              'Take photos at lower resolution'
-            ]
+            details: `Image must be under 5MB. Your image is ${(value.size / 1024 / 1024).toFixed(2)} MB.`,
+            fileName: value.name,
+            fileSize: value.size
           }, { status: 400 });
         }
         
-        images.push(base64);
+        // Convert to base64
+        try {
+          const bytes = await value.arrayBuffer();
+          const buffer = Buffer.from(bytes);
+          const base64 = buffer.toString('base64');
+          images.push(base64);
+        } catch (bufferError) {
+          console.error('Buffer conversion error:', bufferError);
+          return NextResponse.json({ 
+            error: 'Image processing failed',
+            details: 'Failed to convert image to base64',
+            fileName: value.name
+          }, { status: 500 });
+        }
       }
     }
     
     console.log(`📊 Total images to process: ${images.length}`);
     
     if (images.length === 0) {
-      console.error('❌ No images found in request');
       return NextResponse.json({ 
         error: 'No images uploaded',
-        details: 'No image files were found in the request' 
+        details: 'No image files were found in the request',
+        formDataKeys: Array.from(formData.keys())
       }, { status: 400 });
     }
     
@@ -104,7 +83,7 @@ export async function POST(request) {
       console.error('❌ Missing ANTHROPIC_API_KEY');
       return NextResponse.json({ 
         error: 'Server configuration error',
-        details: 'Anthropic API key is not configured' 
+        details: 'Anthropic API key is not configured in environment variables'
       }, { status: 500 });
     }
     
@@ -112,25 +91,29 @@ export async function POST(request) {
       console.error('❌ Missing GOOGLE_CLOUD_VISION_API_KEY');
       return NextResponse.json({ 
         error: 'Server configuration error',
-        details: 'Google Vision API key is not configured' 
+        details: 'Google Vision API key is not configured in environment variables'
       }, { status: 500 });
     }
     
     console.log('🔄 Starting AI analysis...');
-    console.log('API Keys present:', {
-      anthropic: !!process.env.ANTHROPIC_API_KEY,
-      google: !!process.env.GOOGLE_CLOUD_VISION_API_KEY
-    });
     
     // Process images with AI
-    const results = await processBatchImages(images);
+    let results;
+    try {
+      results = await processBatchImages(images);
+    } catch (aiError) {
+      console.error('❌ AI Processing Error:', aiError);
+      return NextResponse.json({ 
+        error: 'AI analysis failed',
+        details: aiError.message || 'Unknown AI processing error',
+        type: 'AI_PROCESSING_ERROR'
+      }, { status: 500 });
+    }
     
     console.log('✅ Analysis complete');
-    console.log('Results:', JSON.stringify(results, null, 2));
     
-    // Check if we have actual results
+    // Ensure we return a proper response
     if (!results) {
-      console.error('❌ No results returned from processBatchImages');
       return NextResponse.json({
         items: [],
         summary: {
@@ -138,6 +121,7 @@ export async function POST(request) {
           totalValue: 0,
           avgItemValue: 0
         },
+        error: 'No results returned from AI processing',
         tokensUsed: 1
       });
     }
@@ -157,9 +141,8 @@ export async function POST(request) {
       });
     }
     
-    // Ensure we have the expected structure
+    // Ensure proper structure
     if (!results.items || results.items.length === 0) {
-      console.warn('⚠️ No items detected in analysis');
       return NextResponse.json({
         items: [],
         summary: {
@@ -167,6 +150,7 @@ export async function POST(request) {
           totalValue: 0,
           avgItemValue: 0
         },
+        message: 'No items detected in analysis',
         tokensUsed: 1
       });
     }
@@ -175,12 +159,15 @@ export async function POST(request) {
     
   } catch (error) {
     console.error('❌ API Route Error:', error);
+    console.error('Error type:', error.constructor.name);
     console.error('Stack trace:', error.stack);
     
+    // Always return JSON, never plain text
     return NextResponse.json({ 
       error: 'Analysis failed', 
-      details: error.message,
-      type: error.constructor.name
+      details: error.message || 'Unknown error occurred',
+      type: error.constructor.name,
+      timestamp: new Date().toISOString()
     }, { status: 500 });
   }
 }
