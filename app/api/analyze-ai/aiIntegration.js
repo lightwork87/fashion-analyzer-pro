@@ -1,4 +1,4 @@
-// aiIntegration.js - Complete AI integration for Fashion Analyzer Pro
+// aiIntegration.js - Optimized with parallel processing
 import { getBrandInfo, findBrandInText, brandDatabase } from './brandDatabase';
 import { analyzeCondition } from './conditionAnalyzer';
 import { generateEbayTitle } from './titleGenerator';
@@ -8,7 +8,6 @@ function cleanBase64(base64String) {
   if (typeof base64String !== 'string') {
     return '';
   }
-  // Remove data URL prefix if present
   return base64String.replace(/^data:image\/[a-z]+;base64,/, '');
 }
 
@@ -42,7 +41,8 @@ async function analyzeImageWithVision(imageBase64) {
     );
 
     if (!response.ok) {
-      throw new Error(`Vision API error: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Vision API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -102,7 +102,7 @@ Be accurate and conservative with pricing. If you see Roman numerals, it's likel
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',  // Updated model name
+        model: 'claude-3-sonnet-20241022',
         max_tokens: 4000,
         messages: [
           {
@@ -128,7 +128,7 @@ Be accurate and conservative with pricing. If you see Roman numerals, it's likel
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Claude API error: ${response.status} ${errorText}`);
+      throw new Error(`Claude API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -151,62 +151,78 @@ Be accurate and conservative with pricing. If you see Roman numerals, it's likel
   }
 }
 
-// Main processing function
+// Process a single image
+async function processSingleImage(imageBase64, index) {
+  try {
+    console.log(`Processing image ${index + 1}...`);
+    
+    // Step 1: Google Vision API
+    const visionData = await analyzeImageWithVision(imageBase64);
+    
+    // Step 2: Claude AI Analysis
+    const claudeAnalysis = await analyzeFashionWithClaude(visionData, imageBase64);
+    
+    // Step 3: Generate eBay title
+    const ebayTitle = generateEbayTitle({
+      brand: claudeAnalysis.brand.name,
+      itemType: claudeAnalysis.itemType,
+      size: claudeAnalysis.size,
+      color: claudeAnalysis.color,
+      gender: claudeAnalysis.gender,
+      keyFeatures: claudeAnalysis.keyFeatures
+    });
+    
+    // Step 4: Generate SKU
+    const sku = generateSKU(claudeAnalysis.brand.name, claudeAnalysis.itemType);
+    
+    // Step 5: Format final result
+    return {
+      imageIndex: index,
+      brand: claudeAnalysis.brand,
+      itemType: claudeAnalysis.itemType,
+      condition: claudeAnalysis.condition,
+      size: claudeAnalysis.size,
+      color: claudeAnalysis.color,
+      material: claudeAnalysis.material,
+      gender: claudeAnalysis.gender,
+      estimatedPrice: claudeAnalysis.estimatedPrice,
+      keyFeatures: claudeAnalysis.keyFeatures,
+      ebayCategory: claudeAnalysis.ebayCategory,
+      ebayTitle: ebayTitle,
+      sku: sku,
+      description: generateDescription(claudeAnalysis),
+      timestamp: new Date().toISOString()
+    };
+    
+  } catch (error) {
+    console.error(`Error processing image ${index}:`, error);
+    return {
+      imageIndex: index,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// Main processing function - OPTIMIZED FOR SPEED
 export async function processBatchImages(imageBase64Array) {
-  console.log(`Processing ${imageBase64Array.length} images...`);
+  console.log(`Processing ${imageBase64Array.length} images in parallel...`);
   
+  // Process images in batches to avoid overwhelming the APIs
+  const batchSize = 3; // Process 3 images at a time
   const results = [];
   
-  for (let i = 0; i < imageBase64Array.length; i++) {
-    try {
-      console.log(`Analyzing image ${i + 1}/${imageBase64Array.length}`);
-      
-      // Step 1: Google Vision API
-      const visionData = await analyzeImageWithVision(imageBase64Array[i]);
-      
-      // Step 2: Claude AI Analysis
-      const claudeAnalysis = await analyzeFashionWithClaude(visionData, imageBase64Array[i]);
-      
-      // Step 3: Generate eBay title
-      const ebayTitle = generateEbayTitle({
-        brand: claudeAnalysis.brand.name,
-        itemType: claudeAnalysis.itemType,
-        size: claudeAnalysis.size,
-        color: claudeAnalysis.color,
-        gender: claudeAnalysis.gender,
-        keyFeatures: claudeAnalysis.keyFeatures
-      });
-      
-      // Step 4: Generate SKU
-      const sku = generateSKU(claudeAnalysis.brand.name, claudeAnalysis.itemType);
-      
-      // Step 5: Format final result
-      results.push({
-        imageIndex: i,
-        brand: claudeAnalysis.brand,
-        itemType: claudeAnalysis.itemType,
-        condition: claudeAnalysis.condition,
-        size: claudeAnalysis.size,
-        color: claudeAnalysis.color,
-        material: claudeAnalysis.material,
-        gender: claudeAnalysis.gender,
-        estimatedPrice: claudeAnalysis.estimatedPrice,
-        keyFeatures: claudeAnalysis.keyFeatures,
-        ebayCategory: claudeAnalysis.ebayCategory,
-        ebayTitle: ebayTitle,
-        sku: sku,
-        description: generateDescription(claudeAnalysis),
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      console.error(`Error processing image ${i}:`, error);
-      results.push({
-        imageIndex: i,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
-    }
+  for (let i = 0; i < imageBase64Array.length; i += batchSize) {
+    const batch = imageBase64Array.slice(i, i + batchSize);
+    const batchPromises = batch.map((image, batchIndex) => 
+      processSingleImage(image, i + batchIndex)
+    );
+    
+    // Process batch in parallel
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults);
+    
+    console.log(`Completed batch: ${Math.min(i + batchSize, imageBase64Array.length)}/${imageBase64Array.length}`);
   }
   
   // Calculate summary
@@ -229,8 +245,8 @@ export async function processBatchImages(imageBase64Array) {
 
 // Helper function to generate SKU
 function generateSKU(brand, itemType) {
-  const brandCode = brand.substring(0, 3).toUpperCase();
-  const itemCode = itemType.substring(0, 3).toUpperCase();
+  const brandCode = (brand || 'UNK').substring(0, 3).toUpperCase();
+  const itemCode = (itemType || 'ITM').substring(0, 3).toUpperCase();
   const timestamp = Date.now().toString().slice(-6);
   return `${brandCode}-${itemCode}-${timestamp}`;
 }
