@@ -207,7 +207,7 @@ export default function AnalysisWorkspace() {
 
       setProgress(50);
 
-      const response = await fetch('/api/analyze-combined', {
+      const response = await fetch('/api/analyze-ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
