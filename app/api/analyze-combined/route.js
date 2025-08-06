@@ -1,7 +1,7 @@
 // app/api/analyze-combined/route.js
 
 import { NextResponse } from 'next/server';
-import { analyzeItemImages } from './aiIntegration.js';
+import { analyzeItemImages } from './aiIntergration.js';
 import { generateEbayTitle, generateSearchKeywords } from './titleGenerator.js';
 import { getEbayConditionCode } from './conditionAnalyzer.js';
 
