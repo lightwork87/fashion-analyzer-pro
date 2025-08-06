@@ -1,439 +1,186 @@
-// app/api/analyze-combined/route.js
-
-import { NextResponse } from 'next/server';
-import { processBatchImages } from './aiIntegration.js';
-import { generateEbayTitle, generateSearchKeywords } from './titleGenerator.js';
-import { getEbayConditionCode } from './conditionAnalyzer.js';
-
-export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-export async function OPTIONS(request) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
-}
+import { NextResponse } from 'next/server';
+import { processBatchImages } from './aiIntegration';
 
-// Generate unique SKU
-function generateSKU(bagNumber, itemIndex, brand) {
-  const date = new Date();
-  const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
-  const brandPrefix = brand ? brand.substring(0, 3).toUpperCase() : 'ITM';
-  const bag = bagNumber || 'XX';
-  
-  return `${brandPrefix}-${dateStr}-${bag}-${itemIndex + 1}`;
-}
+console.log('🔴 Route file loaded!');
 
-// Format currency
-function formatPrice(amount) {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount);
+// Helper function to compress image
+async function compressImage(base64String, maxSizeKB = 150) {
+  // If we're in Node.js environment, we need to use a different approach
+  try {
+    // For now, let's just check the size and reduce quality if needed
+    const sizeInBytes = (base64String.length * 3) / 4;
+    const sizeInKB = sizeInBytes / 1024;
+    
+    console.log(`Image size: ${sizeInKB.toFixed(2)}KB`);
+    
+    if (sizeInKB <= maxSizeKB) {
+      return base64String;
+    }
+    
+    // For server-side compression, we'll need to resize the image
+    // This is a simple approach - in production you'd use sharp or similar
+    console.log(`Image too large (${sizeInKB.toFixed(2)}KB), needs compression`);
+    
+    // For now, we'll just return the original and rely on client-side compression
+    return base64String;
+  } catch (error) {
+    console.error('Error in compression:', error);
+    return base64String;
+  }
 }
 
 export async function POST(request) {
-  console.log('=== AI-POWERED ANALYSIS ENDPOINT ===');
-  const startTime = Date.now();
+  console.log('🚀 API Route: /api/analyze-ai called');
   
   try {
-    const contentLength = request.headers.get('content-length');
-    console.log('Request size:', contentLength, 'bytes');
+    // IMPORTANT: Handle FormData, not JSON
+    const contentType = request.headers.get('content-type') || '';
     
-    let body;
-    try {
-      body = await request.json();
-      console.log('Body parsed successfully');
-    } catch (parseError) {
-      console.error('JSON Parse Error:', parseError);
-      return NextResponse.json(
-        { error: 'Invalid JSON in request body', details: parseError.message },
-        { status: 400 }
-      );
+    if (!contentType.includes('multipart/form-data')) {
+      console.error('❌ Invalid content type:', contentType);
+      return NextResponse.json({ 
+        error: 'Invalid request',
+        details: 'Expected multipart/form-data' 
+      }, { status: 400 });
     }
     
-    const { images, bagNumber, manualOverrides = {} } = body;
+    const formData = await request.formData();
+    const images = [];
     
-    if (!images || !Array.isArray(images)) {
-      return NextResponse.json(
-        { error: 'No images provided or invalid format' },
-        { status: 400 }
-      );
-    }
-    
-    // Validate API keys
-    if (!process.env.GOOGLE_CLOUD_VISION_API_KEY || !process.env.ANTHROPIC_API_KEY) {
-      console.error('Missing API keys');
-      return NextResponse.json(
-        { error: 'Server configuration error: Missing API keys' },
-        { status: 500 }
-      );
-    }
-    
-    console.log(`Processing ${images.length} images for bag ${bagNumber || 'unknown'}`);
-    
-    // Process images in batches to avoid rate limits
-    const processedItems = [];
-    const errors = [];
-    let totalTokensUsed = 0;
-    
-    // Group images by item (for future batch processing)
-    // For now, treat each image as a separate item
-    for (let index = 0; index < images.length; index++) {
-      try {
-        console.log(`Analyzing item ${index + 1}/${images.length}...`);
+    // Collect all images from form data
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith('image') && value instanceof File) {
+        console.log(`📸 Processing image: ${value.name}, size: ${(value.size / 1024 / 1024).toFixed(2)} MB`);
         
-        // Apply manual overrides for this specific item
-        const itemOverrides = {
-          size: manualOverrides.size?.[index],
-          gender: manualOverrides.gender?.[index]
-        };
-        
-        // Analyze with AI
-        const aiResult = await processBatchImages([images[index]], itemOverrides);
-        
-        if (!aiResult || !aiResult.analysis) {
-          throw new Error('AI analysis failed to return results');
+        // Check file size before processing
+        if (value.size > 5 * 1024 * 1024) {
+          console.warn(`⚠️ Image ${value.name} is larger than 5MB, will need compression`);
         }
         
-        const analysis = aiResult.analysis;
-        totalTokensUsed += aiResult.tokensUsed || 0;
+        // For very large images, we need to resize them first
+        // Let's create a compressed version
+        const bytes = await value.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        let base64 = buffer.toString('base64');
         
-        // Generate eBay-specific data
-        const itemData = {
-          type: analysis.itemType,
-          detectedBrand: analysis.brand,
-          color: analysis.color.primary,
-          size: analysis.size.value,
-          gender: analysis.gender,
-          material: analysis.material.primary,
-          condition: analysis.condition.category,
-          model: analysis.style.category,
-          season: analysis.style.season,
-          style: analysis.style.occasion
-        };
+        // Check base64 size
+        const base64SizeKB = (base64.length * 3) / 4 / 1024;
+        console.log(`Base64 size: ${base64SizeKB.toFixed(2)} KB`);
         
-        // Generate eBay title
-        const ebayTitle = generateEbayTitle(itemData);
+        // If image is too large, we need to handle it differently
+        if (base64SizeKB > 4000) { // ~4MB in base64
+          console.error(`❌ Image too large for processing: ${base64SizeKB.toFixed(2)} KB`);
+          return NextResponse.json({ 
+            error: 'Image too large',
+            details: `Image must be under 5MB. Your image is ${(value.size / 1024 / 1024).toFixed(2)} MB. Please resize or compress the image before uploading.`,
+            suggestions: [
+              'Use a photo editor to resize the image to max 2000x2000 pixels',
+              'Save as JPEG with 80% quality',
+              'Use an online image compressor',
+              'Take photos at lower resolution'
+            ]
+          }, { status: 400 });
+        }
         
-        // Generate SKU
-        const sku = generateSKU(bagNumber, index, analysis.brand.name);
-        
-        // Create listing description
-        const description = generateDescription(analysis);
-        
-        // Build processed item object
-        const processedItem = {
-          id: `item-${Date.now()}-${index}`,
-          sku: sku,
-          
-          // Basic info
-          title: `${analysis.brand.name || 'Fashion'} ${analysis.gender} ${analysis.itemType}`,
-          ebayTitle: ebayTitle,
-          description: description,
-          
-          // Condition
-          condition: analysis.condition.category,
-          conditionCode: getEbayConditionCode(analysis.condition.category),
-          conditionScore: analysis.condition.score,
-          conditionIssues: analysis.condition.issues,
-          conditionPositives: analysis.condition.positives,
-          
-          // Pricing
-          suggestedPrice: analysis.estimatedValue.suggested,
-          priceRange: {
-            min: analysis.estimatedValue.min,
-            max: analysis.estimatedValue.max,
-            average: analysis.estimatedValue.suggested
-          },
-          
-          // Product details
-          brand: analysis.brand.name || 'Unbranded',
-          brandConfidence: analysis.brand.confidence,
-          brandTier: analysis.brand.tier,
-          size: analysis.size.value,
-          sizeSystem: analysis.size.system,
-          sizeConfidence: analysis.size.confidence,
-          gender: analysis.gender,
-          color: {
-            primary: analysis.color.primary,
-            secondary: analysis.color.secondary,
-            pattern: analysis.color.pattern
-          },
-          material: {
-            primary: analysis.material.primary,
-            composition: analysis.material.composition,
-            confidence: analysis.material.confidence
-          },
-          
-          // Style and category
-          category: analysis.ebayCategory,
-          style: analysis.style,
-          features: analysis.features,
-          
-          // Measurements
-          measurements: analysis.measurements,
-          hasMeasurements: analysis.measurements?.detected || false,
-          
-          // Search and keywords
-          keywords: analysis.searchKeywords,
-          searchKeywords: analysis.searchKeywords.join(', '),
-          
-          // Image and AI data
-          imageUrl: images[index].substring(0, 50) + '...',
-          visionData: {
-            textDetected: aiResult.visionData.fullTextAnnotation ? true : false,
-            brandsDetected: aiResult.visionData.logos.map(l => l.description),
-            labelsDetected: aiResult.visionData.labels.slice(0, 5).map(l => l.description)
-          },
-          
-          // Quality metrics
-          aiInsights: {
-            brandConfidence: analysis.brand.confidence,
-            conditionScore: analysis.condition.score / 10,
-            sizeConfidence: analysis.size.confidence,
-            materialConfidence: analysis.material.confidence,
-            measurementsDetected: aiResult.measurementsDetected,
-            overallConfidence: calculateOverallConfidence(analysis)
-          },
-          
-          // Manual overrides tracking
-          manualOverrides: {
-            size: itemOverrides.size || null,
-            gender: itemOverrides.gender || null
-          },
-          
-          // Timestamps
-          analyzedAt: new Date().toISOString()
-        };
-        
-        processedItems.push(processedItem);
-        
-      } catch (itemError) {
-        console.error(`Error processing item ${index + 1}:`, itemError);
-        errors.push({
-          itemIndex: index,
-          error: itemError.message
-        });
+        images.push(base64);
       }
     }
     
-    // Calculate summary statistics
-    const successfulItems = processedItems.filter(item => item.aiInsights.overallConfidence > 0.5);
-    const totalValue = processedItems.reduce((sum, item) => sum + item.suggestedPrice, 0);
-    const avgConditionScore = processedItems.reduce((sum, item) => sum + item.conditionScore, 0) / (processedItems.length || 1);
+    console.log(`📊 Total images to process: ${images.length}`);
     
-    // Processing time
-    const processingTime = (Date.now() - startTime) / 1000;
+    if (images.length === 0) {
+      console.error('❌ No images found in request');
+      return NextResponse.json({ 
+        error: 'No images uploaded',
+        details: 'No image files were found in the request' 
+      }, { status: 400 });
+    }
     
-    const results = {
-      success: true,
-      items: processedItems,
-      errors: errors,
-      summary: {
-        totalItems: images.length,
-        successfulItems: successfulItems.length,
-        failedItems: errors.length,
-        totalEstimatedValue: Math.round(totalValue),
-        averageItemValue: Math.round(totalValue / (processedItems.length || 1)),
-        bagNumber: bagNumber || `BAG-${Date.now()}`,
-        
-        // Brand breakdown
-        brandBreakdown: getBrandBreakdown(processedItems),
-        brandTierBreakdown: getBrandTierBreakdown(processedItems),
-        
-        // Condition breakdown
-        conditionBreakdown: getConditionBreakdown(processedItems),
-        averageConditionScore: Math.round(avgConditionScore * 10) / 10,
-        
-        // Size breakdown
-        sizeBreakdown: getSizeBreakdown(processedItems),
-        
-        // Gender breakdown
-        genderBreakdown: getGenderBreakdown(processedItems),
-        
-        // Quality metrics
-        itemsWithMeasurements: processedItems.filter(item => item.hasMeasurements).length,
-        averageConfidence: Math.round(
-          processedItems.reduce((sum, item) => sum + item.aiInsights.overallConfidence, 0) / (processedItems.length || 1) * 100
-        ) / 100
-      },
-      tokensUsed: totalTokensUsed,
-      processingTime: Math.round(processingTime * 10) / 10,
-      timestamp: new Date().toISOString()
-    };
+    // Check API keys
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('❌ Missing ANTHROPIC_API_KEY');
+      return NextResponse.json({ 
+        error: 'Server configuration error',
+        details: 'Anthropic API key is not configured' 
+      }, { status: 500 });
+    }
     
-    console.log('=== AI ANALYSIS COMPLETE ===');
-    console.log(`Processed ${results.items.length} items in ${results.processingTime}s`);
-    console.log(`Tokens used: ${results.tokensUsed}`);
+    if (!process.env.GOOGLE_CLOUD_VISION_API_KEY) {
+      console.error('❌ Missing GOOGLE_CLOUD_VISION_API_KEY');
+      return NextResponse.json({ 
+        error: 'Server configuration error',
+        details: 'Google Vision API key is not configured' 
+      }, { status: 500 });
+    }
+    
+    console.log('🔄 Starting AI analysis...');
+    console.log('API Keys present:', {
+      anthropic: !!process.env.ANTHROPIC_API_KEY,
+      google: !!process.env.GOOGLE_CLOUD_VISION_API_KEY
+    });
+    
+    // Process images with AI
+    const results = await processBatchImages(images);
+    
+    console.log('✅ Analysis complete');
+    console.log('Results:', JSON.stringify(results, null, 2));
+    
+    // Check if we have actual results
+    if (!results) {
+      console.error('❌ No results returned from processBatchImages');
+      return NextResponse.json({
+        items: [],
+        summary: {
+          totalItems: 0,
+          totalValue: 0,
+          avgItemValue: 0
+        },
+        tokensUsed: 1
+      });
+    }
+    
+    // If results is an array of errors, handle it
+    if (Array.isArray(results) && results.length > 0 && results[0].error) {
+      console.error('❌ Errors in results:', results);
+      return NextResponse.json({
+        items: [],
+        summary: {
+          totalItems: 0,
+          totalValue: 0,
+          avgItemValue: 0
+        },
+        errors: results,
+        tokensUsed: 1
+      });
+    }
+    
+    // Ensure we have the expected structure
+    if (!results.items || results.items.length === 0) {
+      console.warn('⚠️ No items detected in analysis');
+      return NextResponse.json({
+        items: [],
+        summary: {
+          totalItems: 0,
+          totalValue: 0,
+          avgItemValue: 0
+        },
+        tokensUsed: 1
+      });
+    }
     
     return NextResponse.json(results);
     
   } catch (error) {
-    console.error('=== ANALYSIS ERROR ===');
-    console.error('Error:', error);
+    console.error('❌ API Route Error:', error);
+    console.error('Stack trace:', error.stack);
     
-    return NextResponse.json(
-      { 
-        error: 'Analysis failed', 
-        message: error.message,
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-        timestamp: new Date().toISOString()
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      error: 'Analysis failed', 
+      details: error.message,
+      type: error.constructor.name
+    }, { status: 500 });
   }
 }
-
-// Helper functions
-
-function calculateOverallConfidence(analysis) {
-  const weights = {
-    brand: 0.3,
-    size: 0.2,
-    material: 0.2,
-    condition: 0.3
-  };
-  
-  const confidence = 
-    (analysis.brand.confidence * weights.brand) +
-    (analysis.size.confidence * weights.size) +
-    (analysis.material.confidence * weights.material) +
-    ((analysis.condition.score / 10) * weights.condition);
-  
-  return Math.round(confidence * 100) / 100;
-}
-
-function generateDescription(analysis) {
-  const { brand, itemType, color, size, gender, material, condition, style, features, measurements } = analysis;
-  
-  let description = `${brand.name || 'Designer'} ${gender} ${itemType} in ${color.primary}`;
-  
-  if (color.secondary) {
-    description += ` with ${color.secondary} accents`;
-  }
-  
-  description += `.
-
-CONDITION: ${condition.category} (${condition.score}/10)`;
-  
-  if (condition.positives.length > 0) {
-    description += `
-✓ ${condition.positives.join('\n✓ ')}`;
-  }
-  
-  if (condition.issues.length > 0) {
-    description += `
-- ${condition.issues.join('\n- ')}`;
-  }
-  
-  description += `
-
-KEY DETAILS:
-• Brand: ${brand.name || 'High-quality brand'}${brand.tier !== 'unknown' ? ` (${brand.tier})` : ''}
-• Size: ${size.value}${size.system ? ` ${size.system}` : ''}
-• Gender: ${gender}
-• Color: ${color.primary}${color.pattern !== 'solid' ? ` - ${color.pattern}` : ''}
-• Material: ${material.primary}${material.composition ? ` (${material.composition})` : ''}
-• Style: ${style.category} / ${style.occasion}
-• Season: ${style.season}`;
-
-  if (features && features.length > 0) {
-    description += `
-• Features: ${features.join(', ')}`;
-  }
-
-  if (measurements?.detected && measurements?.values) {
-    description += `
-
-MEASUREMENTS (Approximate):`;
-    
-    const measurementMap = {
-      chest: 'Chest/Bust',
-      length: 'Length',
-      shoulders: 'Shoulders',
-      waist: 'Waist',
-      sleeves: 'Sleeve Length',
-      hips: 'Hips',
-      inseam: 'Inseam'
-    };
-    
-    Object.entries(measurements.values).forEach(([key, value]) => {
-      if (value) {
-        description += `
-• ${measurementMap[key] || key}: ${value}cm`;
-      }
-    });
-    
-    description += `
-*Please note: Measurements are approximate. We recommend checking against your own items.*`;
-  }
-
-  description += `
-
-This is an authentic ${brand.name || 'designer'} piece${brand.confidence > 0.8 ? ', verified through AI analysis' : ''}.
-${condition.category === 'NEW' ? 'Brand new with tags - never worn!' : 'Pre-loved item in great condition.'}
-
-All items are carefully inspected, cleaned, and packaged with care.
-Ships within 1 business day with tracking.
-Check our other listings for more ${brand.name || 'designer'} items!
-
-SHOP WITH CONFIDENCE:
-✓ Professional seller with ${Math.floor(Math.random() * 5000 + 1000)} positive reviews
-✓ Fast dispatch & secure packaging
-✓ Authenticity guaranteed
-✓ Returns accepted within 30 days`;
-
-  return description;
-}
-
-function getBrandBreakdown(items) {
-  const brands = {};
-  items.forEach(item => {
-    const brand = item.brand || 'Unbranded';
-    brands[brand] = (brands[brand] || 0) + 1;
-  });
-  return brands;
-}
-
-function getBrandTierBreakdown(items) {
-  const tiers = {};
-  items.forEach(item => {
-    const tier = item.brandTier || 'unknown';
-    tiers[tier] = (tiers[tier] || 0) + 1;
-  });
-  return tiers;
-}
-
-function getConditionBreakdown(items) {
-  const conditions = {};
-  items.forEach(item => {
-    conditions[item.condition] = (conditions[item.condition] || 0) + 1;
-  });
-  return conditions;
-}
-
-function getSizeBreakdown(items) {
-  const sizes = {};
-  items.forEach(item => {
-    const size = item.size || 'Unknown';
-    sizes[size] = (sizes[size] || 0) + 1;
-  });
-  return sizes;
-}
-
-function getGenderBreakdown(items) {
-  const genders = {};
-  items.forEach(item => {
-    const gender = item.gender || 'unisex';
-    genders[gender] = (genders[gender] || 0) + 1;
-  });
-  return genders;
-}// Force rebuild Wed  6 Aug 2025 17:12:20 BST

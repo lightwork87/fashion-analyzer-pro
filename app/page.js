@@ -1,259 +1,302 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useUser, useAuth, SignInButton, SignOutButton } from '@clerk/nextjs';
+import { useState, useCallback } from 'react';
+import { compressMultipleImages } from './utils/imageCompression';
 
-// Dashboard Components
-import AnalysisWorkspace from './components/AnalysisWorkspace';
-import AnalysisHistory from './components/AnalysisHistory';
-import SubscriptionManager from './components/SubscriptionManager';
-import UsageAnalytics from './components/UsageAnalytics';
-import TokenManager from './components/TokenManager';
+export default function Home() {
+  const [images, setImages] = useState([]);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [results, setResults] = useState(null);
+  const [compressionProgress, setCompressionProgress] = useState(null);
+  const [error, setError] = useState(null);
 
-export default function ProfessionalDashboard() {
-  const { isSignedIn, user } = useUser();
-  const { signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState('analyzer');
-  const [userStats, setUserStats] = useState({
-    tokensRemaining: 142,
-    totalTokens: 150,
-    analysesThisMonth: 8,
-    subscriptionTier: 'Professional',
-    subscriptionPrice: '£35',
-    nextBilling: '2025-09-05',
-    totalAnalyses: 234,
-    avgProcessingTime: '8.4s',
-    successRate: '98.2%'
-  });
-
-  // Load user stats when signed in
-  useEffect(() => {
-    if (isSignedIn) {
-      loadUserStats();
+  const handleFileSelect = useCallback(async (e) => {
+    const files = Array.from(e.target.files);
+    
+    if (files.length === 0) return;
+    
+    // Limit to 24 images
+    if (files.length > 24) {
+      setError('Maximum 24 images allowed at once');
+      return;
     }
-  }, [isSignedIn]);
+    
+    setError(null);
+    setCompressionProgress({ current: 0, total: files.length });
+    
+    try {
+      // Compress all images
+      const compressedFiles = await compressMultipleImages(files, (current, total, fileName) => {
+        setCompressionProgress({ current, total, fileName });
+      });
+      
+      // Create preview URLs
+      const imageData = compressedFiles.map(file => ({
+        file,
+        preview: URL.createObjectURL(file),
+        originalSize: files[files.findIndex(f => f.name === file.name)].size,
+        compressedSize: file.size
+      }));
+      
+      setImages(imageData);
+      setCompressionProgress(null);
+    } catch (err) {
+      setError('Failed to process images: ' + err.message);
+      setCompressionProgress(null);
+    }
+  }, []);
 
-  const loadUserStats = async () => {
-    // Mock data for now - replace with real API call later
-    setUserStats({
-      tokensRemaining: 142,
-      totalTokens: 150,
-      analysesThisMonth: 8,
-      subscriptionTier: 'Professional',
-      subscriptionPrice: '£35',
-      nextBilling: '2025-09-05',
-      totalAnalyses: 234,
-      avgProcessingTime: '8.4s',
-      successRate: '98.2%'
-    });
+  const analyzeImages = async () => {
+    if (images.length === 0) {
+      setError('Please select images first');
+      return;
+    }
+    
+    setAnalyzing(true);
+    setError(null);
+    
+    try {
+      const formData = new FormData();
+      
+      // Add all compressed images to FormData
+      images.forEach((img, index) => {
+        formData.append(`image${index}`, img.file);
+      });
+      
+      console.log(`Sending ${images.length} images for analysis...`);
+      
+      const response = await fetch('/api/analyze-ai', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Analysis failed');
+      }
+      
+      const data = await response.json();
+      setResults(data);
+      
+    } catch (err) {
+      setError('Analysis failed: ' + err.message);
+      console.error('Analysis error:', err);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
-  // Simulate token usage
-  const handleAnalysisComplete = () => {
-    setUserStats(prev => ({
-      ...prev,
-      tokensRemaining: Math.max(0, prev.tokensRemaining - 1),
-      analysesThisMonth: prev.analysesThisMonth + 1
-    }));
+  const removeImage = (index) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const navigation = [
-    { id: 'analyzer', name: '⚡ Analyzer', icon: '🔍', description: 'Create new listings' },
-    { id: 'history', name: 'History', icon: '📋', description: 'Past analyses' },
-    { id: 'analytics', name: 'Analytics', icon: '📊', description: 'Usage insights' },
-    { id: 'tokens', name: 'Tokens', icon: '🪙', description: 'Manage credits' },
-    { id: 'subscription', name: 'Billing', icon: '💳', description: 'Subscription' },
-  ];
-
-  if (!isSignedIn) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center">
-          <div className="text-6xl mb-6">⚡</div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Fashion Analyzer Pro
-          </h1>
-          <p className="text-gray-600 mb-8">
-            Professional eBay listing creation with AI-powered analysis and ruler measurements.
-          </p>
-          
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-blue-900 mb-2">✨ Professional Features:</h3>
-            <ul className="text-sm text-blue-800 space-y-1 text-left">
-              <li>• 📏 Ruler measurement detection</li>
-              <li>• 🎯 Brand intelligence & authenticity scoring</li>
-              <li>• ⚡ 6-8 second processing with overlapping AI</li>
-              <li>• 💰 Condition-adjusted UK pricing</li>
-              <li>• 📦 Batch listing system (coming soon)</li>
-            </ul>
-          </div>
-          
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-green-900 mb-2">🪙 Token-Based Pricing:</h3>
-            <div className="text-sm text-green-800 space-y-1">
-              <div className="flex justify-between">
-                <span>Professional (150 tokens/month):</span>
-                <span className="font-bold">£35</span>
-              </div>
-              <div className="text-xs text-green-600 mt-2">
-                1 token = 1 complete eBay listing
-              </div>
-            </div>
-          </div>
-
-          <SignInButton mode="modal">
-            <button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg">
-              🚀 Start Professional Trial
-            </button>
-          </SignInButton>
-          
-          <p className="text-xs text-gray-500 mt-4">
-            7-day free trial • No credit card required
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const clearAll = () => {
+    setImages([]);
+    setResults(null);
+    setError(null);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Professional Sidebar */}
-      <div className="w-64 bg-white shadow-xl border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-gray-900 flex items-center">
-            ⚡ Fashion Analyzer
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Professional Dashboard</p>
+    <main className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Fashion Analyzer Pro</h1>
+          <p className="text-gray-600">AI-powered fashion analysis for eBay reselling</p>
         </div>
-
-        {/* User Info */}
-        <div className="p-4 border-b border-gray-200 bg-blue-50">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-              {user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress?.charAt(0) || 'U'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'User'}
-              </p>
-              <p className="text-xs text-blue-600 font-medium">
-                {userStats.subscriptionTier} Plan
-              </p>
-            </div>
-          </div>
+        
+        {/* Upload Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Upload Fashion Images</h2>
           
-          {/* Token Status */}
-          <div className="mt-3 bg-white rounded-lg p-3">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-medium text-gray-600">Tokens Remaining</span>
-              <span className="text-sm font-bold text-blue-600">
-                {userStats.tokensRemaining}/{userStats.totalTokens}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${Math.max((userStats.tokensRemaining / userStats.totalTokens) * 100, 5)}%` }}
-              ></div>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Resets on {userStats.nextBilling}
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+              <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+              id="file-input"
+              disabled={compressionProgress !== null}
+            />
+            <label
+              htmlFor="file-input"
+              className="cursor-pointer inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+            >
+              {compressionProgress ? 'Compressing...' : 'Select Images (Max 24)'}
+            </label>
+            
+            <p className="mt-4 text-gray-600">
+              Upload up to 24 fashion items at once • Any size images will be automatically compressed
             </p>
           </div>
+          
+          {/* Compression Progress */}
+          {compressionProgress && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-700">
+                Compressing image {compressionProgress.current} of {compressionProgress.total}
+                {compressionProgress.fileName && `: ${compressionProgress.fileName}`}
+              </p>
+              <div className="mt-2 w-full bg-blue-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${(compressionProgress.current / compressionProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* Error Display */}
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
         </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-4">
-          <div className="space-y-2">
-            {navigation.map((item) => (
+        
+        {/* Image Preview Grid */}
+        {images.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">
+                Selected Images ({images.length})
+              </h2>
               <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-colors duration-200 ${
-                  activeTab === item.id
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                onClick={clearAll}
+                className="text-red-600 hover:text-red-700 text-sm font-medium"
               >
-                <div className="flex items-center space-x-3">
-                  <span className="text-lg">{item.icon}</span>
-                  <div>
-                    <div className="font-medium">{item.name}</div>
-                    <div className={`text-xs ${
-                      activeTab === item.id ? 'text-blue-100' : 'text-gray-500'
-                    }`}>
-                      {item.description}
+                Clear All
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {images.map((img, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={img.preview}
+                    alt={`Upload ${index + 1}`}
+                    className="w-full h-32 object-cover rounded-lg"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                    <button
+                      onClick={() => removeImage(index)}
+                      className="text-white bg-red-600 p-2 rounded-full hover:bg-red-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600">
+                    {(img.originalSize / 1024).toFixed(0)}KB → {(img.compressedSize / 1024).toFixed(0)}KB
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <button
+              onClick={analyzeImages}
+              disabled={analyzing || images.length === 0}
+              className="mt-6 w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-semibold transition-colors"
+            >
+              {analyzing ? `Analyzing ${images.length} images...` : `Analyze ${images.length} Images`}
+            </button>
+          </div>
+        )}
+        
+        {/* Results Section */}
+        {results && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4">
+              Analysis Results - {results.summary.totalItems} Items Found
+            </h2>
+            
+            {results.items.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                  {results.items.map((item, index) => (
+                    <div key={index} className="border rounded-lg p-4 hover:shadow-lg transition-shadow">
+                      <div className="mb-3">
+                        <h3 className="font-semibold text-lg">{item.brand.name} {item.itemType}</h3>
+                        <p className="text-sm text-gray-600">SKU: {item.sku}</p>
+                      </div>
+                      
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Condition:</span>
+                          <span className="font-medium">{item.condition.score}/10</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Size:</span>
+                          <span className="font-medium">{item.size}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Color:</span>
+                          <span className="font-medium">{item.color}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Price Range:</span>
+                          <span className="font-medium text-green-600">£{item.estimatedPrice.min}-{item.estimatedPrice.max}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
+                        <p className="font-semibold mb-1">eBay Title:</p>
+                        <p className="break-all">{item.ebayTitle}</p>
+                      </div>
+                      
+                      {item.keyFeatures && item.keyFeatures.length > 0 && (
+                        <div className="mt-3 text-xs">
+                          <p className="font-semibold mb-1">Key Features:</p>
+                          <p className="text-gray-600">{item.keyFeatures.join(', ')}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-6">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-3xl font-bold text-blue-600">{results.summary.totalItems}</p>
+                      <p className="text-sm text-gray-600 mt-1">Items Detected</p>
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-green-600">£{results.summary.totalValue}</p>
+                      <p className="text-sm text-gray-600 mt-1">Total Value</p>
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-purple-600">£{results.summary.avgItemValue}</p>
+                      <p className="text-sm text-gray-600 mt-1">Average Value</p>
                     </div>
                   </div>
                 </div>
-              </button>
-            ))}
-          </div>
-        </nav>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-200">
-          <button
-            onClick={() => signOut()}
-            className="w-full text-gray-600 hover:text-gray-900 text-sm py-2 px-4 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            🚪 Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Top Bar */}
-        <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                {navigation.find(nav => nav.id === activeTab)?.name}
-              </h2>
-              <p className="text-gray-500">
-                {navigation.find(nav => nav.id === activeTab)?.description}
-              </p>
-            </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No items were detected in the uploaded images. Please try with clearer fashion item photos.
+              </div>
+            )}
             
-            {/* Quick Stats */}
-            <div className="flex space-x-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{userStats.analysesThisMonth}</div>
-                <div className="text-xs text-gray-500">This Month</div>
+            {results.errors && results.errors.length > 0 && (
+              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm font-semibold text-yellow-800 mb-2">
+                  {results.errors.length} image(s) could not be processed:
+                </p>
+                <ul className="text-xs text-yellow-700 space-y-1">
+                  {results.errors.map((err, idx) => (
+                    <li key={idx}>Image {err.imageIndex + 1}: {err.error}</li>
+                  ))}
+                </ul>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{userStats.avgProcessingTime}</div>
-                <div className="text-xs text-gray-500">Avg Speed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">{userStats.successRate}</div>
-                <div className="text-xs text-gray-500">Success Rate</div>
-              </div>
-            </div>
+            )}
           </div>
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 p-6 overflow-auto">
-          {activeTab === 'analyzer' && (
-            <AnalysisWorkspace userStats={userStats} onAnalysisComplete={handleAnalysisComplete} />
-          )}
-          {activeTab === 'history' && (
-            <AnalysisHistory />
-          )}
-          {activeTab === 'analytics' && (
-            <UsageAnalytics userStats={userStats} />
-          )}
-          {activeTab === 'tokens' && (
-            <TokenManager userStats={userStats} onTokenUpdate={loadUserStats} />
-          )}
-          {activeTab === 'subscription' && (
-            <SubscriptionManager userStats={userStats} onSubscriptionUpdate={loadUserStats} />
-          )}
-        </div>
+        )}
       </div>
-    </div>
+    </main>
   );
 }
