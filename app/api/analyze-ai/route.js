@@ -4,6 +4,22 @@ export const maxDuration = 60;
 
 import { NextResponse } from 'next/server';
 import { processBatchImages } from './aiIntegration';
+import { calculateCreditsNeeded } from '../../lib/stripe';
+
+// Temporary in-memory credit tracking
+const creditTracker = new Map();
+
+function getUserCredits(userId) {
+  if (!creditTracker.has(userId)) {
+    creditTracker.set(userId, {
+      total: 10,
+      used: 0,
+      bonus: 0,
+      subscription: 'free'
+    });
+  }
+  return creditTracker.get(userId);
+}
 
 export async function POST(request) {
   console.log('🚀 API Route: /api/analyze-ai called');
@@ -63,6 +79,23 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
+    // Credit check
+    const creditsNeeded = calculateCreditsNeeded(images.length);
+    const userId = 'dummy-user'; // Replace with actual user ID from auth
+    const userCredits = getUserCredits(userId);
+    const creditsAvailable = userCredits.total - userCredits.used + userCredits.bonus;
+    
+    if (creditsAvailable < creditsNeeded) {
+      return NextResponse.json({ 
+        error: 'Insufficient Credits',
+        details: `This analysis requires ${creditsNeeded} credits. You have ${creditsAvailable} credits remaining.`,
+        type: 'INSUFFICIENT_CREDITS',
+        creditsNeeded,
+        creditsAvailable,
+        upgradeUrl: '/pricing'
+      }, { status: 403 });
+    }
+    
     // Warn about large batches
     if (images.length > 10) {
       console.warn(`⚠️ Large batch detected: ${images.length} images. This may take a while...`);
@@ -83,6 +116,17 @@ export async function POST(request) {
     try {
       const results = await processBatchImages(images);
       console.log('✅ AI analysis completed successfully');
+      
+      // Deduct credits
+      userCredits.used += creditsNeeded;
+      
+      // Add credit info to results
+      results.creditInfo = {
+        creditsUsed: creditsNeeded,
+        creditsRemaining: creditsAvailable - creditsNeeded,
+        totalCredits: userCredits.total + userCredits.bonus,
+        subscription: userCredits.subscription
+      };
       
       return NextResponse.json(results);
     } catch (aiError) {
