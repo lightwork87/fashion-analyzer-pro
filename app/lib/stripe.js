@@ -1,6 +1,7 @@
 // Credit-based pricing calculations
 export function calculateCreditsNeeded(imageCount) {
-  return imageCount; // 1 credit per image
+  // 1 credit per listing, regardless of photo count
+  return 1;
 }
 
 // Check if user has enough credits

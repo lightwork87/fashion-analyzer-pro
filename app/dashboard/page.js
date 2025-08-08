@@ -38,9 +38,9 @@ export default function Dashboard() {
       return;
     }
     
-    const creditsNeeded = calculateCreditsNeeded(files.length);
+    const creditsNeeded = 1; // Always 1 credit per listing
     if (creditsNeeded > creditInfo.creditsRemaining) {
-      setError(`This analysis requires ${creditsNeeded} credits. You have ${creditInfo.creditsRemaining} credits remaining.`);
+      setError(`This analysis requires ${creditsNeeded} credit. You have ${creditInfo.creditsRemaining} credits remaining.`);
       return;
     }
     
@@ -73,9 +73,9 @@ export default function Dashboard() {
       return;
     }
     
-    const creditsNeeded = calculateCreditsNeeded(images.length);
+    const creditsNeeded = 1; // Always 1 credit per listing
     if (creditsNeeded > creditInfo.creditsRemaining) {
-      setError(`Insufficient credits. You need ${creditsNeeded} credits but have ${creditInfo.creditsRemaining}.`);
+      setError(`Insufficient credits. You need ${creditsNeeded} credit but have ${creditInfo.creditsRemaining}.`);
       return;
     }
     
@@ -165,8 +165,6 @@ export default function Dashboard() {
       'Fit': item.keyFeatures?.find(f => ['slim', 'regular', 'relaxed', 'oversized'].some(fit => f.toLowerCase().includes(fit))) || '',
     };
   };
-
-  const creditsNeeded = images.length > 0 ? calculateCreditsNeeded(images.length) : 0;
 
   if (!mounted) {
     return (
@@ -272,7 +270,7 @@ export default function Dashboard() {
                 Drop photos here or click to browse • Max 24 photos per listing
               </p>
               <p className="mt-1 text-xs text-gray-500">
-                All photos will be analyzed as one item • 1 credit per photo
+                All photos will be analyzed as one item • 1 credit per listing
               </p>
             </div>
             
@@ -310,7 +308,7 @@ export default function Dashboard() {
                 </svg>
                 {images.length} Photos Selected
                 <span className="text-sm text-gray-500 ml-2">
-                  ({creditsNeeded} credits required)
+                  (1 credit required)
                 </span>
               </h3>
               <button
@@ -355,9 +353,9 @@ export default function Dashboard() {
               </div>
               <button
                 onClick={analyzeImages}
-                disabled={analyzing || creditInfo.creditsRemaining < creditsNeeded}
+                disabled={analyzing || creditInfo.creditsRemaining < 1}
                 className={`px-6 py-2.5 rounded-md font-medium transition-all ${
-                  analyzing || creditInfo.creditsRemaining < creditsNeeded
+                  analyzing || creditInfo.creditsRemaining < 1
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow'
                 }`}
@@ -370,20 +368,339 @@ export default function Dashboard() {
                     </svg>
                     Analyzing with AI...
                   </span>
-                ) : creditInfo.creditsRemaining < creditsNeeded ? (
+                ) : creditInfo.creditsRemaining < 1 ? (
                   'Insufficient Credits'
                 ) : (
-                  `Analyze with AI (${creditsNeeded} credits)`
+                  `Analyze with AI (1 credit)`
                 )}
               </button>
             </div>
           </div>
         )}
         
-        {/* Results Section - Collapsed for space, same as before */}
+        {/* Results Section */}
         {results && results.items && results.items.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Results content - same as before */}
+            {/* Left Column - Photos */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-lg shadow-sm border p-4 sticky top-6">
+                <h3 className="font-semibold mb-3 text-sm text-gray-700">Photos ({results.items[0].imageCount})</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {images.map((img, index) => (
+                    <img
+                      key={index}
+                      src={img.preview}
+                      alt={`Photo ${index + 1}`}
+                      className={`w-full h-20 object-cover rounded border ${index === 0 ? 'border-blue-500 border-2' : 'border-gray-300'}`}
+                    />
+                  ))}
+                </div>
+                
+                {/* Credit Usage Summary */}
+                {results.creditInfo && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded">
+                    <p className="text-sm text-gray-700 font-medium">Credits Used: {results.creditInfo.creditsUsed}</p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Remaining: {results.creditInfo.creditsRemaining} / {results.creditInfo.totalCredits}
+                    </p>
+                  </div>
+                )}
+                
+                <button
+                  onClick={clearAll}
+                  className="mt-4 w-full py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:border-gray-400 transition-colors"
+                >
+                  Start New Listing
+                </button>
+              </div>
+            </div>
+            
+            {/* Right Column - Listing Details */}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-lg shadow-sm border">
+                {/* Tabs */}
+                <div className="border-b">
+                  <div className="flex">
+                    <button
+                      onClick={() => setActiveTab('details')}
+                      className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'details'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Listing Details
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('specifics')}
+                      className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'specifics'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Item Specifics
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('pricing')}
+                      className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'pricing'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Pricing & SKU
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="p-6">
+                  {/* Listing Details Tab */}
+                  {activeTab === 'details' && (
+                    <div className="space-y-6">
+                      {/* Title */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Title <span className="text-red-500">*</span>
+                          <span className="float-right text-xs text-gray-500">{editedTitle.length}/80</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editedTitle}
+                          onChange={(e) => setEditedTitle(e.target.value.slice(0, 80))}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">AI optimized for eBay search</p>
+                      </div>
+                      
+                      {/* Category */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Category <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={results.items[0].ebayCategory}
+                            readOnly
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-md bg-gray-50"
+                          />
+                          <button className="px-4 py-2 text-sm text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50">
+                            Change
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Condition */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Condition <span className="text-red-500">*</span>
+                        </label>
+                        <select 
+                          defaultValue={results.items[0].condition.score >= 10 ? 'new-with-tags' : 
+                                       results.items[0].condition.score === 9 ? 'new-without-tags' :
+                                       results.items[0].condition.score === 8 ? 'new-with-defects' : 'used'}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="new-with-tags">New with tags</option>
+                          <option value="new-without-tags">New without tags</option>
+                          <option value="new-with-defects">New with defects</option>
+                          <option value="used">Pre-owned</option>
+                        </select>
+                      </div>
+                      
+                      {/* Description */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Description
+                        </label>
+                        <textarea
+                          value={editedDescription}
+                          onChange={(e) => setEditedDescription(e.target.value)}
+                          rows={8}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">AI generated from image analysis</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Item Specifics Tab */}
+                  {activeTab === 'specifics' && (
+                    <div className="space-y-4">
+                      <p className="text-sm text-gray-600 mb-4">
+                        Item specifics help buyers find your item. We've auto-filled these based on AI analysis.
+                      </p>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        {Object.entries(generateItemSpecifics()).map(([key, value]) => (
+                          <div key={key}>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              {key}
+                              {['Brand', 'Size', 'Color', 'Type'].includes(key) && <span className="text-red-500"> *</span>}
+                            </label>
+                            <input
+                              type="text"
+                              defaultValue={value}
+                              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder={`Enter ${key.toLowerCase()}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div className="text-sm text-blue-800">
+                            <p className="font-medium">AI Confidence: {Math.round(results.items[0].brand.confidence * 100)}%</p>
+                            <p className="mt-1">Our AI has analyzed your photos and extracted these details automatically. Review and adjust as needed.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Pricing Tab */}
+                  {activeTab === 'pricing' && (
+                    <div className="space-y-6">
+                      {/* Pricing */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-4">
+                          Pricing Strategy
+                        </label>
+                        
+                        <div className="space-y-4">
+                          <div className="p-4 border rounded-lg">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <input type="radio" name="pricing" id="fixed" className="text-blue-600" defaultChecked />
+                                <label htmlFor="fixed" className="font-medium">Fixed Price</label>
+                              </div>
+                              <span className="text-sm text-gray-500">Recommended</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mt-3">
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">Min Price</label>
+                                <div className="flex items-center">
+                                  <span className="px-3 py-2 bg-gray-100 border border-r-0 border-gray-300 rounded-l-md">£</span>
+                                  <input
+                                    type="number"
+                                    value={editedPrice.min}
+                                    onChange={(e) => setEditedPrice({...editedPrice, min: e.target.value})}
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">Max Price</label>
+                                <div className="flex items-center">
+                                  <span className="px-3 py-2 bg-gray-100 border border-r-0 border-gray-300 rounded-l-md">£</span>
+                                  <input
+                                    type="number"
+                                    value={editedPrice.max}
+                                    onChange={(e) => setEditedPrice({...editedPrice, max: e.target.value})}
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="p-4 border rounded-lg opacity-60">
+                            <div className="flex items-center gap-2 mb-3">
+                              <input type="radio" name="pricing" id="auction" className="text-blue-600" />
+                              <label htmlFor="auction" className="font-medium">Auction</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* AI Price Analysis */}
+                        <div className="mt-6 p-4 bg-green-50 rounded-lg">
+                          <h4 className="font-medium text-green-900 mb-2">AI Price Analysis</h4>
+                          <div className="text-sm text-green-800 space-y-1">
+                            <p>• Similar {results.items[0].brand.name} items sell for £{editedPrice.min}-£{editedPrice.max}</p>
+                            <p>• Condition score ({results.items[0].condition.score}/10) suggests pricing at the {results.items[0].condition.score >= 8 ? 'higher' : 'lower'} end</p>
+                            <p>• {results.items[0].brand.confidence > 0.8 ? 'High' : 'Medium'} brand confidence supports this pricing</p>
+                            {results.items[0].measurements?.hasRuler && (
+                              <p className="text-green-900 font-medium">• 35% price boost applied for measured item</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* SKU */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          SKU (Stock Keeping Unit)
+                        </label>
+                        <input
+                          type="text"
+                          value={results.items[0].sku}
+                          readOnly
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Auto-generated for inventory tracking</p>
+                      </div>
+                      
+                      {/* Quantity */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Quantity
+                        </label>
+                        <input
+                          type="number"
+                          defaultValue="1"
+                          min="1"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Action Buttons */}
+                  <div className="mt-8 pt-6 border-t flex justify-between items-center">
+                    <button className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">
+                      Save as Draft
+                    </button>
+                    <div className="flex gap-3">
+                      <button className="px-4 py-2 text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50">
+                        Preview Listing
+                      </button>
+                      <button className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-sm hover:shadow">
+                        List on eBay
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Quick Stats */}
+              <div className="mt-6 grid grid-cols-3 gap-4">
+                <div className="bg-white rounded-lg shadow-sm border p-4 text-center">
+                  <p className="text-2xl font-bold text-green-600">£{results.summary.avgItemValue}</p>
+                  <p className="text-sm text-gray-600 mt-1">Est. Value</p>
+                </div>
+                <div className="bg-white rounded-lg shadow-sm border p-4 text-center">
+                  <p className="text-2xl font-bold text-blue-600">{results.items[0].condition.score}/10</p>
+                  <p className="text-sm text-gray-600 mt-1">Condition</p>
+                </div>
+                <div className="bg-white rounded-lg shadow-sm border p-4 text-center">
+                  <p className="text-2xl font-bold text-purple-600">{Math.round(results.items[0].brand.confidence * 100)}%</p>
+                  <p className="text-sm text-gray-600 mt-1">AI Confidence</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Errors */}
+        {results && results.errors && results.errors.length > 0 && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm font-semibold text-red-800 mb-2">Analysis Error</p>
+            <p className="text-sm text-red-700">{results.errors[0].error}</p>
           </div>
         )}
       </div>
