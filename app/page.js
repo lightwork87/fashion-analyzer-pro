@@ -1,5 +1,70 @@
 'use client';
 
+'use client';
+
+import { useState, useCallback, useEffect } from 'react';
+import { compressMultipleImages } from './utils/imageCompression';
+import dynamic from 'next/dynamic';
+import { calculateCreditsNeeded } from './lib/stripe';
+
+// Dynamically import credit display to avoid hydration issues
+const CreditDisplay = dynamic(() => import('./components/CreditDisplay'), {
+  ssr: false,
+  loading: () => <div className="h-20 bg-gray-100 animate-pulse rounded"></div>
+});
+
+export default function Home() {
+  const [mounted, setMounted] = useState(false);
+  const [images, setImages] = useState([]);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [results, setResults] = useState(null);
+  const [compressionProgress, setCompressionProgress] = useState(null);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('details');
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedPrice, setEditedPrice] = useState({ min: '', max: '' });
+  const [editedDescription, setEditedDescription] = useState('');
+  const [creditInfo, setCreditInfo] = useState(null);
+
+  // Prevent hydration errors
+  useEffect(() => {
+    setMounted(true);
+    // Set default credit info after mount
+    setCreditInfo({
+      creditsRemaining: 10,
+      totalCredits: 10,
+      subscription: 'free'
+    });
+  }, []);
+
+  // Your existing handleFileSelect, analyzeImages, etc. functions here...
+  // (Keep all your existing functions as they are)
+
+  // Don't render interactive elements until mounted
+  if (!mounted) {
+    return (
+      <main className="min-h-screen bg-gray-100">
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-bold text-gray-900">Fashion Analyzer Pro</h1>
+              <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">AI Powered</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      </main>
+    );
+  }
+
+  // Your existing return statement here...
+  return (
+    // Your existing JSX
+  );
+}
+
 import { useState, useCallback } from 'react';
 import { compressMultipleImages } from './utils/imageCompression';
 import CreditDisplay from './components/CreditDisplay';
