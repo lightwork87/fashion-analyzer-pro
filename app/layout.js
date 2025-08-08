@@ -1,9 +1,5 @@
 import './globals.css'
-import dynamic from 'next/dynamic'
-
-const ErrorBoundary = dynamic(() => import('./components/ErrorBoundary'), {
-  ssr: false
-})
+import { ClerkProvider } from '@clerk/nextjs'
 
 export const metadata = {
   title: 'Fashion Analyzer Pro - AI-Powered Fashion Analysis',
@@ -12,12 +8,10 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body>
-        <ErrorBoundary>
-          {children}
-        </ErrorBoundary>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
   )
 }

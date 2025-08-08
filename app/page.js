@@ -1,8 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useUser, SignOutButton } from '@clerk/nextjs';
 
 export default function Home() {
+  const { user, isLoaded } = useUser();
+
   return (
     <main className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -14,6 +17,27 @@ export default function Home() {
               <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">
                 AI Powered
               </span>
+            </div>
+            <div>
+              {isLoaded && user ? (
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600">Hi, {user.firstName || user.emailAddresses[0].emailAddress}</span>
+                  <SignOutButton>
+                    <button className="text-sm text-gray-600 hover:text-gray-900">
+                      Sign Out
+                    </button>
+                  </SignOutButton>
+                </div>
+              ) : (
+                <div className="flex gap-4">
+                  <Link href="/sign-in" className="text-sm text-gray-600 hover:text-gray-900">
+                    Sign In
+                  </Link>
+                  <Link href="/sign-up" className="text-sm bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    Get Started
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -30,12 +54,26 @@ export default function Home() {
           </p>
           
           <div className="space-y-4">
-            <Link 
-              href="/dashboard"
-              className="inline-block px-8 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Go to Dashboard
-            </Link>
+            {isLoaded && user ? (
+              <Link 
+                href="/dashboard"
+                className="inline-block px-8 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link 
+                  href="/sign-up"
+                  className="inline-block px-8 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Start Free Trial - 10 Credits
+                </Link>
+                <p className="text-sm text-gray-600">
+                  Already have an account? <Link href="/sign-in" className="text-blue-600 hover:underline">Sign in</Link>
+                </p>
+              </>
+            )}
             
             <br />
             
@@ -49,12 +87,12 @@ export default function Home() {
           
           <div className="mt-8 p-4 bg-yellow-50 rounded-lg">
             <p className="text-sm text-yellow-800">
-              🚧 Note: We&apos;re currently in beta. Some features may be limited.
+              🚧 Note: We&apos;re currently in beta. Start with 10 free credits!
             </p>
           </div>
         </div>
 
-        {/* Features Section */}
+        {/* Features Section - Same as before */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <div className="text-blue-600 mb-4">
