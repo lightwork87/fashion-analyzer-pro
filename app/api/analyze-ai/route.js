@@ -3,34 +3,35 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 import { NextResponse } from 'next/server';
+import { currentUser } from '@clerk/nextjs';
 import { processBatchImages } from './aiIntegration';
 import { calculateCreditsNeeded } from '../../lib/stripe';
-
-// Temporary in-memory credit tracking
-const creditTracker = new Map();
-
-function getUserCredits(userId) {
-  if (!creditTracker.has(userId)) {
-    creditTracker.set(userId, {
-      total: 10,
-      used: 0,
-      bonus: 0,
-      subscription: 'free'
-    });
-  }
-  return creditTracker.get(userId);
-}
+import { checkUserCredits, useCredits, saveAnalysis } from '../../lib/supabase';
 
 export async function POST(request) {
   console.log('🚀 API Route: /api/analyze-ai called');
   
   try {
+    // Get the current user from Clerk
+    const user = await currentUser();
+    
+    if (!user) {
+      console.log('❌ No authenticated user found');
+      return NextResponse.json({ 
+        error: 'Authentication Required',
+        details: 'Please sign in to analyze images',
+        type: 'UNAUTHENTICATED'
+      }, { status: 401 });
+    }
+    
+    console.log('👤 Authenticated user:', user.id);
+    
     // Check if API keys exist
     if (!process.env.ANTHROPIC_API_KEY) {
       console.error('❌ Missing ANTHROPIC_API_KEY');
       return NextResponse.json({ 
         error: 'Configuration Error',
-        details: 'Anthropic API key is not configured. Please check Vercel environment variables.',
+        details: 'Anthropic API key is not configured.',
         type: 'MISSING_API_KEY'
       }, { status: 500 });
     }
@@ -39,7 +40,7 @@ export async function POST(request) {
       console.error('❌ Missing GOOGLE_CLOUD_VISION_API_KEY');
       return NextResponse.json({ 
         error: 'Configuration Error',
-        details: 'Google Vision API key is not configured. Please check Vercel environment variables.',
+        details: 'Google Vision API key is not configured.',
         type: 'MISSING_API_KEY'
       }, { status: 500 });
     }
@@ -53,7 +54,6 @@ export async function POST(request) {
       if (key.startsWith('image') && value instanceof File) {
         console.log(`📸 Processing image: ${value.name}, size: ${(value.size / 1024).toFixed(2)} KB`);
         
-        // Convert to base64
         try {
           const bytes = await value.arrayBuffer();
           const buffer = Buffer.from(bytes);
@@ -79,29 +79,28 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    // Credit check
-    const creditsNeeded = calculateCreditsNeeded(images.length);
-    const userId = 'dummy-user'; // Replace with actual user ID from auth
-    const userCredits = getUserCredits(userId);
-    const creditsAvailable = userCredits.total - userCredits.used + userCredits.bonus;
+    // Check user credits from database
+    const creditsNeeded = 1; // Always 1 credit per listing
+    console.log('💳 Checking user credits...');
+    const creditCheck = await checkUserCredits(user.id, creditsNeeded);
     
-    if (creditsAvailable < creditsNeeded) {
+    console.log('💳 Credit check result:', {
+      hasEnoughCredits: creditCheck.hasEnoughCredits,
+      creditsAvailable: creditCheck.creditsAvailable,
+      creditsNeeded: creditsNeeded
+    });
+    
+    if (!creditCheck.hasEnoughCredits) {
       return NextResponse.json({ 
         error: 'Insufficient Credits',
-        details: `This analysis requires ${creditsNeeded} credits. You have ${creditsAvailable} credits remaining.`,
+        details: `This analysis requires ${creditsNeeded} credit. You have ${creditCheck.creditsAvailable} credits remaining.`,
         type: 'INSUFFICIENT_CREDITS',
         creditsNeeded,
-        creditsAvailable,
+        creditsAvailable: creditCheck.creditsAvailable,
         upgradeUrl: '/pricing'
       }, { status: 403 });
     }
     
-    // Warn about large batches
-    if (images.length > 10) {
-      console.warn(`⚠️ Large batch detected: ${images.length} images. This may take a while...`);
-    }
-    
-    // For very large batches, consider limiting
     if (images.length > 15) {
       return NextResponse.json({ 
         error: 'Too Many Images',
@@ -117,16 +116,41 @@ export async function POST(request) {
       const results = await processBatchImages(images);
       console.log('✅ AI analysis completed successfully');
       
-      // Deduct credits
-      userCredits.used += creditsNeeded;
+      // Use credits - THIS IS THE IMPORTANT PART
+      console.log('💳 Deducting credits...');
+      const creditResult = await useCredits(user.id, creditsNeeded, images.length);
+      
+      if (!creditResult.success) {
+        console.error('❌ Failed to deduct credits:', creditResult.error);
+        // Continue anyway - we don't want to fail the analysis if credit deduction fails
+      } else {
+        console.log('✅ Credits deducted successfully');
+      }
+      
+      // Save analysis to database
+      if (results.items && results.items.length > 0) {
+        console.log('💾 Saving analysis to database...');
+        const saveResult = await saveAnalysis(user.id, results.items[0]);
+        if (!saveResult.success) {
+          console.error('❌ Failed to save analysis:', saveResult.error);
+        } else {
+          console.log('✅ Analysis saved successfully');
+        }
+      }
+      
+      // Get updated credit info
+      console.log('💳 Getting updated credit info...');
+      const updatedCreditCheck = await checkUserCredits(user.id);
       
       // Add credit info to results
       results.creditInfo = {
         creditsUsed: creditsNeeded,
-        creditsRemaining: creditsAvailable - creditsNeeded,
-        totalCredits: userCredits.total + userCredits.bonus,
-        subscription: userCredits.subscription
+        creditsRemaining: updatedCreditCheck.creditsAvailable,
+        totalCredits: updatedCreditCheck.totalCredits,
+        subscription: 'free' // We'll update this when we implement subscriptions
       };
+      
+      console.log('📤 Returning results with credit info:', results.creditInfo);
       
       return NextResponse.json(results);
     } catch (aiError) {

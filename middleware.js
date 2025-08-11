@@ -6,11 +6,10 @@ export default authMiddleware({
     "/pricing",
     "/sign-in",
     "/sign-up",
-    "/api/stripe/create-checkout"
-  ],
-  ignoredRoutes: [
+    "/api/stripe/create-checkout",
     "/api/webhook/stripe"
-  ]
+  ],
+  ignoredRoutes: []
 });
 
 export const config = {
