@@ -8,20 +8,33 @@ import CreditDisplay from '../components/CreditDisplay';
 import { useUserData } from '../hooks/useUserData';
 import { supabase } from '../lib/supabase';
 
-// eBay category-specific requirements
-const EBAY_CATEGORIES = {
+// eBay UK category-specific requirements
+const EBAY_UK_CATEGORIES = {
   'mens_clothing': {
-    required: ['brand', 'size', 'color', 'condition', 'department'],
+    required: ['brand', 'size', 'colour', 'condition', 'department'],
     optional: ['size_type', 'style', 'material', 'sleeve_length', 'pattern']
   },
   'womens_clothing': {
-    required: ['brand', 'size', 'color', 'condition', 'department', 'size_type'],
+    required: ['brand', 'size', 'colour', 'condition', 'department', 'size_type'],
     optional: ['style', 'material', 'sleeve_length', 'pattern', 'occasion']
   },
   'shoes': {
-    required: ['brand', 'size', 'color', 'condition', 'department', 'shoe_type'],
+    required: ['brand', 'size', 'colour', 'condition', 'department', 'shoe_type'],
     optional: ['width', 'material', 'style', 'occasion']
   }
+};
+
+// UK Postage Services
+const UK_POSTAGE_SERVICES = {
+  'royal_mail_48': 'Royal Mail 48 (2-3 days)',
+  'royal_mail_24': 'Royal Mail 24 (1-2 days)',
+  'royal_mail_1st': 'Royal Mail 1st Class',
+  'royal_mail_2nd': 'Royal Mail 2nd Class',
+  'royal_mail_special': 'Royal Mail Special Delivery',
+  'hermes': 'Evri (Hermes) Standard',
+  'dpd': 'DPD Next Day',
+  'collect_plus': 'Collect+ Drop Off',
+  'click_collect': 'Click & Collect'
 };
 
 export default function Dashboard() {
@@ -38,7 +51,7 @@ export default function Dashboard() {
   const [drafts, setDrafts] = useState([]);
   const [savingDraft, setSavingDraft] = useState(false);
   
-  // Listing form state
+  // Listing form state - UK specific
   const [listingData, setListingData] = useState({
     // Basic Info
     title: '',
@@ -48,9 +61,9 @@ export default function Dashboard() {
     // Item Specifics
     brand: '',
     size: '',
-    color: '',
+    colour: '', // UK spelling
     material: '',
-    condition: 'pre-owned',
+    condition: 'used',
     condition_description: '',
     department: '',
     size_type: '',
@@ -66,7 +79,7 @@ export default function Dashboard() {
     is_vintage: false,
     is_handmade: false,
     
-    // Pricing
+    // Pricing (GBP)
     listing_format: 'fixed_price',
     buy_it_now_price: '',
     starting_bid: '',
@@ -77,17 +90,18 @@ export default function Dashboard() {
     auto_accept_offer: '',
     auto_decline_offer: '',
     
-    // Shipping
-    shipping_type: 'calculated',
-    package_weight_pounds: 1,
-    package_weight_ounces: 0,
-    package_length: 12,
-    package_width: 9,
-    package_height: 3,
-    handling_time: 1,
-    international_shipping: false,
+    // UK Shipping
+    shipping_type: 'flat', // Most UK sellers use flat rate
+    postage_service: 'royal_mail_48',
+    postage_cost: '3.50',
+    package_weight_kg: 0,
+    package_weight_g: 200,
+    package_length_cm: 30,
+    package_width_cm: 25,
+    package_depth_cm: 5,
+    dispatch_time: 1,
     
-    // Returns
+    // Returns (UK standard)
     returns_accepted: true,
     return_period: 30,
     return_shipping_paid_by: 'buyer',
@@ -193,24 +207,29 @@ export default function Dashboard() {
       setResults(data);
       await refreshCredits();
       
-      // Pre-fill form with AI results
+      // Pre-fill form with AI results (converted to GBP)
       if (data.items && data.items.length > 0) {
         const item = data.items[0];
+        
+        // Convert USD prices to GBP (rough conversion)
+        const minPriceGBP = item.estimatedPrice?.min ? (item.estimatedPrice.min * 0.8).toFixed(2) : '';
+        const maxPriceGBP = item.estimatedPrice?.max ? (item.estimatedPrice.max * 0.8).toFixed(2) : '';
+        
         setListingData(prev => ({
           ...prev,
           title: item.ebayTitle || '',
           sku: item.sku || '',
           brand: item.brand?.name !== 'Unknown' ? item.brand.name : '',
           size: item.size !== 'Not Visible' ? item.size : '',
-          color: item.color || '',
+          colour: item.color || '', // Note: using 'colour' for UK
           material: item.material !== 'Not Specified' ? item.material : '',
           condition: item.condition?.score >= 9 ? 'new_with_tags' : 
                     item.condition?.score >= 7 ? 'new_without_tags' :
-                    item.condition?.score >= 5 ? 'very_good' : 'good',
+                    item.condition?.score >= 5 ? 'very_good' : 'used',
           condition_description: item.condition?.description || '',
           description: item.description || '',
-          buy_it_now_price: item.estimatedPrice?.max || '',
-          starting_bid: item.estimatedPrice?.min || '',
+          buy_it_now_price: maxPriceGBP,
+          starting_bid: minPriceGBP,
           department: item.gender || '',
           style: item.keyFeatures?.find(f => f.toLowerCase().includes('style'))?.replace(/style:?\s*/i, '') || '',
           pattern: item.keyFeatures?.find(f => f.toLowerCase().includes('pattern'))?.replace(/pattern:?\s*/i, '') || '',
@@ -258,7 +277,7 @@ export default function Dashboard() {
   };
 
   const validateListing = () => {
-    const category = EBAY_CATEGORIES[listingData.category];
+    const category = EBAY_UK_CATEGORIES[listingData.category];
     const missing = [];
     
     if (category) {
@@ -304,7 +323,7 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <h1 className="text-xl font-bold text-gray-900">Fashion Analyzer Pro</h1>
+              <h1 className="text-xl font-bold text-gray-900">Fashion Analyzer Pro UK</h1>
               <nav className="flex gap-4">
                 <button
                   onClick={() => setActiveTab('upload')}
@@ -409,7 +428,7 @@ export default function Dashboard() {
                   disabled={analyzing || images.length === 0}
                   className="mt-6 w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
                 >
-                  {analyzing ? 'Analyzing...' : `Analyze Images (1 Credit)`}
+                  {analyzing ? 'Analysing...' : `Analyse Images (1 Credit)`}
                 </button>
               </div>
             )}
@@ -425,10 +444,10 @@ export default function Dashboard() {
         {/* Listing Details Tab */}
         {activeTab === 'details' && results && (
           <div className="space-y-6">
-            {/* eBay Listing Form */}
+            {/* eBay UK Listing Form */}
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Listing Details</h2>
+                <h2 className="text-2xl font-bold">eBay UK Listing Details</h2>
                 <div className="flex gap-2">
                   <button
                     onClick={saveDraft}
@@ -443,12 +462,12 @@ export default function Dashboard() {
                       if (missing.length > 0) {
                         alert(`Missing required fields: ${missing.join(', ')}`);
                       } else {
-                        alert('Ready to list on eBay!');
+                        alert('Ready to list on eBay UK!');
                       }
                     }}
                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
-                    List on eBay
+                    List on eBay UK
                   </button>
                 </div>
               </div>
@@ -509,7 +528,7 @@ export default function Dashboard() {
                       value={listingData.brand}
                       onChange={(e) => handleInputChange('brand', e.target.value)}
                       className="w-full p-2 border rounded-lg"
-                      placeholder="Nike, Adidas, etc."
+                      placeholder="Next, M&S, Primark, etc."
                     />
                   </div>
                   <div>
@@ -521,19 +540,19 @@ export default function Dashboard() {
                       value={listingData.size}
                       onChange={(e) => handleInputChange('size', e.target.value)}
                       className="w-full p-2 border rounded-lg"
-                      placeholder="M, L, XL, etc."
+                      placeholder="10, 12, 14, S, M, L, etc."
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Color <span className="text-red-500">*</span>
+                      Colour <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      value={listingData.color}
-                      onChange={(e) => handleInputChange('color', e.target.value)}
+                      value={listingData.colour}
+                      onChange={(e) => handleInputChange('colour', e.target.value)}
                       className="w-full p-2 border rounded-lg"
-                      placeholder="Blue, Red, etc."
+                      placeholder="Black, Navy, Red, etc."
                     />
                   </div>
                   <div>
@@ -548,7 +567,9 @@ export default function Dashboard() {
                       <option value="new_with_tags">New with tags</option>
                       <option value="new_without_tags">New without tags</option>
                       <option value="new_with_defects">New with defects</option>
-                      <option value="pre-owned">Pre-owned</option>
+                      <option value="very_good">Very good</option>
+                      <option value="good">Good</option>
+                      <option value="used">Used</option>
                     </select>
                   </div>
                   <div>
@@ -561,8 +582,9 @@ export default function Dashboard() {
                       <option value="">Select...</option>
                       <option value="Men">Men</option>
                       <option value="Women">Women</option>
-                      <option value="Unisex">Unisex</option>
-                      <option value="Kids">Kids</option>
+                      <option value="Unisex">Unisex Adults</option>
+                      <option value="Boys">Boys</option>
+                      <option value="Girls">Girls</option>
                     </select>
                   </div>
                   <div>
@@ -572,7 +594,7 @@ export default function Dashboard() {
                       value={listingData.material}
                       onChange={(e) => handleInputChange('material', e.target.value)}
                       className="w-full p-2 border rounded-lg"
-                      placeholder="Cotton, Polyester, etc."
+                      placeholder="Cotton, Polyester, Wool, etc."
                     />
                   </div>
                   <div>
@@ -582,7 +604,7 @@ export default function Dashboard() {
                       value={listingData.style}
                       onChange={(e) => handleInputChange('style', e.target.value)}
                       className="w-full p-2 border rounded-lg"
-                      placeholder="Casual, Formal, etc."
+                      placeholder="Casual, Smart, Formal, etc."
                     />
                   </div>
                   <div>
@@ -592,7 +614,7 @@ export default function Dashboard() {
                       value={listingData.pattern}
                       onChange={(e) => handleInputChange('pattern', e.target.value)}
                       className="w-full p-2 border rounded-lg"
-                      placeholder="Solid, Striped, etc."
+                      placeholder="Plain, Striped, Floral, etc."
                     />
                   </div>
                   <div>
@@ -603,10 +625,8 @@ export default function Dashboard() {
                       className="w-full p-2 border rounded-lg"
                     >
                       <option value="all_seasons">All Seasons</option>
-                      <option value="spring">Spring</option>
-                      <option value="summer">Summer</option>
-                      <option value="fall">Fall</option>
-                      <option value="winter">Winter</option>
+                      <option value="spring_summer">Spring/Summer</option>
+                      <option value="autumn_winter">Autumn/Winter</option>
                     </select>
                   </div>
                 </div>
@@ -635,7 +655,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Pricing Section */}
+              {/* Pricing Section - GBP */}
               <div className="border-t pt-6 mt-6">
                 <h3 className="text-lg font-semibold mb-4">Pricing & Format</h3>
                 
@@ -672,7 +692,7 @@ export default function Dashboard() {
                         Buy It Now Price <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-gray-500">$</span>
+                        <span className="absolute left-3 top-2 text-gray-500">£</span>
                         <input
                           type="number"
                           step="0.01"
@@ -699,7 +719,7 @@ export default function Dashboard() {
                         <div>
                           <label className="block text-xs text-gray-600 mb-1">Auto-accept at</label>
                           <div className="relative">
-                            <span className="absolute left-2 top-1 text-gray-500 text-sm">$</span>
+                            <span className="absolute left-2 top-1 text-gray-500 text-sm">£</span>
                             <input
                               type="number"
                               step="0.01"
@@ -712,7 +732,7 @@ export default function Dashboard() {
                         <div>
                           <label className="block text-xs text-gray-600 mb-1">Auto-decline below</label>
                           <div className="relative">
-                            <span className="absolute left-2 top-1 text-gray-500 text-sm">$</span>
+                            <span className="absolute left-2 top-1 text-gray-500 text-sm">£</span>
                             <input
                               type="number"
                               step="0.01"
@@ -725,7 +745,7 @@ export default function Dashboard() {
                         <div>
                           <label className="block text-xs text-gray-600 mb-1">Minimum offer</label>
                           <div className="relative">
-                            <span className="absolute left-2 top-1 text-gray-500 text-sm">$</span>
+                            <span className="absolute left-2 top-1 text-gray-500 text-sm">£</span>
                             <input
                               type="number"
                               step="0.01"
@@ -747,7 +767,7 @@ export default function Dashboard() {
                         Starting Bid <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-gray-500">$</span>
+                        <span className="absolute left-3 top-2 text-gray-500">£</span>
                         <input
                           type="number"
                           step="0.01"
@@ -773,7 +793,7 @@ export default function Dashboard() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Buy It Now Price</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-gray-500">$</span>
+                        <span className="absolute left-3 top-2 text-gray-500">£</span>
                         <input
                           type="number"
                           step="0.01"
@@ -787,7 +807,7 @@ export default function Dashboard() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Reserve Price</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-2 text-gray-500">$</span>
+                        <span className="absolute left-3 top-2 text-gray-500">£</span>
                         <input
                           type="number"
                           step="0.01"
@@ -802,35 +822,43 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* Shipping Section */}
+              {/* UK Postage Section */}
               <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Shipping</h3>
+                <h3 className="text-lg font-semibold mb-4">Postage & Packaging</h3>
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Shipping Type</label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          value="calculated"
-                          checked={listingData.shipping_type === 'calculated'}
-                          onChange={(e) => handleInputChange('shipping_type', e.target.value)}
-                          className="mr-2"
-                        />
-                        Calculated (buyer pays actual shipping)
-                      </label>
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          value="flat"
-                          checked={listingData.shipping_type === 'flat'}
-                          onChange={(e) => handleInputChange('shipping_type', e.target.value)}
-                          className="mr-2"
-                        />
-                        Flat rate
-                      </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Postage Service <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={listingData.postage_service}
+                      onChange={(e) => handleInputChange('postage_service', e.target.value)}
+                      className="w-full p-2 border rounded-lg"
+                    >
+                      {Object.entries(UK_POSTAGE_SERVICES).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Postage Cost <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-gray-500">£</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={listingData.postage_cost}
+                        onChange={(e) => handleInputChange('postage_cost', e.target.value)}
+                        className="w-full pl-8 p-2 border rounded-lg"
+                      />
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Standard UK postage rates: Small parcel £3.50, Medium £5.50, Large £8.50
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4">
@@ -839,82 +867,71 @@ export default function Dashboard() {
                       <div className="flex gap-2">
                         <input
                           type="number"
-                          value={listingData.package_weight_pounds}
-                          onChange={(e) => handleInputChange('package_weight_pounds', e.target.value)}
+                          value={listingData.package_weight_kg}
+                          onChange={(e) => handleInputChange('package_weight_kg', e.target.value)}
                           className="w-20 p-2 border rounded-lg"
                           min="0"
                         />
-                        <span className="text-sm text-gray-500 pt-2">lbs</span>
+                        <span className="text-sm text-gray-500 pt-2">kg</span>
                         <input
                           type="number"
-                          value={listingData.package_weight_ounces}
-                          onChange={(e) => handleInputChange('package_weight_ounces', e.target.value)}
+                          value={listingData.package_weight_g}
+                          onChange={(e) => handleInputChange('package_weight_g', e.target.value)}
                           className="w-20 p-2 border rounded-lg"
                           min="0"
-                          max="15"
+                          max="999"
                         />
-                        <span className="text-sm text-gray-500 pt-2">oz</span>
+                        <span className="text-sm text-gray-500 pt-2">g</span>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Package Size (inches)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Package Size (cm)</label>
                       <div className="flex gap-1">
                         <input
                           type="number"
-                          value={listingData.package_length}
-                          onChange={(e) => handleInputChange('package_length', e.target.value)}
+                          value={listingData.package_length_cm}
+                          onChange={(e) => handleInputChange('package_length_cm', e.target.value)}
                           className="w-16 p-2 border rounded-lg"
                           placeholder="L"
                         />
                         <span className="text-gray-500 pt-2">×</span>
                         <input
                           type="number"
-                          value={listingData.package_width}
-                          onChange={(e) => handleInputChange('package_width', e.target.value)}
+                          value={listingData.package_width_cm}
+                          onChange={(e) => handleInputChange('package_width_cm', e.target.value)}
                           className="w-16 p-2 border rounded-lg"
                           placeholder="W"
                         />
                         <span className="text-gray-500 pt-2">×</span>
                         <input
                           type="number"
-                          value={listingData.package_height}
-                          onChange={(e) => handleInputChange('package_height', e.target.value)}
+                          value={listingData.package_depth_cm}
+                          onChange={(e) => handleInputChange('package_depth_cm', e.target.value)}
                           className="w-16 p-2 border rounded-lg"
-                          placeholder="H"
+                          placeholder="D"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Handling Time</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Dispatch Time</label>
                       <select
-                        value={listingData.handling_time}
-                        onChange={(e) => handleInputChange('handling_time', e.target.value)}
+                        value={listingData.dispatch_time}
+                        onChange={(e) => handleInputChange('dispatch_time', e.target.value)}
                         className="w-full p-2 border rounded-lg"
                       >
-                        <option value={1}>1 business day</option>
-                        <option value={2}>2 business days</option>
-                        <option value={3}>3 business days</option>
-                        <option value={5}>5 business days</option>
+                        <option value={1}>Next working day</option>
+                        <option value={2}>2 working days</option>
+                        <option value={3}>3 working days</option>
+                        <option value={5}>5 working days</option>
                       </select>
                     </div>
-                  </div>
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="international"
-                      checked={listingData.international_shipping}
-                      onChange={(e) => handleInputChange('international_shipping', e.target.checked)}
-                      className="mr-2"
-                    />
-                    <label htmlFor="international" className="text-sm">Offer international shipping</label>
                   </div>
                 </div>
               </div>
 
               {/* Returns Section */}
               <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Returns</h3>
+                <h3 className="text-lg font-semibold mb-4">Returns Policy</h3>
                 
                 <div className="space-y-4">
                   <div className="flex items-center">
@@ -943,7 +960,7 @@ export default function Dashboard() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Return Shipping Paid By</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Return Postage Paid By</label>
                         <select
                           value={listingData.return_shipping_paid_by}
                           onChange={(e) => handleInputChange('return_shipping_paid_by', e.target.value)}
@@ -1004,10 +1021,10 @@ export default function Dashboard() {
                         <td className="px-4 py-3 text-sm">{draft.brand || '-'}</td>
                         <td className="px-4 py-3 text-sm">{draft.size || '-'}</td>
                         <td className="px-4 py-3 text-sm">
-                          ${draft.buy_it_now_price || draft.starting_bid || '0'}
+                          £{draft.buy_it_now_price || draft.starting_bid || '0'}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
-                          {new Date(draft.last_edited).toLocaleDateString()}
+                          {new Date(draft.last_edited).toLocaleDateString('en-GB')}
                         </td>
                         <td className="px-4 py-3 text-sm">
                           <button className="text-blue-600 hover:text-blue-700 mr-3">Edit</button>
