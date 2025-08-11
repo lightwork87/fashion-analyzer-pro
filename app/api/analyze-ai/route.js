@@ -6,13 +6,13 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { processBatchImages } from './aiIntegration';
 import { calculateCreditsNeeded } from '../../lib/stripe';
-import { checkUserCredits, useCredits, saveAnalysis } from '../../lib/supabase';
+import { supabase, checkUserCredits, useCredits, saveAnalysis } from '../../lib/supabase';
 
 export async function POST(request) {
   console.log('🚀 API Route: /api/analyze-ai called');
   
   try {
-    // Get the authenticated user using the new auth() method
+    // Get the authenticated user
     const { userId } = await auth();
     
     if (!userId) {
@@ -86,17 +86,30 @@ export async function POST(request) {
     const results = await processBatchImages(images);
     console.log('✅ AI analysis completed');
     
-    // Use credits
+    // Use credits - Fixed section
     console.log('💳 Deducting credits...');
-    const creditResult = await useCredits(userId, creditsNeeded, images.length);
-    
-    if (!creditResult.success) {
-      console.error('Failed to deduct credits:', creditResult.error);
+    try {
+      const creditResult = await useCredits(userId, creditsNeeded, images.length);
+      
+      if (!creditResult.success) {
+        console.error('Failed to deduct credits:', creditResult.error);
+        // Continue anyway - don't fail the whole request
+      } else {
+        console.log('✅ Credits deducted successfully');
+      }
+    } catch (creditError) {
+      console.error('Credit deduction error:', creditError);
+      // Continue anyway - don't fail the whole request
     }
     
     // Save analysis
-    if (results.items && results.items.length > 0) {
-      await saveAnalysis(userId, results.items[0]);
+    try {
+      if (results.items && results.items.length > 0) {
+        await saveAnalysis(userId, results.items[0]);
+      }
+    } catch (saveError) {
+      console.error('Failed to save analysis:', saveError);
+      // Continue anyway
     }
     
     // Get updated credit info
@@ -105,8 +118,8 @@ export async function POST(request) {
     // Add credit info to results
     results.creditInfo = {
       creditsUsed: creditsNeeded,
-      creditsRemaining: updatedCreditCheck.creditsAvailable,
-      totalCredits: updatedCreditCheck.totalCredits,
+      creditsRemaining: updatedCreditCheck.creditsAvailable || 0,
+      totalCredits: updatedCreditCheck.totalCredits || 0,
       subscription: 'free'
     };
     

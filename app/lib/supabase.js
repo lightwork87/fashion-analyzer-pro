@@ -111,3 +111,12 @@ export async function checkUserCredits(clerkId, creditsNeeded = 1) {
     return { hasEnoughCredits: false, creditsAvailable: 0, error };
   }
 }
+// At the very bottom of /app/lib/supabase.js, add:
+export {
+  supabase,
+  getOrCreateUser,
+  checkUserCredits,
+  useCredits,
+  saveAnalysis,
+  getUserAnalyses
+};
