@@ -267,11 +267,11 @@ export async function getUserAnalyses(clerkId, limit = 10) {
   }
 }
 
-// Export all functions (NOT supabase again since it's already exported above)
-export {
-  getOrCreateUser,
-  checkUserCredits,
-  useCredits,
-  saveAnalysis,
-  getUserAnalyses
-};
+// DELETE THIS ENTIRE SECTION - it's causing the duplicate export error
+// export {
+//   getOrCreateUser,
+//   checkUserCredits,
+//   useCredits,
+//   saveAnalysis,
+//   getUserAnalyses
+// };
