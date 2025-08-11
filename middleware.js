@@ -4,14 +4,15 @@ export default authMiddleware({
   publicRoutes: [
     "/",
     "/pricing",
-    "/sign-in",
-    "/sign-up",
+    "/sign-in(.*)",
+    "/sign-up(.*)",
     "/api/stripe/create-checkout",
-    "/api/webhook/stripe"
-  ],
-  ignoredRoutes: []
+    "/api/webhook/stripe",
+    "/api/test-db",
+    "/test-db"
+  ]
 });
 
 export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
 };
