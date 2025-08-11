@@ -2,12 +2,16 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import { compressMultipleImages } from '../utils/imageCompression';
 import CreditDisplay from '../components/CreditDisplay';
 import { calculateCreditsNeeded } from '../lib/stripe';
+import { useUserData } from '../hooks/useUserData';
 
 export default function Dashboard() {
   const router = useRouter();
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const { creditInfo, refreshCredits } = useUserData();
   const [mounted, setMounted] = useState(false);
   const [images, setImages] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -18,15 +22,17 @@ export default function Dashboard() {
   const [editedTitle, setEditedTitle] = useState('');
   const [editedPrice, setEditedPrice] = useState({ min: '', max: '' });
   const [editedDescription, setEditedDescription] = useState('');
-  const [creditInfo, setCreditInfo] = useState({
-    creditsRemaining: 10,
-    totalCredits: 10,
-    subscription: 'free'
-  });
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    // Redirect to sign-in if not authenticated
+    if (clerkLoaded && !clerkUser) {
+      router.push('/sign-in');
+    }
+  }, [clerkUser, clerkLoaded, router]);
 
   const handleFileSelect = useCallback(async (e) => {
     const files = Array.from(e.target.files);
@@ -98,12 +104,7 @@ export default function Dashboard() {
       if (!response.ok) {
         if (data.type === 'INSUFFICIENT_CREDITS') {
           setError(`Insufficient credits. ${data.details}`);
-          if (data.creditsAvailable !== undefined) {
-            setCreditInfo(prev => ({
-              ...prev,
-              creditsRemaining: data.creditsAvailable
-            }));
-          }
+          await refreshCredits(); // Refresh credit display
           return;
         }
         throw new Error(data.details || data.error || `Server error: ${response.status}`);
@@ -111,9 +112,8 @@ export default function Dashboard() {
       
       setResults(data);
       
-      if (data.creditInfo) {
-        setCreditInfo(data.creditInfo);
-      }
+      // Refresh credits after successful analysis
+      await refreshCredits();
       
       if (data.items && data.items.length > 0) {
         setEditedTitle(data.items[0].ebayTitle);
@@ -166,7 +166,7 @@ export default function Dashboard() {
     };
   };
 
-  if (!mounted) {
+  if (!mounted || !clerkLoaded) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -175,6 +175,11 @@ export default function Dashboard() {
         </div>
       </div>
     );
+  }
+
+  // Redirect if not authenticated
+  if (!clerkUser) {
+    return null;
   }
 
   return (
@@ -397,14 +402,12 @@ export default function Dashboard() {
                 </div>
                 
                 {/* Credit Usage Summary */}
-                {results.creditInfo && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded">
-                    <p className="text-sm text-gray-700 font-medium">Credits Used: {results.creditInfo.creditsUsed}</p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Remaining: {results.creditInfo.creditsRemaining} / {results.creditInfo.totalCredits}
-                    </p>
-                  </div>
-                )}
+                <div className="mt-4 p-3 bg-gray-50 rounded">
+                  <p className="text-sm text-gray-700 font-medium">Credits Used: 1</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Remaining: {creditInfo.creditsRemaining} / {creditInfo.totalCredits}
+                  </p>
+                </div>
                 
                 <button
                   onClick={clearAll}
