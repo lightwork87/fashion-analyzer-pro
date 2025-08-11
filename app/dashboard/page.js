@@ -8,6 +8,70 @@ import CreditDisplay from '../components/CreditDisplay';
 import { useUserData } from '../hooks/useUserData';
 import { supabase } from '../lib/supabase';
 
+// Your Business Policies (configured like eBay)
+const BUSINESS_POLICIES = {
+  returns: {
+    'free_returns_30': {
+      name: 'Free returns',
+      description: 'Top rated seller +',
+      returns_accepted: true,
+      return_period: 30,
+      return_shipping_paid_by: 'seller',
+      domestic_returns: true,
+      international_returns: false
+    },
+    'buyer_pays_returns_14': {
+      name: 'Buyer pays return',
+      description: 'Standard returns',
+      returns_accepted: true,
+      return_period: 14,
+      return_shipping_paid_by: 'buyer',
+      domestic_returns: true,
+      international_returns: false
+    },
+    'no_returns': {
+      name: 'No returns',
+      description: 'All sales final',
+      returns_accepted: false,
+      domestic_returns: false,
+      international_returns: false
+    }
+  },
+  shipping: {
+    'free_shipping_48': {
+      name: 'Free shipping',
+      description: 'Royal Mail 48',
+      postage_service: 'royal_mail_48',
+      postage_cost: '0.00',
+      dispatch_time: 1,
+      shipping_type: 'flat'
+    },
+    'standard_shipping': {
+      name: 'Standard shipping',
+      description: '£3.50 Royal Mail 48',
+      postage_service: 'royal_mail_48',
+      postage_cost: '3.50',
+      dispatch_time: 1,
+      shipping_type: 'flat'
+    },
+    'next_day': {
+      name: 'Next day delivery',
+      description: '£6.95 Royal Mail 24',
+      postage_service: 'royal_mail_24',
+      postage_cost: '6.95',
+      dispatch_time: 1,
+      shipping_type: 'flat'
+    }
+  },
+  payment: {
+    'standard': {
+      name: 'Standard payment',
+      description: 'PayPal, Credit/Debit cards',
+      payment_methods: ['paypal', 'credit_card', 'debit_card']
+    }
+  }
+};
+
 // eBay UK category-specific requirements
 const EBAY_UK_CATEGORIES = {
   'mens_clothing': {
@@ -50,6 +114,12 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('upload');
   const [drafts, setDrafts] = useState([]);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [selectedPolicies, setSelectedPolicies] = useState({
+    returns: 'free_returns_30',
+    shipping: 'standard_shipping',
+    payment: 'standard'
+  });
   
   // Listing form state - UK specific
   const [listingData, setListingData] = useState({
@@ -90,8 +160,8 @@ export default function Dashboard() {
     auto_accept_offer: '',
     auto_decline_offer: '',
     
-    // UK Shipping
-    shipping_type: 'flat', // Most UK sellers use flat rate
+    // These will be set by policies
+    shipping_type: 'flat',
     postage_service: 'royal_mail_48',
     postage_cost: '3.50',
     package_weight_kg: 0,
@@ -101,7 +171,7 @@ export default function Dashboard() {
     package_depth_cm: 5,
     dispatch_time: 1,
     
-    // Returns (UK standard)
+    // Returns (set by policy)
     returns_accepted: true,
     return_period: 30,
     return_shipping_paid_by: 'buyer',
@@ -113,6 +183,7 @@ export default function Dashboard() {
   useEffect(() => {
     setMounted(true);
     loadDrafts();
+    loadUserPolicies();
   }, []);
 
   useEffect(() => {
@@ -120,6 +191,55 @@ export default function Dashboard() {
       router.push('/sign-in');
     }
   }, [clerkUser, clerkLoaded, router]);
+
+  useEffect(() => {
+    // Apply selected policies to listing data
+    applyPoliciesToListing();
+  }, [selectedPolicies]);
+
+  const loadUserPolicies = async () => {
+    // Load user's saved policy preferences from database
+    if (!clerkUser) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('default_policies')
+        .eq('user_id', clerkUser.id)
+        .single();
+        
+      if (data && data.default_policies) {
+        setSelectedPolicies(data.default_policies);
+      }
+    } catch (err) {
+      console.error('Error loading policies:', err);
+    }
+  };
+
+  const applyPoliciesToListing = () => {
+    // Apply returns policy
+    if (selectedPolicies.returns && BUSINESS_POLICIES.returns[selectedPolicies.returns]) {
+      const returnsPolicy = BUSINESS_POLICIES.returns[selectedPolicies.returns];
+      setListingData(prev => ({
+        ...prev,
+        returns_accepted: returnsPolicy.returns_accepted,
+        return_period: returnsPolicy.return_period || 30,
+        return_shipping_paid_by: returnsPolicy.return_shipping_paid_by || 'buyer'
+      }));
+    }
+    
+    // Apply shipping policy
+    if (selectedPolicies.shipping && BUSINESS_POLICIES.shipping[selectedPolicies.shipping]) {
+      const shippingPolicy = BUSINESS_POLICIES.shipping[selectedPolicies.shipping];
+      setListingData(prev => ({
+        ...prev,
+        postage_service: shippingPolicy.postage_service,
+        postage_cost: shippingPolicy.postage_cost,
+        dispatch_time: shippingPolicy.dispatch_time,
+        shipping_type: shippingPolicy.shipping_type
+      }));
+    }
+  };
 
   const loadDrafts = async () => {
     if (!clerkUser) return;
@@ -256,6 +376,10 @@ export default function Dashboard() {
         .insert({
           user_id: clerkUser.id,
           ...listingData,
+          // Save which policies were used
+          returns_policy: selectedPolicies.returns,
+          shipping_policy: selectedPolicies.shipping,
+          payment_policy: selectedPolicies.payment,
           images_count: images.length,
           is_draft: true,
           is_listed: false,
@@ -306,6 +430,79 @@ export default function Dashboard() {
     }));
   };
 
+  const PolicySelector = () => (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-lg font-semibold text-blue-900">Business Policies</h3>
+        <button
+          onClick={() => setShowPolicyModal(true)}
+          className="text-sm text-blue-600 hover:text-blue-700"
+        >
+          Manage Policies
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Returns Policy</label>
+          <select
+            value={selectedPolicies.returns}
+            onChange={(e) => setSelectedPolicies(prev => ({ ...prev, returns: e.target.value }))}
+            className="w-full p-2 border rounded bg-white"
+          >
+            {Object.entries(BUSINESS_POLICIES.returns).map(([key, policy]) => (
+              <option key={key} value={key}>{policy.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            {BUSINESS_POLICIES.returns[selectedPolicies.returns]?.description}
+          </p>
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Policy</label>
+          <select
+            value={selectedPolicies.shipping}
+            onChange={(e) => setSelectedPolicies(prev => ({ ...prev, shipping: e.target.value }))}
+            className="w-full p-2 border rounded bg-white"
+          >
+            {Object.entries(BUSINESS_POLICIES.shipping).map(([key, policy]) => (
+              <option key={key} value={key}>{policy.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            {BUSINESS_POLICIES.shipping[selectedPolicies.shipping]?.description}
+          </p>
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Payment Policy</label>
+          <select
+            value={selectedPolicies.payment}
+            onChange={(e) => setSelectedPolicies(prev => ({ ...prev, payment: e.target.value }))}
+            className="w-full p-2 border rounded bg-white"
+          >
+            {Object.entries(BUSINESS_POLICIES.payment).map(([key, policy]) => (
+              <option key={key} value={key}>{policy.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            {BUSINESS_POLICIES.payment[selectedPolicies.payment]?.description}
+          </p>
+        </div>
+      </div>
+      
+      <div className="mt-3 text-xs text-gray-600">
+        <span className="inline-flex items-center">
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          These policies will be applied to all listings. You can override individual settings below.
+        </span>
+      </div>
+    </div>
+  );
+
   if (!mounted || !clerkLoaded) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -344,6 +541,12 @@ export default function Dashboard() {
                 >
                   Drafts ({drafts.length})
                 </button>
+                <button
+                  onClick={() => setActiveTab('policies')}
+                  className={`px-3 py-1 rounded ${activeTab === 'policies' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
+                >
+                  Policies
+                </button>
               </nav>
             </div>
             <div className="flex items-center gap-4">
@@ -364,6 +567,9 @@ export default function Dashboard() {
         {activeTab === 'upload' && (
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-2xl font-bold mb-6">Upload Fashion Items</h2>
+            
+            {/* Policy Selector */}
+            <PolicySelector />
             
             {/* Upload Area */}
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
@@ -444,6 +650,9 @@ export default function Dashboard() {
         {/* Listing Details Tab */}
         {activeTab === 'details' && results && (
           <div className="space-y-6">
+            {/* Policy Selector at top of form too */}
+            <PolicySelector />
+            
             {/* eBay UK Listing Form */}
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex justify-between items-center mb-6">
@@ -822,159 +1031,6 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* UK Postage Section */}
-              <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Postage & Packaging</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Postage Service <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={listingData.postage_service}
-                      onChange={(e) => handleInputChange('postage_service', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                    >
-                      {Object.entries(UK_POSTAGE_SERVICES).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Postage Cost <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2 text-gray-500">£</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={listingData.postage_cost}
-                        onChange={(e) => handleInputChange('postage_cost', e.target.value)}
-                        className="w-full pl-8 p-2 border rounded-lg"
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Standard UK postage rates: Small parcel £3.50, Medium £5.50, Large £8.50
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Package Weight</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          value={listingData.package_weight_kg}
-                          onChange={(e) => handleInputChange('package_weight_kg', e.target.value)}
-                          className="w-20 p-2 border rounded-lg"
-                          min="0"
-                        />
-                        <span className="text-sm text-gray-500 pt-2">kg</span>
-                        <input
-                          type="number"
-                          value={listingData.package_weight_g}
-                          onChange={(e) => handleInputChange('package_weight_g', e.target.value)}
-                          className="w-20 p-2 border rounded-lg"
-                          min="0"
-                          max="999"
-                        />
-                        <span className="text-sm text-gray-500 pt-2">g</span>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Package Size (cm)</label>
-                      <div className="flex gap-1">
-                        <input
-                          type="number"
-                          value={listingData.package_length_cm}
-                          onChange={(e) => handleInputChange('package_length_cm', e.target.value)}
-                          className="w-16 p-2 border rounded-lg"
-                          placeholder="L"
-                        />
-                        <span className="text-gray-500 pt-2">×</span>
-                        <input
-                          type="number"
-                          value={listingData.package_width_cm}
-                          onChange={(e) => handleInputChange('package_width_cm', e.target.value)}
-                          className="w-16 p-2 border rounded-lg"
-                          placeholder="W"
-                        />
-                        <span className="text-gray-500 pt-2">×</span>
-                        <input
-                          type="number"
-                          value={listingData.package_depth_cm}
-                          onChange={(e) => handleInputChange('package_depth_cm', e.target.value)}
-                          className="w-16 p-2 border rounded-lg"
-                          placeholder="D"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Dispatch Time</label>
-                      <select
-                        value={listingData.dispatch_time}
-                        onChange={(e) => handleInputChange('dispatch_time', e.target.value)}
-                        className="w-full p-2 border rounded-lg"
-                      >
-                        <option value={1}>Next working day</option>
-                        <option value={2}>2 working days</option>
-                        <option value={3}>3 working days</option>
-                        <option value={5}>5 working days</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Returns Section */}
-              <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Returns Policy</h3>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="returns"
-                      checked={listingData.returns_accepted}
-                      onChange={(e) => handleInputChange('returns_accepted', e.target.checked)}
-                      className="mr-2"
-                    />
-                    <label htmlFor="returns" className="text-sm">Accept returns</label>
-                  </div>
-
-                  {listingData.returns_accepted && (
-                    <div className="grid grid-cols-2 gap-4 ml-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Return Period</label>
-                        <select
-                          value={listingData.return_period}
-                          onChange={(e) => handleInputChange('return_period', e.target.value)}
-                          className="w-full p-2 border rounded-lg"
-                        >
-                          <option value={14}>14 days</option>
-                          <option value={30}>30 days</option>
-                          <option value={60}>60 days</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Return Postage Paid By</label>
-                        <select
-                          value={listingData.return_shipping_paid_by}
-                          onChange={(e) => handleInputChange('return_shipping_paid_by', e.target.value)}
-                          className="w-full p-2 border rounded-lg"
-                        >
-                          <option value="buyer">Buyer</option>
-                          <option value="seller">Seller</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
               {/* Description */}
               <div className="border-t pt-6 mt-6">
                 <h3 className="text-lg font-semibold mb-4">Description</h3>
@@ -986,11 +1042,92 @@ export default function Dashboard() {
                   placeholder="Describe your item in detail..."
                 />
               </div>
+
+              {/* Applied Policies Summary */}
+              <div className="border-t pt-6 mt-6 bg-gray-50 -mx-6 -mb-6 px-6 pb-6">
+                <h3 className="text-lg font-semibold mb-4">Applied Policies</h3>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium">Returns:</span> {BUSINESS_POLICIES.returns[selectedPolicies.returns]?.name}
+                  </div>
+                  <div>
+                    <span className="font-medium">Shipping:</span> {BUSINESS_POLICIES.shipping[selectedPolicies.shipping]?.name}
+                  </div>
+                  <div>
+                    <span className="font-medium">Payment:</span> {BUSINESS_POLICIES.payment[selectedPolicies.payment]?.name}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Drafts Tab */}
+        {/* Policies Tab */}
+        {activeTab === 'policies' && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h2 className="text-2xl font-bold">Business Policies</h2>
+              <p className="text-gray-600 mt-2">Manage your default policies for all listings</p>
+            </div>
+            
+            <div className="p-6 space-y-8">
+              {/* Returns Policies */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Returns Policies</h3>
+                <div className="space-y-3">
+                  {Object.entries(BUSINESS_POLICIES.returns).map(([key, policy]) => (
+                    <div key={key} className="border rounded-lg p-4 hover:bg-gray-50">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">{policy.name}</h4>
+                          <p className="text-sm text-gray-600">{policy.description}</p>
+                          <div className="mt-2 text-xs text-gray-500">
+                            {policy.returns_accepted ? (
+                              <>Returns accepted within {policy.return_period} days • {policy.return_shipping_paid_by === 'seller' ? 'Free returns' : 'Buyer pays return postage'}</>
+                            ) : (
+                              'No returns accepted'
+                            )}
+                          </div>
+                        </div>
+                        <button className="text-blue-600 text-sm hover:underline">Edit</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Shipping Policies */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Shipping Policies</h3>
+                <div className="space-y-3">
+                  {Object.entries(BUSINESS_POLICIES.shipping).map(([key, policy]) => (
+                    <div key={key} className="border rounded-lg p-4 hover:bg-gray-50">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">{policy.name}</h4>
+                          <p className="text-sm text-gray-600">{policy.description}</p>
+                          <div className="mt-2 text-xs text-gray-500">
+                            £{policy.postage_cost} • Dispatch in {policy.dispatch_time} working day{policy.dispatch_time > 1 ? 's' : ''}
+                          </div>
+                        </div>
+                        <button className="text-blue-600 text-sm hover:underline">Edit</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add New Policy Button */}
+              <div className="pt-4 border-t">
+                <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                  Create New Policy
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Drafts Tab - Updated to show policies */}
         {activeTab === 'drafts' && (
           <div className="bg-white rounded-lg shadow">
             <div className="p-6 border-b">
@@ -1010,6 +1147,7 @@ export default function Dashboard() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brand</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Policies</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Edited</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
@@ -1022,6 +1160,10 @@ export default function Dashboard() {
                         <td className="px-4 py-3 text-sm">{draft.size || '-'}</td>
                         <td className="px-4 py-3 text-sm">
                           £{draft.buy_it_now_price || draft.starting_bid || '0'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-xs">
+                          <div>{BUSINESS_POLICIES.returns[draft.returns_policy]?.name || 'Default'}</div>
+                          <div className="text-gray-500">{BUSINESS_POLICIES.shipping[draft.shipping_policy]?.name || 'Default'}</div>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           {new Date(draft.last_edited).toLocaleDateString('en-GB')}
