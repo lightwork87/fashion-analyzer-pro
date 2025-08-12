@@ -4,7 +4,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 export const metadata = {
   title: 'Fashion Analyzer Pro - AI-Powered Fashion Analysis for UK Resellers',
   description: 'Analyze fashion items with AI for optimal eBay and Vinted reselling in the UK. Get accurate valuations, condition reports, and SEO-optimized listings.',
-  metadataBase: new URL('https://yourdomain.co.uk'), // REPLACE WITH YOUR DOMAIN
+  metadataBase: new URL('https://lightlisterai.co.uk'), // REPLACE WITH YOUR DOMAIN
   keywords: ['fashion resale', 'eBay selling', 'Vinted', 'AI fashion analysis', 'UK reselling', 'clothing valuation'],
   authors: [{ name: 'Fashion Analyzer Pro' }],
   creator: 'Fashion Analyzer Pro',
