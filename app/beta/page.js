@@ -203,46 +203,46 @@ export default function BetaProgram() {
 
   return (
     <main className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Image 
-                src="/logo.png" 
-                alt="LightLister AI" 
-                width={40} 
-                height={40}
-                className="h-10 w-auto"
-              />
-              <h1 className="text-2xl font-bold text-gray-900">LightLister AI</h1>
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-semibold">
-                BETA VERSION
-              </span>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link 
-                href="/dashboard"
-                className="text-sm bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
-              >
-                Dashboard
-              </Link>
-              
-                href="mailto:lightlisterai@outlook.com?subject=LightLister AI - Beta Feedback"
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Report Issue
-              </a>
-              <Link
-                href="/"
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Home
-              </Link>
-            </div>
-          </div>
-        </div>
+     {/* Header */}
+<div className="bg-white border-b">
+  <div className="max-w-7xl mx-auto px-4 py-4">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <Image 
+          src="/logo.png" 
+          alt="LightLister AI" 
+          width={40} 
+          height={40}
+          className="h-10 w-auto"
+        />
+        <h1 className="text-2xl font-bold text-gray-900">LightLister AI</h1>
+        <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-semibold">
+          BETA VERSION
+        </span>
       </div>
+      <div className="flex items-center gap-4">
+        <Link 
+          href="/dashboard"
+          className="text-sm bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+        >
+          Dashboard
+        </Link>
+        
+          href="mailto:lightlisterai@outlook.com?subject=LightLister AI - Beta Feedback"
+          className="text-sm text-gray-600 hover:text-gray-900"
+        >
+          Report Issue
+        </a>
+        <Link
+          href="/"
+          className="text-sm text-gray-600 hover:text-gray-900"
+        >
+          Home
+        </Link>
+      </div>
+    </div>
+  </div>
+</div>
 
       <div className="max-w-3xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow">
