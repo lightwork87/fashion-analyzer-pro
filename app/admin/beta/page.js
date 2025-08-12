@@ -6,7 +6,7 @@ import { useUser } from '@clerk/nextjs';
 import { supabase } from '../../lib/supabase';
 
 // Add your admin email here
-const ADMIN_EMAILS = [lightlisterai@outlook.com.com']; // CHANGE THIS TO YOUR EMAIL
+const ADMIN_EMAILS = [lightlisterai@outlook.com']; // CHANGE THIS TO YOUR EMAIL
 
 export default function BetaAdmin() {
   const router = useRouter();
