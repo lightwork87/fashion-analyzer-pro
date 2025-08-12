@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs';
 import { processBatchImages } from './aiIntegration';
 import { calculateCreditsNeeded } from '../../lib/stripe';
 import { supabase, checkUserCredits, useCredits, saveAnalysis } from '../../lib/supabase';

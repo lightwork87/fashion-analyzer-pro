@@ -7,6 +7,11 @@ import Image from 'next/image';
 export default function Home() {
   const { user, isLoaded } = useUser();
 
+  // Function to handle email click
+  const handleReportIssue = () => {
+    window.location.href = 'mailto:lightlisterai@outlook.com?subject=LightLister%20AI%20-%20Issue%20Report';
+  };
+
   return (
     <main className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -35,13 +40,15 @@ export default function Home() {
                   >
                     Dashboard
                   </Link>
-                  
-                    href="mailto:lightlisterai@outlook.com?subject=LightLister AI - Issue Report"
+                  <button
+                    onClick={handleReportIssue}
                     className="text-sm text-gray-600 hover:text-gray-900"
                   >
                     Report Issue
-                  </a>
-                  <span className="text-sm text-gray-600">Hi, {user.firstName || user.emailAddresses[0].emailAddress}</span>
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    Hi, {user.firstName || user.emailAddresses[0].emailAddress}
+                  </span>
                   <SignOutButton>
                     <button className="text-sm text-gray-600 hover:text-gray-900">
                       Sign Out
@@ -77,7 +84,7 @@ export default function Home() {
             AI-Powered Fashion Listing for UK Resellers
           </h2>
           <p className="text-xl text-gray-600 mb-8">
-            List your fashion items on eBay & Vinted in seconds with AI-powered analysis
+            List your fashion items on eBay and Vinted in seconds with AI-powered analysis
           </p>
           
           <div className="space-y-4">
@@ -147,7 +154,7 @@ export default function Home() {
             </div>
             <h3 className="text-lg font-semibold mb-2">Multi-Platform</h3>
             <p className="text-gray-600">
-              Optimized for eBay & Vinted with platform-specific keywords
+              Optimized for eBay and Vinted with platform-specific keywords
             </p>
           </div>
         </div>
@@ -169,80 +176,6 @@ export default function Home() {
           >
             Apply for Beta Access
           </Link>
-        </div>
-
-        {/* How It Works Section */}
-        <div className="mt-16">
-          <h2 className="text-2xl font-bold text-center mb-8">How LightLister AI Works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="text-center">
-              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-blue-600">1</span>
-              </div>
-              <h4 className="font-semibold mb-2">Upload Photos</h4>
-              <p className="text-sm text-gray-600">
-                Take photos of your items - up to 24 per listing
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-blue-600">2</span>
-              </div>
-              <h4 className="font-semibold mb-2">AI Analysis</h4>
-              <p className="text-sm text-gray-600">
-                Our AI identifies brands, sizes, and conditions
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-blue-600">3</span>
-              </div>
-              <h4 className="font-semibold mb-2">Review & Edit</h4>
-              <p className="text-sm text-gray-600">
-                Fine-tune AI suggestions and pricing
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-blue-600">4</span>
-              </div>
-              <h4 className="font-semibold mb-2">List & Sell</h4>
-              <p className="text-sm text-gray-600">
-                Export to eBay, Vinted, or other platforms
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Testimonials Section (Coming Soon) */}
-        <div className="mt-16 bg-gray-50 rounded-lg p-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">Coming Soon: Success Stories</h2>
-          <p className="text-gray-600 mb-6">
-            Be one of our first beta testers and have your success story featured here!
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-lg">
-              <div className="text-4xl mb-4">⭐⭐⭐⭐⭐</div>
-              <p className="text-sm text-gray-600 italic">
-                "Your testimonial could be here!"
-              </p>
-              <p className="text-sm font-semibold mt-2">Beta Tester</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg">
-              <div className="text-4xl mb-4">⭐⭐⭐⭐⭐</div>
-              <p className="text-sm text-gray-600 italic">
-                "Join beta testing today"
-              </p>
-              <p className="text-sm font-semibold mt-2">Beta Tester</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg">
-              <div className="text-4xl mb-4">⭐⭐⭐⭐⭐</div>
-              <p className="text-sm text-gray-600 italic">
-                "Share your experience"
-              </p>
-              <p className="text-sm font-semibold mt-2">Beta Tester</p>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
