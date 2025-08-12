@@ -530,6 +530,9 @@ export default function Dashboard() {
                   className="h-8 w-auto"
                 />
                 <h1 className="text-xl font-bold text-gray-900">LightLister AI</h1>
+                <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-semibold">
+                  BETA VERSION
+                </span>
               </div>
               <nav className="flex gap-4">
                 <button
@@ -567,12 +570,43 @@ export default function Dashboard() {
               >
                 Get Credits
               </button>
+              
+                href="mailto:lightlisterai@outlook.com?subject=LightLister AI - Issue Report&body=Please describe the issue you encountered:"
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Report Issue
+              </a>
+              <button
+                onClick={() => router.push('/')}
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Home
+              </button>
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto p-6">
+        {/* Credit Warning */}
+        {creditInfo.creditsRemaining < 20 && creditInfo.creditsRemaining > 0 && (
+          <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <p className="text-orange-800">
+              ⚠️ You have {creditInfo.creditsRemaining} credits remaining. 
+              <a href="/pricing" className="ml-2 underline font-medium">Get more credits</a>
+            </p>
+          </div>
+        )}
+
+        {creditInfo.creditsRemaining === 0 && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800 font-medium">
+              ❌ You're out of credits! 
+              <a href="/pricing" className="ml-2 underline">Upgrade now to continue analyzing</a>
+            </p>
+          </div>
+        )}
+
         {/* Upload Tab */}
         {activeTab === 'upload' && (
           <div className="bg-white rounded-lg shadow p-6">
@@ -1154,10 +1188,6 @@ export default function Dashboard() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brand</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brand</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>

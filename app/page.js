@@ -22,20 +22,32 @@ export default function Home() {
                 className="h-10 w-auto"
               />
               <h1 className="text-2xl font-bold text-gray-900">LightLister AI</h1>
-              <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">
-                AI Powered
+              <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-semibold">
+                BETA VERSION
               </span>
             </div>
-            <div>
+            <div className="flex items-center gap-4">
               {isLoaded && user ? (
-                <div className="flex items-center gap-4">
+                <>
+                  <Link 
+                    href="/dashboard"
+                    className="text-sm bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                  >
+                    Dashboard
+                  </Link>
+                  
+                    href="mailto:lightlisterai@outlook.com?subject=LightLister AI - Issue Report"
+                    className="text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    Report Issue
+                  </a>
                   <span className="text-sm text-gray-600">Hi, {user.firstName || user.emailAddresses[0].emailAddress}</span>
                   <SignOutButton>
                     <button className="text-sm text-gray-600 hover:text-gray-900">
                       Sign Out
                     </button>
                   </SignOutButton>
-                </div>
+                </>
               ) : (
                 <div className="flex gap-4">
                   <Link href="/sign-in" className="text-sm text-gray-600 hover:text-gray-900">
@@ -98,12 +110,6 @@ export default function Home() {
             >
               View Pricing Plans
             </Link>
-          </div>
-          
-          <div className="mt-8 p-4 bg-yellow-50 rounded-lg">
-            <p className="text-sm text-yellow-800">
-              🚧 Note: We&apos;re currently in beta. Start with 10 free credits!
-            </p>
           </div>
         </div>
 
