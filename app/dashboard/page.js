@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
+import Image from 'next/image';
 import { compressMultipleImages } from '../utils/imageCompression';
 import CreditDisplay from '../components/CreditDisplay';
 import { useUserData } from '../hooks/useUserData';
@@ -520,7 +521,16 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <h1 className="text-xl font-bold text-gray-900">Fashion Analyzer Pro UK</h1>
+              <div className="flex items-center gap-2">
+                <Image 
+                  src="/logo.png" 
+                  alt="Fashion Analyzer Pro" 
+                  width={32} 
+                  height={32}
+                  className="h-8 w-auto"
+                />
+                <h1 className="text-xl font-bold text-gray-900">Fashion Analyzer Pro</h1>
+              </div>
               <nav className="flex gap-4">
                 <button
                   onClick={() => setActiveTab('upload')}

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useUser, SignOutButton } from '@clerk/nextjs';
+import Image from 'next/image';
 
 export default function Home() {
   const { user, isLoaded } = useUser();
@@ -12,7 +13,14 @@ export default function Home() {
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <Image 
+                src="/logo.png" 
+                alt="Fashion Analyzer Pro" 
+                width={40} 
+                height={40}
+                className="h-10 w-auto"
+              />
               <h1 className="text-2xl font-bold text-gray-900">Fashion Analyzer Pro</h1>
               <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">
                 AI Powered
@@ -46,11 +54,18 @@ export default function Home() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
+          <Image 
+            src="/logo.png" 
+            alt="Fashion Analyzer Pro" 
+            width={80} 
+            height={80}
+            className="h-20 w-auto mx-auto mb-6"
+          />
           <h2 className="text-3xl font-bold mb-4">
-            AI-Powered Fashion Analysis for eBay Reselling
+            AI-Powered Fashion Analysis for UK Resellers
           </h2>
           <p className="text-xl text-gray-600 mb-8">
-            Analyze fashion items with AI to maximize your reselling profits
+            Analyze fashion items with AI to maximize your eBay & Vinted profits
           </p>
           
           <div className="space-y-4">
@@ -92,7 +107,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Features Section - Same as before */}
+        {/* Features Section */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <div className="text-blue-600 mb-4">
@@ -124,9 +139,9 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold mb-2">eBay Optimized</h3>
+            <h3 className="text-lg font-semibold mb-2">Multi-Platform</h3>
             <p className="text-gray-600">
-              Auto-generated titles and descriptions optimized for eBay search
+              Optimized for eBay & Vinted with platform-specific keywords
             </p>
           </div>
         </div>

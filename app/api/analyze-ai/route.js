@@ -2,6 +2,30 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// Add body size limit
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
+
+import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+// ... rest of your imports
+
+export async function POST(request) {
+  console.log('🚀 API Route: /api/analyze-ai called');
+  
+  try {
+    // Add request size check
+    const contentLength = request.headers.get('content-length');
+    console.log('Request size:', contentLength, 'bytes');
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { processBatchImages } from './aiIntegration';
