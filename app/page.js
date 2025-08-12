@@ -145,6 +145,109 @@ export default function Home() {
             </p>
           </div>
         </div>
+
+        {/* Beta Testing Program Banner */}
+        <div className="mt-8 bg-purple-50 border border-purple-200 rounded-lg p-6 text-center">
+          <div className="flex items-center justify-center mb-3">
+            <svg className="w-8 h-8 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            <h3 className="text-lg font-semibold">Beta Testing Program Open!</h3>
+          </div>
+          <p className="text-gray-600 mb-4">
+            Join our beta program and get 50 free credits (worth £12.50) to test all features!
+          </p>
+          <Link 
+            href="/beta"
+            className="inline-block px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+          >
+            Apply for Beta Access
+          </Link>
+        </div>
+
+        {/* How It Works Section */}
+        <div className="mt-16">
+          <h2 className="text-2xl font-bold text-center mb-8">How LightLister AI Works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="text-center">
+              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-blue-600">1</span>
+              </div>
+              <h4 className="font-semibold mb-2">Upload Photos</h4>
+              <p className="text-sm text-gray-600">
+                Take photos of your items - up to 24 per listing
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-blue-600">2</span>
+              </div>
+              <h4 className="font-semibold mb-2">AI Analysis</h4>
+              <p className="text-sm text-gray-600">
+                Our AI identifies brands, sizes, and conditions
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-blue-600">3</span>
+              </div>
+              <h4 className="font-semibold mb-2">Review & Edit</h4>
+              <p className="text-sm text-gray-600">
+                Fine-tune AI suggestions and pricing
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-blue-600">4</span>
+              </div>
+              <h4 className="font-semibold mb-2">List & Sell</h4>
+              <p className="text-sm text-gray-600">
+                Export to eBay, Vinted, or other platforms
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Testimonials Section (Coming Soon) */}
+        <div className="mt-16 bg-gray-50 rounded-lg p-8 text-center">
+          <h2 className="text-2xl font-bold mb-4">Coming Soon: Success Stories</h2>
+          <p className="text-gray-600 mb-6">
+            Be one of our first beta testers and have your success story featured here!
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-lg">
+              <div className="text-4xl mb-4">⭐⭐⭐⭐⭐</div>
+              <p className="text-sm text-gray-600 italic">
+                "Your testimonial could be here!"
+              </p>
+              <p className="text-sm font-semibold mt-2">Beta Tester</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg">
+              <div className="text-4xl mb-4">⭐⭐⭐⭐⭐</div>
+              <p className="text-sm text-gray-600 italic">
+                "Join beta testing today"
+              </p>
+              <p className="text-sm font-semibold mt-2">Beta Tester</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg">
+              <div className="text-4xl mb-4">⭐⭐⭐⭐⭐</div>
+              <p className="text-sm text-gray-600 italic">
+                "Share your experience"
+              </p>
+              <p className="text-sm font-semibold mt-2">Beta Tester</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-16 text-center text-sm text-gray-600">
+          <p>&copy; 2025 LightLister AI. All rights reserved.</p>
+          <div className="mt-4 flex justify-center gap-6">
+            <Link href="/terms" className="hover:text-gray-900">Terms of Service</Link>
+            <Link href="/privacy" className="hover:text-gray-900">Privacy Policy</Link>
+            <Link href="/contact" className="hover:text-gray-900">Contact Us</Link>
+          </div>
+        </div>
       </div>
     </main>
   );
