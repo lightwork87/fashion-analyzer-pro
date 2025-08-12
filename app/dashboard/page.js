@@ -1157,3 +1157,44 @@ export default function Dashboard() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brand</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brand</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Policies</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Edited</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {drafts.map((draft) => (
+                      <tr key={draft.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm">{draft.title || 'Untitled'}</td>
+                        <td className="px-4 py-3 text-sm">{draft.brand || '-'}</td>
+                        <td className="px-4 py-3 text-sm">{draft.size || '-'}</td>
+                        <td className="px-4 py-3 text-sm">
+                          £{draft.buy_it_now_price || draft.starting_bid || '0'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-xs">
+                          <div>{BUSINESS_POLICIES.returns[draft.returns_policy]?.name || 'Default'}</div>
+                          <div className="text-gray-500">{BUSINESS_POLICIES.shipping[draft.shipping_policy]?.name || 'Default'}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {new Date(draft.last_edited).toLocaleDateString('en-GB')}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <button className="text-blue-600 hover:text-blue-700 mr-3">Edit</button>
+                          <button className="text-red-600 hover:text-red-700">Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
