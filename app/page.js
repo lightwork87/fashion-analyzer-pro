@@ -16,12 +16,12 @@ export default function Home() {
             <div className="flex items-center gap-3">
               <Image 
                 src="/logo.png" 
-                alt="Fashion Analyzer Pro" 
+                alt="LightLister AI" 
                 width={40} 
                 height={40}
                 className="h-10 w-auto"
               />
-              <h1 className="text-2xl font-bold text-gray-900">Fashion Analyzer Pro</h1>
+              <h1 className="text-2xl font-bold text-gray-900">LightLister AI</h1>
               <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">
                 AI Powered
               </span>
@@ -56,16 +56,16 @@ export default function Home() {
         <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
           <Image 
             src="/logo.png" 
-            alt="Fashion Analyzer Pro" 
+            alt="LightLister AI" 
             width={80} 
             height={80}
             className="h-20 w-auto mx-auto mb-6"
           />
           <h2 className="text-3xl font-bold mb-4">
-            AI-Powered Fashion Analysis for UK Resellers
+            AI-Powered Fashion Listing for UK Resellers
           </h2>
           <p className="text-xl text-gray-600 mb-8">
-            Analyze fashion items with AI to maximize your eBay & Vinted profits
+            List your fashion items on eBay & Vinted in seconds with AI-powered analysis
           </p>
           
           <div className="space-y-4">

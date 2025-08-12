@@ -2,13 +2,13 @@ import './globals.css'
 import { ClerkProvider } from '@clerk/nextjs'
 
 export const metadata = {
-  title: 'Fashion Analyzer Pro - AI-Powered Fashion Analysis for UK Resellers',
-  description: 'Analyze fashion items with AI for optimal eBay and Vinted reselling in the UK. Get accurate valuations, condition reports, and SEO-optimized listings.',
-  metadataBase: new URL('https://lightlisterai.co.uk'), // REPLACE WITH YOUR DOMAIN
-  keywords: ['fashion resale', 'eBay selling', 'Vinted', 'AI fashion analysis', 'UK reselling', 'clothing valuation'],
-  authors: [{ name: 'Fashion Analyzer Pro' }],
-  creator: 'Fashion Analyzer Pro',
-  publisher: 'Fashion Analyzer Pro',
+  title: 'LightLister AI - AI-Powered Fashion Listing for UK Resellers',
+  description: 'List fashion items on eBay and Vinted in seconds with AI-powered analysis. Smart pricing, condition grading, and SEO optimization.',
+  metadataBase: new URL('https://lightlisterai.co.uk'),
+  keywords: ['fashion resale', 'eBay listing tool', 'Vinted', 'AI fashion analysis', 'UK reselling', 'clothing valuation', 'automated listing'],
+  authors: [{ name: 'LightLister AI' }],
+  creator: 'LightLister AI',
+  publisher: 'LightLister AI',
   formatDetection: {
     email: false,
     address: false,
@@ -20,16 +20,16 @@ export const metadata = {
     shortcut: '/logo.png',
   },
   openGraph: {
-    title: 'Fashion Analyzer Pro - AI Fashion Analysis',
-    description: 'AI-Powered Fashion Analysis for UK Resellers. Maximize profits on eBay & Vinted.',
-    url: 'https://yourdomain.co.uk', // REPLACE WITH YOUR DOMAIN
-    siteName: 'Fashion Analyzer Pro',
+    title: 'LightLister AI - AI Fashion Listing Tool',
+    description: 'AI-Powered Fashion Listing for UK Resellers. List on eBay & Vinted in seconds.',
+    url: 'https://lightlisterai.co.uk',
+    siteName: 'LightLister AI',
     images: [
       {
         url: '/logo.png',
         width: 800,
         height: 600,
-        alt: 'Fashion Analyzer Pro Logo',
+        alt: 'LightLister AI Logo',
       }
     ],
     locale: 'en_GB',
@@ -37,8 +37,8 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Fashion Analyzer Pro - AI Fashion Analysis',
-    description: 'AI-Powered Fashion Analysis for UK Resellers',
+    title: 'LightLister AI - AI Fashion Listing Tool',
+    description: 'AI-Powered Fashion Listing for UK Resellers',
     images: ['/logo.png'],
   },
   robots: {
