@@ -1,1230 +1,908 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Image from 'next/image';
-import { compressMultipleImages } from '../utils/imageCompression';
 import CreditDisplay from '../components/CreditDisplay';
-import { useUserData } from '../hooks/useUserData';
-import { supabase } from '../lib/supabase';
+import { compressImage } from '../utils/imageCompression';
 
-// Your Business Policies (configured like eBay)
-const BUSINESS_POLICIES = {
+const generateSKU = () => {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 7);
+  return `LL-${timestamp}-${random}`.toUpperCase();
+};
+
+const clothingSizes = {
+  womens: {
+    UK: ['4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24'],
+    EU: ['32', '34', '36', '38', '40', '42', '44', '46', '48', '50', '52'],
+    US: ['0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20']
+  },
+  mens: {
+    UK: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'],
+    Chest: ['34"', '36"', '38"', '40"', '42"', '44"', '46"', '48"', '50"', '52"'],
+    Waist: ['26"', '28"', '30"', '32"', '34"', '36"', '38"', '40"', '42"', '44"']
+  },
+  shoes: {
+    UK: ['3', '3.5', '4', '4.5', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12'],
+    EU: ['35', '35.5', '36', '37', '37.5', '38', '38.5', '39', '40', '40.5', '41', '42', '42.5', '43', '44', '44.5', '45', '46', '47'],
+    US: ['5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12', '12.5', '13', '13.5', '14']
+  }
+};
+
+const businessPolicies = {
   returns: {
-    'free_returns_30': {
-      name: 'Free returns',
-      description: 'Top rated seller +',
-      returns_accepted: true,
-      return_period: 30,
-      return_shipping_paid_by: 'seller',
-      domestic_returns: true,
-      international_returns: false
-    },
-    'buyer_pays_returns_14': {
-      name: 'Buyer pays return',
-      description: 'Standard returns',
-      returns_accepted: true,
-      return_period: 14,
-      return_shipping_paid_by: 'buyer',
-      domestic_returns: true,
-      international_returns: false
-    },
-    'no_returns': {
-      name: 'No returns',
-      description: 'All sales final',
-      returns_accepted: false,
-      domestic_returns: false,
-      international_returns: false
-    }
+    name: "30 Day Returns",
+    description: "We accept returns within 30 days of purchase. Items must be in the same condition as received."
   },
   shipping: {
-    'free_shipping_48': {
-      name: 'Free shipping',
-      description: 'Royal Mail 48',
-      postage_service: 'royal_mail_48',
-      postage_cost: '0.00',
-      dispatch_time: 1,
-      shipping_type: 'flat'
-    },
-    'standard_shipping': {
-      name: 'Standard shipping',
-      description: '£3.50 Royal Mail 48',
-      postage_service: 'royal_mail_48',
-      postage_cost: '3.50',
-      dispatch_time: 1,
-      shipping_type: 'flat'
-    },
-    'next_day': {
-      name: 'Next day delivery',
-      description: '£6.95 Royal Mail 24',
-      postage_service: 'royal_mail_24',
-      postage_cost: '6.95',
-      dispatch_time: 1,
-      shipping_type: 'flat'
-    }
+    name: "Standard Shipping",
+    description: "Items dispatched within 1 business day via Royal Mail. Tracking provided."
   },
   payment: {
-    'standard': {
-      name: 'Standard payment',
-      description: 'PayPal, Credit/Debit cards',
-      payment_methods: ['paypal', 'credit_card', 'debit_card']
-    }
+    name: "Secure Payment",
+    description: "We accept all major payment methods through secure payment processing."
   }
-};
-
-// eBay UK category-specific requirements
-const EBAY_UK_CATEGORIES = {
-  'mens_clothing': {
-    required: ['brand', 'size', 'colour', 'condition', 'department'],
-    optional: ['size_type', 'style', 'material', 'sleeve_length', 'pattern']
-  },
-  'womens_clothing': {
-    required: ['brand', 'size', 'colour', 'condition', 'department', 'size_type'],
-    optional: ['style', 'material', 'sleeve_length', 'pattern', 'occasion']
-  },
-  'shoes': {
-    required: ['brand', 'size', 'colour', 'condition', 'department', 'shoe_type'],
-    optional: ['width', 'material', 'style', 'occasion']
-  }
-};
-
-// UK Postage Services
-const UK_POSTAGE_SERVICES = {
-  'royal_mail_48': 'Royal Mail 48 (2-3 days)',
-  'royal_mail_24': 'Royal Mail 24 (1-2 days)',
-  'royal_mail_1st': 'Royal Mail 1st Class',
-  'royal_mail_2nd': 'Royal Mail 2nd Class',
-  'royal_mail_special': 'Royal Mail Special Delivery',
-  'hermes': 'Evri (Hermes) Standard',
-  'dpd': 'DPD Next Day',
-  'collect_plus': 'Collect+ Drop Off',
-  'click_collect': 'Click & Collect'
 };
 
 export default function Dashboard() {
+  const { user, isLoaded } = useUser();
   const router = useRouter();
-  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
-  const { creditInfo, refreshCredits } = useUserData();
-  const [mounted, setMounted] = useState(false);
   const [images, setImages] = useState([]);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [results, setResults] = useState(null);
-  const [compressionProgress, setCompressionProgress] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState(null);
   const [error, setError] = useState(null);
+  const [savedDrafts, setSavedDrafts] = useState([]);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({});
   const [activeTab, setActiveTab] = useState('upload');
-  const [drafts, setDrafts] = useState([]);
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [showPolicyModal, setShowPolicyModal] = useState(false);
-  const [selectedPolicies, setSelectedPolicies] = useState({
-    returns: 'free_returns_30',
-    shipping: 'standard_shipping',
-    payment: 'standard'
-  });
-  
-  // Listing form state - UK specific
-  const [listingData, setListingData] = useState({
-    // Basic Info
+  const [formData, setFormData] = useState({
     title: '',
-    sku: '',
-    category: 'womens_clothing',
-    
-    // Item Specifics
+    category: '',
     brand: '',
     size: '',
-    colour: '', // UK spelling
+    sizeType: 'UK',
+    color: '',
+    condition: 'Used',
+    conditionScore: 7,
+    description: '',
+    measurements: {
+      chest: '',
+      length: '',
+      shoulders: '',
+      sleeves: '',
+      waist: '',
+      hips: '',
+      inseam: '',
+      rise: ''
+    },
     material: '',
-    condition: 'used',
-    condition_description: '',
-    department: '',
-    size_type: '',
-    style: '',
-    pattern: '',
-    sleeve_length: '',
-    occasion: '',
-    season: 'all_seasons',
-    theme: '',
     features: [],
-    garment_care: '',
-    country_of_manufacture: '',
-    is_vintage: false,
-    is_handmade: false,
-    
-    // Pricing (GBP)
-    listing_format: 'fixed_price',
-    buy_it_now_price: '',
-    starting_bid: '',
-    reserve_price: '',
-    auction_duration: 7,
-    best_offer_enabled: false,
-    minimum_offer: '',
-    auto_accept_offer: '',
-    auto_decline_offer: '',
-    
-    // These will be set by policies
-    shipping_type: 'flat',
-    postage_service: 'royal_mail_48',
-    postage_cost: '3.50',
-    package_weight_kg: 0,
-    package_weight_g: 200,
-    package_length_cm: 30,
-    package_width_cm: 25,
-    package_depth_cm: 5,
-    dispatch_time: 1,
-    
-    // Returns (set by policy)
-    returns_accepted: true,
-    return_period: 30,
-    return_shipping_paid_by: 'buyer',
-    
-    // Description
-    description: ''
+    flaws: '',
+    price: '',
+    quantity: 1,
+    sku: generateSKU(),
+    shippingPolicy: businessPolicies.shipping.name,
+    returnPolicy: businessPolicies.returns.name,
+    paymentPolicy: businessPolicies.payment.name,
+    ukSpecific: {
+      dispatchTime: '1',
+      postalService: 'Royal Mail 2nd Class',
+      itemLocation: 'United Kingdom',
+      ukSizeChart: true
+    }
   });
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [creditInfo, setCreditInfo] = useState(null);
 
-  useEffect(() => {
-    setMounted(true);
-    loadDrafts();
-    loadUserPolicies();
+  const handleEmailSupport = () => {
+    window.location.href = 'mailto:lightlisterai@outlook.com?subject=LightLister%20AI%20-%20Support%20Request';
+  };
+
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
   }, []);
 
-  useEffect(() => {
-    if (clerkLoaded && !clerkUser) {
-      router.push('/sign-in');
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.target.id === 'drop-zone') {
+      setIsDragging(false);
     }
-  }, [clerkUser, clerkLoaded, router]);
+  }, []);
 
-  useEffect(() => {
-    // Apply selected policies to listing data
-    applyPoliciesToListing();
-  }, [selectedPolicies]);
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
 
-  const loadUserPolicies = async () => {
-    // Load user's saved policy preferences from database
-    if (!clerkUser) return;
+  const handleDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
     
-    try {
-      const { data, error } = await supabase
-        .from('user_preferences')
-        .select('default_policies')
-        .eq('user_id', clerkUser.id)
-        .single();
-        
-      if (data && data.default_policies) {
-        setSelectedPolicies(data.default_policies);
-      }
-    } catch (err) {
-      console.error('Error loading policies:', err);
-    }
-  };
+    const files = Array.from(e.dataTransfer.files).filter(file => 
+      file.type.startsWith('image/')
+    );
+    
+    await processFiles(files);
+  }, []);
 
-  const applyPoliciesToListing = () => {
-    // Apply returns policy
-    if (selectedPolicies.returns && BUSINESS_POLICIES.returns[selectedPolicies.returns]) {
-      const returnsPolicy = BUSINESS_POLICIES.returns[selectedPolicies.returns];
-      setListingData(prev => ({
-        ...prev,
-        returns_accepted: returnsPolicy.returns_accepted,
-        return_period: returnsPolicy.return_period || 30,
-        return_shipping_paid_by: returnsPolicy.return_shipping_paid_by || 'buyer'
-      }));
-    }
+  const processFiles = async (files) => {
+    const newImages = [];
     
-    // Apply shipping policy
-    if (selectedPolicies.shipping && BUSINESS_POLICIES.shipping[selectedPolicies.shipping]) {
-      const shippingPolicy = BUSINESS_POLICIES.shipping[selectedPolicies.shipping];
-      setListingData(prev => ({
-        ...prev,
-        postage_service: shippingPolicy.postage_service,
-        postage_cost: shippingPolicy.postage_cost,
-        dispatch_time: shippingPolicy.dispatch_time,
-        shipping_type: shippingPolicy.shipping_type
-      }));
-    }
-  };
-
-  const loadDrafts = async () => {
-    if (!clerkUser) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('draft_listings')
-        .select('*')
-        .eq('user_id', clerkUser.id)
-        .limit(10);
-        
-      if (!error && data) {
-        setDrafts(data);
-      }
-    } catch (err) {
-      console.error('Error loading drafts:', err);
-    }
-  };
-
-  const handleFileSelect = useCallback(async (e) => {
-    const files = Array.from(e.target.files);
-    
-    if (files.length === 0) return;
-    
-    if (files.length > 24) {
-      setError('Maximum 24 images allowed per listing');
-      return;
-    }
-    
-    const creditsNeeded = 1;
-    if (creditsNeeded > creditInfo.creditsRemaining) {
-      setError(`This analysis requires ${creditsNeeded} credit. You have ${creditInfo.creditsRemaining} credits remaining.`);
-      return;
-    }
-    
-    setError(null);
-    setCompressionProgress({ current: 0, total: files.length });
-    
-    try {
-      const compressedFiles = await compressMultipleImages(files, (current, total, fileName) => {
-        setCompressionProgress({ current, total, fileName });
-      });
+    for (let i = 0; i < files.length && images.length + newImages.length < 24; i++) {
+      const file = files[i];
+      const id = `${Date.now()}-${i}`;
       
-      const imageData = compressedFiles.map((file, index) => ({
-        file,
-        preview: URL.createObjectURL(file),
-        originalSize: files[index].size,
-        compressedSize: file.size
-      }));
+      setUploadProgress(prev => ({ ...prev, [id]: 0 }));
       
-      setImages(imageData);
-      setCompressionProgress(null);
-    } catch (err) {
-      setError('Failed to process images: ' + err.message);
-      setCompressionProgress(null);
-    }
-  }, [creditInfo]);
-
-  const analyzeImages = async () => {
-    if (images.length === 0) {
-      setError('Please select images first');
-      return;
-    }
-    
-    setAnalyzing(true);
-    setError(null);
-    
-    try {
-      const formData = new FormData();
-      images.forEach((img, index) => {
-        formData.append(`image${index}`, img.file);
-      });
-      
-      const response = await fetch('/api/analyze-ai', {
-        method: 'POST',
-        body: formData
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.details || data.error || `Server error: ${response.status}`);
-      }
-      
-      setResults(data);
-      await refreshCredits();
-      
-      // Pre-fill form with AI results (converted to GBP)
-      if (data.items && data.items.length > 0) {
-        const item = data.items[0];
-        
-        // Convert USD prices to GBP (rough conversion)
-        const minPriceGBP = item.estimatedPrice?.min ? (item.estimatedPrice.min * 0.8).toFixed(2) : '';
-        const maxPriceGBP = item.estimatedPrice?.max ? (item.estimatedPrice.max * 0.8).toFixed(2) : '';
-        
-        setListingData(prev => ({
-          ...prev,
-          title: item.ebayTitle || '',
-          sku: item.sku || '',
-          brand: item.brand?.name !== 'Unknown' ? item.brand.name : '',
-          size: item.size !== 'Not Visible' ? item.size : '',
-          colour: item.color || '', // Note: using 'colour' for UK
-          material: item.material !== 'Not Specified' ? item.material : '',
-          condition: item.condition?.score >= 9 ? 'new_with_tags' : 
-                    item.condition?.score >= 7 ? 'new_without_tags' :
-                    item.condition?.score >= 5 ? 'very_good' : 'used',
-          condition_description: item.condition?.description || '',
-          description: item.description || '',
-          buy_it_now_price: maxPriceGBP,
-          starting_bid: minPriceGBP,
-          department: item.gender || '',
-          style: item.keyFeatures?.find(f => f.toLowerCase().includes('style'))?.replace(/style:?\s*/i, '') || '',
-          pattern: item.keyFeatures?.find(f => f.toLowerCase().includes('pattern'))?.replace(/pattern:?\s*/i, '') || '',
-          features: item.keyFeatures || []
-        }));
-      }
-      
-      setActiveTab('details');
-      
-    } catch (err) {
-      setError('Analysis failed: ' + err.message);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
-  const saveDraft = async () => {
-    if (!clerkUser) return;
-    
-    setSavingDraft(true);
-    try {
-      const { error } = await supabase
-        .from('analyses')
-        .insert({
-          user_id: clerkUser.id,
-          ...listingData,
-          // Save which policies were used
-          returns_policy: selectedPolicies.returns,
-          shipping_policy: selectedPolicies.shipping,
-          payment_policy: selectedPolicies.payment,
-          images_count: images.length,
-          is_draft: true,
-          is_listed: false,
-          metadata: { images: images.map(img => img.preview) }
+      try {
+        const compressedFile = await compressImage(file, {
+          maxWidth: 1920,
+          maxHeight: 1920,
+          quality: 0.9,
+          onProgress: (progress) => {
+            setUploadProgress(prev => ({ ...prev, [id]: progress }));
+          }
         });
         
-      if (!error) {
-        setError(null);
-        alert('Draft saved successfully!');
-        loadDrafts();
-      } else {
-        throw error;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          newImages.push({
+            id,
+            file: compressedFile,
+            preview: e.target.result,
+            name: file.name,
+            size: compressedFile.size
+          });
+          
+          if (i === files.length - 1 || images.length + newImages.length >= 24) {
+            setImages(prev => [...prev, ...newImages]);
+            setTimeout(() => {
+              setUploadProgress(prev => {
+                const updated = { ...prev };
+                newImages.forEach(img => delete updated[img.id]);
+                return updated;
+              });
+            }, 1000);
+          }
+        };
+        reader.readAsDataURL(compressedFile);
+      } catch (error) {
+        console.error('Error processing image:', error);
+        setError(`Failed to process ${file.name}`);
       }
-    } catch (err) {
-      setError('Failed to save draft: ' + err.message);
-    } finally {
-      setSavingDraft(false);
     }
   };
 
-  const validateListing = () => {
-    const category = EBAY_UK_CATEGORIES[listingData.category];
-    const missing = [];
-    
-    if (category) {
-      category.required.forEach(field => {
-        if (!listingData[field]) {
-          missing.push(field.replace('_', ' '));
-        }
+  const handleImageUpload = useCallback(async (e) => {
+    const files = Array.from(e.target.files).filter(file => 
+      file.type.startsWith('image/')
+    );
+    await processFiles(files);
+  }, [images.length]);
+
+  const removeImage = useCallback((id) => {
+    setImages(prev => prev.filter(img => img.id !== id));
+    if (previewImage?.id === id) {
+      setPreviewImage(null);
+    }
+  }, [previewImage]);
+
+  const handleAnalyze = async () => {
+    if (images.length === 0) {
+      setError('Please upload at least one image');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setError(null);
+    setActiveTab('results');
+
+    try {
+      const formDataToSend = new FormData();
+      images.forEach((image, index) => {
+        formDataToSend.append(`image${index}`, image.file);
       });
+
+      const response = await fetch('/api/analyze-ai', {
+        method: 'POST',
+        body: formDataToSend,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data.type === 'INSUFFICIENT_CREDITS') {
+          setShowUpgradeModal(true);
+          setCreditInfo(data);
+        }
+        throw new Error(data.error || 'Analysis failed');
+      }
+
+      if (data.creditInfo) {
+        setCreditInfo(data.creditInfo);
+      }
+
+      if (data.items && data.items.length > 0) {
+        const result = data.items[0];
+        setAnalysisResult(result);
+        
+        setFormData(prev => ({
+          ...prev,
+          title: result.ebayTitle || '',
+          category: result.category || result.itemType || '',
+          brand: result.brand?.name || '',
+          size: result.size?.value || '',
+          sizeType: result.size?.type || 'UK',
+          color: result.color || '',
+          condition: mapConditionScore(result.condition?.score),
+          conditionScore: result.condition?.score || 7,
+          description: result.description || '',
+          material: result.material || '',
+          features: result.features || [],
+          flaws: result.condition?.notes || '',
+          price: result.estimatedPrice?.mid || '',
+          sku: result.sku || generateSKU()
+        }));
+      }
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setError(error.message || 'Failed to analyze images. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
     }
-    
-    if (listingData.listing_format === 'fixed_price' && !listingData.buy_it_now_price) {
-      missing.push('Buy It Now price');
-    }
-    
-    if (listingData.listing_format === 'auction' && !listingData.starting_bid) {
-      missing.push('Starting bid');
-    }
-    
-    return missing;
   };
 
-  const handleInputChange = (field, value) => {
-    setListingData(prev => ({
+  const mapConditionScore = (score) => {
+    if (score >= 9) return 'New with tags';
+    if (score >= 8) return 'New without tags';
+    if (score >= 7) return 'Excellent';
+    if (score >= 5) return 'Good';
+    if (score >= 3) return 'Fair';
+    return 'Poor';
+  };
+
+  const saveDraft = () => {
+    const draft = {
+      id: Date.now(),
+      ...formData,
+      images: images.map(img => ({
+        name: img.name,
+        preview: img.preview
+      })),
+      savedAt: new Date().toISOString()
+    };
+    
+    const drafts = JSON.parse(localStorage.getItem('lightlister_drafts') || '[]');
+    drafts.unshift(draft);
+    if (drafts.length > 10) drafts.pop();
+    localStorage.setItem('lightlister_drafts', JSON.stringify(drafts));
+    setSavedDrafts(drafts);
+    setError(null);
+    alert('Draft saved successfully!');
+  };
+
+  const loadDraft = (draft) => {
+    setFormData(draft);
+    setActiveTab('results');
+  };
+
+  const deleteDraft = (id) => {
+    const drafts = savedDrafts.filter(d => d.id !== id);
+    localStorage.setItem('lightlister_drafts', JSON.stringify(drafts));
+    setSavedDrafts(drafts);
+  };
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    if (!user) {
+      router.push('/sign-in');
+      return;
+    }
+
+    const drafts = JSON.parse(localStorage.getItem('lightlister_drafts') || '[]');
+    setSavedDrafts(drafts);
+  }, [user, isLoaded, router]);
+
+  const conditionDescriptions = {
+    'New with tags': 'Brand new item with original tags attached',
+    'New without tags': 'Brand new item without tags',
+    'Excellent': 'Worn once or twice, no visible signs of wear',
+    'Good': 'Gently worn with minimal signs of wear',
+    'Fair': 'Obviously worn with some signs of wear',
+    'Poor': 'Heavily worn with significant signs of wear'
+  };
+
+  const availableFeatures = [
+    'Designer', 'Vintage', 'Limited Edition', 'Handmade', 'Sustainable',
+    'Plus Size', 'Petite', 'Tall', 'Maternity', 'Unisex'
+  ];
+
+  const toggleFeature = (feature) => {
+    setFormData(prev => ({
       ...prev,
-      [field]: value
+      features: prev.features.includes(feature)
+        ? prev.features.filter(f => f !== feature)
+        : [...prev.features, feature]
     }));
   };
 
-  const PolicySelector = () => (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-semibold text-blue-900">Business Policies</h3>
-        <button
-          onClick={() => setShowPolicyModal(true)}
-          className="text-sm text-blue-600 hover:text-blue-700"
+  const imageUploadSection = useMemo(() => (
+    <div className="space-y-4">
+      <div
+        id="drop-zone"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+        }`}
+      >
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={handleImageUpload}
+          className="sr-only"
+          id="image-upload"
+          disabled={images.length >= 24}
+        />
+        <label
+          htmlFor="image-upload"
+          className="cursor-pointer"
         >
-          Manage Policies
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Returns Policy</label>
-          <select
-            value={selectedPolicies.returns}
-            onChange={(e) => setSelectedPolicies(prev => ({ ...prev, returns: e.target.value }))}
-            className="w-full p-2 border rounded bg-white"
-          >
-            {Object.entries(BUSINESS_POLICIES.returns).map(([key, policy]) => (
-              <option key={key} value={key}>{policy.name}</option>
-            ))}
-          </select>
-          <p className="text-xs text-gray-500 mt-1">
-            {BUSINESS_POLICIES.returns[selectedPolicies.returns]?.description}
-          </p>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Policy</label>
-          <select
-            value={selectedPolicies.shipping}
-            onChange={(e) => setSelectedPolicies(prev => ({ ...prev, shipping: e.target.value }))}
-            className="w-full p-2 border rounded bg-white"
-          >
-            {Object.entries(BUSINESS_POLICIES.shipping).map(([key, policy]) => (
-              <option key={key} value={key}>{policy.name}</option>
-            ))}
-          </select>
-          <p className="text-xs text-gray-500 mt-1">
-            {BUSINESS_POLICIES.shipping[selectedPolicies.shipping]?.description}
-          </p>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Payment Policy</label>
-          <select
-            value={selectedPolicies.payment}
-            onChange={(e) => setSelectedPolicies(prev => ({ ...prev, payment: e.target.value }))}
-            className="w-full p-2 border rounded bg-white"
-          >
-            {Object.entries(BUSINESS_POLICIES.payment).map(([key, policy]) => (
-              <option key={key} value={key}>{policy.name}</option>
-            ))}
-          </select>
-          <p className="text-xs text-gray-500 mt-1">
-            {BUSINESS_POLICIES.payment[selectedPolicies.payment]?.description}
-          </p>
-        </div>
-      </div>
-      
-      <div className="mt-3 text-xs text-gray-600">
-        <span className="inline-flex items-center">
-          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
-          These policies will be applied to all listings. You can override individual settings below.
-        </span>
+          <p className="mt-2 text-sm text-gray-600">
+            {images.length >= 24 
+              ? 'Maximum 24 images reached'
+              : 'Drop images here or click to upload'
+            }
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {24 - images.length} slots remaining • Max 24 images • JPG, PNG up to 10MB each
+          </p>
+        </label>
       </div>
-    </div>
-  );
 
-  if (!mounted || !clerkLoaded) {
+      {Object.keys(uploadProgress).length > 0 && (
+        <div className="space-y-2">
+          {Object.entries(uploadProgress).map(([id, progress]) => (
+            <div key={id} className="bg-gray-100 rounded-lg p-2">
+              <div className="flex items-center justify-between text-sm">
+                <span>Uploading...</span>
+                <span>{Math.round(progress)}%</span>
+              </div>
+              <div className="mt-1 bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {images.map((image) => (
+            <div key={image.id} className="relative group">
+              <img
+                src={image.preview}
+                alt={image.name}
+                className="w-full h-32 object-cover rounded-lg cursor-pointer"
+                onClick={() => setPreviewImage(image)}
+              />
+              <button
+                onClick={() => removeImage(image.id)}
+                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 rounded-b-lg">
+                {(image.size / 1024 / 1024).toFixed(1)}MB
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  ), [images, isDragging, uploadProgress, handleDragEnter, handleDragOver, handleDragLeave, handleDrop, handleImageUpload, removeImage]);
+
+  if (!isLoaded || !user) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
       </div>
     );
   }
 
-  if (!clerkUser) return null;
-
   return (
-    <main className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <Link href="/" className="flex items-center">
                 <Image 
                   src="/logo.png" 
                   alt="LightLister AI" 
                   width={32} 
                   height={32}
-                  className="h-8 w-auto"
+                  className="h-8 w-auto mr-3"
                 />
                 <h1 className="text-xl font-bold text-gray-900">LightLister AI</h1>
-                <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-semibold">
-                  BETA VERSION
-                </span>
-              </div>
-              <nav className="flex gap-4">
-                <button
-                  onClick={() => setActiveTab('upload')}
-                  className={`px-3 py-1 rounded ${activeTab === 'upload' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
-                >
-                  Upload
-                </button>
-                <button
-                  onClick={() => setActiveTab('details')}
-                  className={`px-3 py-1 rounded ${activeTab === 'details' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
-                  disabled={!results}
-                >
-                  Listing Details
-                </button>
-                <button
-                  onClick={() => setActiveTab('drafts')}
-                  className={`px-3 py-1 rounded ${activeTab === 'drafts' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
-                >
-                  Drafts ({drafts.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('policies')}
-                  className={`px-3 py-1 rounded ${activeTab === 'policies' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
-                >
-                  Policies
-                </button>
-              </nav>
+              </Link>
+              <span className="ml-3 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-semibold">
+                BETA
+              </span>
             </div>
+            
             <div className="flex items-center gap-4">
-              <CreditDisplay creditInfo={creditInfo} compact={true} />
-              <button 
-                onClick={() => router.push('/pricing')}
-                className="text-sm bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-              >
-                Get Credits
-              </button>
-              
-                href="mailto:lightlisterai@outlook.com?subject=LightLister AI - Issue Report&body=Please describe the issue you encountered:"
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Report Issue
-              </a>
+              <CreditDisplay />
               <button
-                onClick={() => router.push('/')}
+                onClick={handleEmailSupport}
                 className="text-sm text-gray-600 hover:text-gray-900"
               >
-                Home
+                Support
               </button>
+              <Link 
+                href="/pricing"
+                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+              >
+                Upgrade
+              </Link>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Credit Warning */}
-        {creditInfo.creditsRemaining < 20 && creditInfo.creditsRemaining > 0 && (
-          <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-            <p className="text-orange-800">
-              ⚠️ You have {creditInfo.creditsRemaining} credits remaining. 
-              <a href="/pricing" className="ml-2 underline font-medium">Get more credits</a>
-            </p>
-          </div>
-        )}
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Tabs */}
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('upload')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'upload'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Upload Images
+            </button>
+            <button
+              onClick={() => setActiveTab('results')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'results'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+              disabled={!analysisResult && !formData.title}
+            >
+              Listing Details
+            </button>
+            <button
+              onClick={() => setActiveTab('drafts')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'drafts'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Saved Drafts ({savedDrafts.length})
+            </button>
+          </nav>
+        </div>
 
-        {creditInfo.creditsRemaining === 0 && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-800 font-medium">
-              ❌ You're out of credits! 
-              <a href="/pricing" className="ml-2 underline">Upgrade now to continue analyzing</a>
-            </p>
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
           </div>
         )}
 
         {/* Upload Tab */}
         {activeTab === 'upload' && (
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-2xl font-bold mb-6">Upload Fashion Items</h2>
+            <h2 className="text-lg font-semibold mb-4">Upload Fashion Images</h2>
+            {imageUploadSection}
             
-            {/* Policy Selector */}
-            <PolicySelector />
-            
-            {/* Upload Area */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-                id="file-upload"
-                disabled={analyzing}
-              />
-              <label
-                htmlFor="file-upload"
-                className="cursor-pointer"
-              >
-                <div className="space-y-2">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="text-gray-600">
-                    Click to upload or drag and drop
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Up to 24 images per listing • 1 credit per listing
-                  </p>
-                </div>
-              </label>
-            </div>
-
-            {/* Image Preview Grid */}
             {images.length > 0 && (
               <div className="mt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold">{images.length} images selected</h3>
-                  <button
-                    onClick={() => setImages([])}
-                    className="text-red-600 text-sm hover:text-red-700"
-                  >
-                    Clear all
-                  </button>
-                </div>
-                <div className="grid grid-cols-6 gap-4">
-                  {images.map((img, index) => (
-                    <div key={index} className="relative group">
-                      <img
-                        src={img.preview}
-                        alt={`Upload ${index + 1}`}
-                        className="w-full h-24 object-cover rounded"
-                      />
-                      <button
-                        onClick={() => setImages(prev => prev.filter((_, i) => i !== index))}
-                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
                 <button
-                  onClick={analyzeImages}
-                  disabled={analyzing || images.length === 0}
-                  className="mt-6 w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                  onClick={handleAnalyze}
+                  disabled={isAnalyzing}
+                  className={`w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                    isAnalyzing
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
                 >
-                  {analyzing ? 'Analysing...' : `Analyse Images (1 Credit)`}
+                  {isAnalyzing ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Analyzing {images.length} {images.length === 1 ? 'image' : 'images'}...
+                    </span>
+                  ) : (
+                    `Analyze ${images.length} ${images.length === 1 ? 'Image' : 'Images'} (1 Credit)`
+                  )}
                 </button>
-              </div>
-            )}
-
-            {error && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                {error}
               </div>
             )}
           </div>
         )}
 
-        {/* Listing Details Tab */}
-        {activeTab === 'details' && results && (
+        {/* Results Tab */}
+        {activeTab === 'results' && (
           <div className="space-y-6">
-            {/* Policy Selector at top of form too */}
-            <PolicySelector />
-            
-            {/* eBay UK Listing Form */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">eBay UK Listing Details</h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={saveDraft}
-                    disabled={savingDraft}
-                    className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                  >
-                    {savingDraft ? 'Saving...' : 'Save Draft'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      const missing = validateListing();
-                      if (missing.length > 0) {
-                        alert(`Missing required fields: ${missing.join(', ')}`);
-                      } else {
-                        alert('Ready to list on eBay UK!');
-                      }
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    List on eBay UK
-                  </button>
+            {/* AI Analysis Results */}
+            {analysisResult && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h3 className="font-semibold text-green-900 mb-2">AI Analysis Complete!</h3>
+                <div className="text-sm text-green-700 space-y-1">
+                  <p>✓ Brand: {analysisResult.brand?.name || 'Unknown'} (Confidence: {analysisResult.brand?.confidence || 'N/A'})</p>
+                  <p>✓ Category: {analysisResult.category || analysisResult.itemType}</p>
+                  <p>✓ Condition: {analysisResult.condition?.score}/10 - {analysisResult.condition?.description}</p>
+                  <p>✓ Estimated Value: £{analysisResult.estimatedPrice?.min} - £{analysisResult.estimatedPrice?.max}</p>
                 </div>
               </div>
+            )}
 
-              {/* Title & Category */}
-              <div className="space-y-4 mb-6">
+            {/* Listing Form */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-lg font-semibold mb-4">Listing Details</h2>
+              
+              <form className="space-y-4">
+                {/* Title */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title <span className="text-red-500">*</span>
+                    Title (eBay Optimized)
                   </label>
                   <input
                     type="text"
-                    value={listingData.title}
-                    onChange={(e) => handleInputChange('title', e.target.value)}
+                    value={formData.title}
+                    onChange={(e) => setFormData({...formData, title: e.target.value})}
                     maxLength={80}
-                    className="w-full p-2 border rounded-lg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
-                  <p className="text-xs text-gray-500 mt-1">{listingData.title.length}/80 characters</p>
+                  <p className="text-xs text-gray-500 mt-1">{formData.title.length}/80 characters</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                {/* Category and Brand */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Category <span className="text-red-500">*</span>
+                      Category
                     </label>
+                    <input
+                      type="text"
+                      value={formData.category}
+                      onChange={(e) => setFormData({...formData, category: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Brand
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.brand}
+                      onChange={(e) => setFormData({...formData, brand: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Size */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Size
+                  </label>
+                  <div className="flex gap-2">
                     <select
-                      value={listingData.category}
-                      onChange={(e) => handleInputChange('category', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
+                      value={formData.sizeType}
+                      onChange={(e) => setFormData({...formData, sizeType: e.target.value})}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     >
-                      <option value="womens_clothing">Women's Clothing</option>
-                      <option value="mens_clothing">Men's Clothing</option>
-                      <option value="shoes">Shoes</option>
+                      <option value="UK">UK</option>
+                      <option value="EU">EU</option>
+                      <option value="US">US</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
                     <input
                       type="text"
-                      value={listingData.sku}
-                      onChange={(e) => handleInputChange('sku', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
+                      value={formData.size}
+                      onChange={(e) => setFormData({...formData, size: e.target.value})}
+                      placeholder="Enter size"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 </div>
-              </div>
 
-              {/* Item Specifics */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Item Specifics</h3>
-                <div className="grid grid-cols-3 gap-4">
+                {/* Condition */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Condition
+                  </label>
+                  <select
+                    value={formData.condition}
+                    onChange={(e) => setFormData({...formData, condition: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {Object.entries(conditionDescriptions).map(([condition, description]) => (
+                      <option key={condition} value={condition}>
+                        {condition} - {description}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    rows={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Price and SKU */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Brand <span className="text-red-500">*</span>
+                      Price (£)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) => setFormData({...formData, price: e.target.value})}
+                      step="0.01"
+                      min="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Quantity
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.quantity}
+                      onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                      min="1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      SKU
                     </label>
                     <input
                       type="text"
-                      value={listingData.brand}
-                      onChange={(e) => handleInputChange('brand', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                      placeholder="Next, M&S, Primark, etc."
+                      value={formData.sku}
+                      onChange={(e) => setFormData({...formData, sku: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Size <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={listingData.size}
-                      onChange={(e) => handleInputChange('size', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                      placeholder="10, 12, 14, S, M, L, etc."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Colour <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={listingData.colour}
-                      onChange={(e) => handleInputChange('colour', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                      placeholder="Black, Navy, Red, etc."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Condition <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={listingData.condition}
-                      onChange={(e) => handleInputChange('condition', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                    >
-                      <option value="new_with_tags">New with tags</option>
-                      <option value="new_without_tags">New without tags</option>
-                      <option value="new_with_defects">New with defects</option>
-                      <option value="very_good">Very good</option>
-                      <option value="good">Good</option>
-                      <option value="used">Used</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                    <select
-                      value={listingData.department}
-                      onChange={(e) => handleInputChange('department', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                    >
-                      <option value="">Select...</option>
-                      <option value="Men">Men</option>
-                      <option value="Women">Women</option>
-                      <option value="Unisex">Unisex Adults</option>
-                      <option value="Boys">Boys</option>
-                      <option value="Girls">Girls</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Material</label>
-                    <input
-                      type="text"
-                      value={listingData.material}
-                      onChange={(e) => handleInputChange('material', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                      placeholder="Cotton, Polyester, Wool, etc."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Style</label>
-                    <input
-                      type="text"
-                      value={listingData.style}
-                      onChange={(e) => handleInputChange('style', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                      placeholder="Casual, Smart, Formal, etc."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Pattern</label>
-                    <input
-                      type="text"
-                      value={listingData.pattern}
-                      onChange={(e) => handleInputChange('pattern', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                      placeholder="Plain, Striped, Floral, etc."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Season</label>
-                    <select
-                      value={listingData.season}
-                      onChange={(e) => handleInputChange('season', e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                    >
-                      <option value="all_seasons">All Seasons</option>
-                      <option value="spring_summer">Spring/Summer</option>
-                      <option value="autumn_winter">Autumn/Winter</option>
-                    </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="vintage"
-                      checked={listingData.is_vintage}
-                      onChange={(e) => handleInputChange('is_vintage', e.target.checked)}
-                      className="mr-2"
-                    />
-                    <label htmlFor="vintage" className="text-sm">Vintage (20+ years old)</label>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="handmade"
-                      checked={listingData.is_handmade}
-                      onChange={(e) => handleInputChange('is_handmade', e.target.checked)}
-                      className="mr-2"
-                    />
-                    <label htmlFor="handmade" className="text-sm">Handmade</label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pricing Section - GBP */}
-              <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Pricing & Format</h3>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Listing Format</label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        value="fixed_price"
-                        checked={listingData.listing_format === 'fixed_price'}
-                        onChange={(e) => handleInputChange('listing_format', e.target.value)}
-                        className="mr-2"
-                      />
-                      Buy It Now
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        value="auction"
-                        checked={listingData.listing_format === 'auction'}
-                        onChange={(e) => handleInputChange('listing_format', e.target.value)}
-                        className="mr-2"
-                      />
-                      Auction
-                    </label>
-                  </div>
-                </div>
-
-                {listingData.listing_format === 'fixed_price' && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Buy It Now Price <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2 text-gray-500">£</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={listingData.buy_it_now_price}
-                          onChange={(e) => handleInputChange('buy_it_now_price', e.target.value)}
-                          className="w-full pl-8 p-2 border rounded-lg"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id="best_offer"
-                        checked={listingData.best_offer_enabled}
-                        onChange={(e) => handleInputChange('best_offer_enabled', e.target.checked)}
-                        className="mr-2"
-                      />
-                      <label htmlFor="best_offer" className="text-sm">Accept offers</label>
-                    </div>
-
-                    {listingData.best_offer_enabled && (
-                      <div className="grid grid-cols-3 gap-4 ml-6">
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Auto-accept at</label>
-                          <div className="relative">
-                            <span className="absolute left-2 top-1 text-gray-500 text-sm">£</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={listingData.auto_accept_offer}
-                              onChange={(e) => handleInputChange('auto_accept_offer', e.target.value)}
-                              className="w-full pl-6 p-1 border rounded text-sm"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Auto-decline below</label>
-                          <div className="relative">
-                            <span className="absolute left-2 top-1 text-gray-500 text-sm">£</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={listingData.auto_decline_offer}
-                              onChange={(e) => handleInputChange('auto_decline_offer', e.target.value)}
-                              className="w-full pl-6 p-1 border rounded text-sm"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Minimum offer</label>
-                          <div className="relative">
-                            <span className="absolute left-2 top-1 text-gray-500 text-sm">£</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={listingData.minimum_offer}
-                              onChange={(e) => handleInputChange('minimum_offer', e.target.value)}
-                              className="w-full pl-6 p-1 border rounded text-sm"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {listingData.listing_format === 'auction' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Starting Bid <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2 text-gray-500">£</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={listingData.starting_bid}
-                          onChange={(e) => handleInputChange('starting_bid', e.target.value)}
-                          className="w-full pl-8 p-2 border rounded-lg"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
-                      <select
-                        value={listingData.auction_duration}
-                        onChange={(e) => handleInputChange('auction_duration', e.target.value)}
-                        className="w-full p-2 border rounded-lg"
+                {/* Features */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Features
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableFeatures.map(feature => (
+                      <button
+                        key={feature}
+                        type="button"
+                        onClick={() => toggleFeature(feature)}
+                        className={`px-3 py-1 rounded-full text-sm ${
+                          formData.features.includes(feature)
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                       >
-                        <option value={3}>3 days</option>
-                        <option value={5}>5 days</option>
-                        <option value={7}>7 days</option>
-                        <option value={10}>10 days</option>
+                        {feature}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* UK Specific Settings */}
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">UK Shipping Settings</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">
+                        Dispatch Time
+                      </label>
+                      <select
+                        value={formData.ukSpecific.dispatchTime}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          ukSpecific: {...formData.ukSpecific, dispatchTime: e.target.value}
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="1">1 business day</option>
+                        <option value="2">2 business days</option>
+                        <option value="3">3 business days</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Buy It Now Price</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2 text-gray-500">£</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={listingData.buy_it_now_price}
-                          onChange={(e) => handleInputChange('buy_it_now_price', e.target.value)}
-                          className="w-full pl-8 p-2 border rounded-lg"
-                          placeholder="Optional"
-                        />
-                      </div>
+                      <label className="block text-sm text-gray-600 mb-1">
+                        Postal Service
+                      </label>
+                      <select
+                        value={formData.ukSpecific.postalService}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          ukSpecific: {...formData.ukSpecific, postalService: e.target.value}
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="Royal Mail 2nd Class">Royal Mail 2nd Class</option>
+                        <option value="Royal Mail 1st Class">Royal Mail 1st Class</option>
+                        <option value="Royal Mail Tracked 48">Royal Mail Tracked 48</option>
+                        <option value="Royal Mail Tracked 24">Royal Mail Tracked 24</option>
+                      </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Reserve Price</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2 text-gray-500">£</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={listingData.reserve_price}
-                          onChange={(e) => handleInputChange('reserve_price', e.target.value)}
-                          className="w-full pl-8 p-2 border rounded-lg"
-                          placeholder="Optional"
-                        />
-                      </div>
+                      <label className="block text-sm text-gray-600 mb-1">
+                        Item Location
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.ukSpecific.itemLocation}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          ukSpecific: {...formData.ukSpecific, itemLocation: e.target.value}
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* Description */}
-              <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Description</h3>
-                <textarea
-                  value={listingData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
-                  rows={8}
-                  className="w-full p-3 border rounded-lg"
-                  placeholder="Describe your item in detail..."
-                />
-              </div>
-
-              {/* Applied Policies Summary */}
-              <div className="border-t pt-6 mt-6 bg-gray-50 -mx-6 -mb-6 px-6 pb-6">
-                <h3 className="text-lg font-semibold mb-4">Applied Policies</h3>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium">Returns:</span> {BUSINESS_POLICIES.returns[selectedPolicies.returns]?.name}
-                  </div>
-                  <div>
-                    <span className="font-medium">Shipping:</span> {BUSINESS_POLICIES.shipping[selectedPolicies.shipping]?.name}
-                  </div>
-                  <div>
-                    <span className="font-medium">Payment:</span> {BUSINESS_POLICIES.payment[selectedPolicies.payment]?.name}
-                  </div>
                 </div>
-              </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={saveDraft}
+                    className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Save Draft
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    List on eBay
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                  >
+                    List on Vinted
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
 
-        {/* Policies Tab */}
-        {activeTab === 'policies' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b">
-              <h2 className="text-2xl font-bold">Business Policies</h2>
-              <p className="text-gray-600 mt-2">Manage your default policies for all listings</p>
-            </div>
-            
-            <div className="p-6 space-y-8">
-              {/* Returns Policies */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Returns Policies</h3>
-                <div className="space-y-3">
-                  {Object.entries(BUSINESS_POLICIES.returns).map(([key, policy]) => (
-                    <div key={key} className="border rounded-lg p-4 hover:bg-gray-50">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">{policy.name}</h4>
-                          <p className="text-sm text-gray-600">{policy.description}</p>
-                          <div className="mt-2 text-xs text-gray-500">
-                            {policy.returns_accepted ? (
-                              <>Returns accepted within {policy.return_period} days • {policy.return_shipping_paid_by === 'seller' ? 'Free returns' : 'Buyer pays return postage'}</>
-                            ) : (
-                              'No returns accepted'
-                            )}
-                          </div>
-                        </div>
-                        <button className="text-blue-600 text-sm hover:underline">Edit</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Shipping Policies */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Shipping Policies</h3>
-                <div className="space-y-3">
-                  {Object.entries(BUSINESS_POLICIES.shipping).map(([key, policy]) => (
-                    <div key={key} className="border rounded-lg p-4 hover:bg-gray-50">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">{policy.name}</h4>
-                          <p className="text-sm text-gray-600">{policy.description}</p>
-                          <div className="mt-2 text-xs text-gray-500">
-                            £{policy.postage_cost} • Dispatch in {policy.dispatch_time} working day{policy.dispatch_time > 1 ? 's' : ''}
-                          </div>
-                        </div>
-                        <button className="text-blue-600 text-sm hover:underline">Edit</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Add New Policy Button */}
-              <div className="pt-4 border-t">
-                <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                  Create New Policy
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Drafts Tab - Updated to show policies */}
+        {/* Drafts Tab */}
         {activeTab === 'drafts' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b">
-              <h2 className="text-2xl font-bold">Draft Listings</h2>
-            </div>
-            
-            {drafts.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">
-                <p>No draft listings yet</p>
-              </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Saved Drafts</h2>
+            {savedDrafts.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No saved drafts yet</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brand</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Policies</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Edited</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {drafts.map((draft) => (
-                      <tr key={draft.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm">{draft.title || 'Untitled'}</td>
-                        <td className="px-4 py-3 text-sm">{draft.brand || '-'}</td>
-                        <td className="px-4 py-3 text-sm">{draft.size || '-'}</td>
-                        <td className="px-4 py-3 text-sm">
-                          £{draft.buy_it_now_price || draft.starting_bid || '0'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-xs">
-                          <div>{BUSINESS_POLICIES.returns[draft.returns_policy]?.name || 'Default'}</div>
-                          <div className="text-gray-500">{BUSINESS_POLICIES.shipping[draft.shipping_policy]?.name || 'Default'}</div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
-                          {new Date(draft.last_edited).toLocaleDateString('en-GB')}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <button className="text-blue-600 hover:text-blue-700 mr-3">Edit</button>
-                          <button className="text-red-600 hover:text-red-700">Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-4">
+                {savedDrafts.map(draft => (
+                  <div key={draft.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="font-medium">{draft.title || 'Untitled Draft'}</h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {draft.brand} • {draft.category} • {draft.size}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Saved {new Date(draft.savedAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => loadDraft(draft)}
+                          className="text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={() => deleteDraft(draft.id)}
+                          className="text-sm text-red-600 hover:text-red-800"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         )}
-      </div>
-    </main>
+      </main>
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="max-w-4xl max-h-full">
+            <img
+              src={previewImage.preview}
+              alt={previewImage.name}
+              className="max-w-full max-h-full object-contain"
+            />
+            <p className="text-white text-center mt-2">{previewImage.name}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Insufficient Credits</h3>
+            <p className="text-gray-600 mb-4">
+              You need {creditInfo?.creditsNeeded || 1} credit to analyze these images. 
+              You currently have {creditInfo?.creditsAvailable || 0} credits.
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowUpgradeModal(false)}
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <Link
+                href="/pricing"
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-center"
+              >
+                Get More Credits
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
