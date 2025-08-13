@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { auth, currentUser } from '@clerk/nextjs';
+import { getAuth } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
@@ -8,8 +9,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export async function POST(request) {
   try {
-    // Get the authenticated user ID
-    const { userId } = auth();
+    // Get the authenticated user ID from the request
+    const { userId } = getAuth(request);
     
     if (!userId) {
       return NextResponse.json(
@@ -19,7 +20,7 @@ export async function POST(request) {
     }
 
     // Get the full user details including email
-    const user = await currentUser();
+    const user = await clerkClient.users.getUser(userId);
     
     if (!user || !user.emailAddresses || user.emailAddresses.length === 0) {
       return NextResponse.json(
@@ -68,7 +69,7 @@ export async function POST(request) {
         planName: planName || 'Credits',
       },
       automatic_tax: {
-        enabled: true, // This enables Stripe Tax for automatic VAT handling
+        enabled: true,
       },
     };
 
