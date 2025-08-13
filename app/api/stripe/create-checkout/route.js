@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { auth } from '@clerk/nextjs';
-import { clerkClient } from '@clerk/nextjs/server';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
@@ -9,34 +7,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export async function POST(request) {
   try {
-    // Get the authenticated user ID
-    const { userId } = auth();
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Please sign in' },
-        { status: 401 }
-      );
-    }
-
-    // Get the full user details including email
-    const user = await clerkClient.users.getUser(userId);
-    
-    if (!user || !user.emailAddresses || user.emailAddresses.length === 0) {
-      return NextResponse.json(
-        { error: 'User email not found' },
-        { status: 400 }
-      );
-    }
-
-    const userEmail = user.emailAddresses[0].emailAddress;
-
     // Get the request body
-    const { priceId, planName } = await request.json();
+    const { priceId, planName, userEmail, userId } = await request.json();
 
-    if (!priceId) {
+    if (!priceId || !userEmail || !userId) {
       return NextResponse.json(
-        { error: 'Price ID is required' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
@@ -49,7 +25,7 @@ export async function POST(request) {
       mode = 'subscription';
     }
 
-    console.log(`Creating checkout session: mode=${mode}, priceId=${priceId}`);
+    console.log(`Creating checkout session: mode=${mode}, priceId=${priceId}, email=${userEmail}`);
 
     // Create Stripe checkout session
     const sessionConfig = {

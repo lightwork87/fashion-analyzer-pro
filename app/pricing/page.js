@@ -51,7 +51,8 @@ export default function PricingPage() {
         body: JSON.stringify({
           priceId,
           planName,
-          userEmail: user.emailAddresses?.[0]?.emailAddress || null,
+          userEmail: user.emailAddresses[0].emailAddress,
+          userId: user.id,
         }),
       });
 
