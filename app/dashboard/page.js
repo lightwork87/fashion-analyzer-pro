@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useUser, SignOutButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -48,7 +48,7 @@ const businessPolicies = {
 };
 
 export default function Dashboard() {
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
   const [images, setImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -301,16 +301,15 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (!isLoaded) return;
-    
-    if (!user) {
+    if (isLoaded && !isSignedIn) {
       router.push('/sign-in');
-      return;
     }
 
-    const drafts = JSON.parse(localStorage.getItem('lightlister_drafts') || '[]');
-    setSavedDrafts(drafts);
-  }, [user, isLoaded, router]);
+    if (isSignedIn) {
+      const drafts = JSON.parse(localStorage.getItem('lightlister_drafts') || '[]');
+      setSavedDrafts(drafts);
+    }
+  }, [isLoaded, isSignedIn, router]);
 
   const conditionDescriptions = {
     'New with tags': 'Brand new item with original tags attached',
@@ -422,7 +421,7 @@ export default function Dashboard() {
     </div>
   ), [images, isDragging, uploadProgress, handleDragEnter, handleDragOver, handleDragLeave, handleDrop, handleImageUpload, removeImage]);
 
-  if (!isLoaded || !user) {
+  if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -431,6 +430,10 @@ export default function Dashboard() {
         </div>
       </div>
     );
+  }
+
+  if (!isSignedIn) {
+    return null;
   }
 
   return (
@@ -457,18 +460,29 @@ export default function Dashboard() {
             
             <div className="flex items-center gap-4">
               <CreditDisplay />
+              <Link 
+                href="/beta"
+                className="text-sm bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
+              >
+                Beta Program
+              </Link>
               <button
                 onClick={handleEmailSupport}
-                className="text-sm text-gray-600 hover:text-gray-900"
+                className="text-sm bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
               >
                 Support
               </button>
               <Link 
                 href="/pricing"
-                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
               >
-                Upgrade
+                Get Credits
               </Link>
+              <SignOutButton>
+                <button className="text-sm bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors">
+                  Sign Out
+                </button>
+              </SignOutButton>
             </div>
           </div>
         </div>
@@ -534,7 +548,7 @@ export default function Dashboard() {
                     isAnalyzing
                       ? 'bg-gray-400 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors`}
                 >
                   {isAnalyzing ? (
                     <span className="flex items-center justify-center">
@@ -584,7 +598,7 @@ export default function Dashboard() {
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
                     maxLength={80}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                   />
                   <p className="text-xs text-gray-500 mt-1">{formData.title.length}/80 characters</p>
                 </div>
@@ -599,7 +613,7 @@ export default function Dashboard() {
                       type="text"
                       value={formData.category}
                       onChange={(e) => setFormData({...formData, category: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                     />
                   </div>
                   <div>
@@ -610,7 +624,7 @@ export default function Dashboard() {
                       type="text"
                       value={formData.brand}
                       onChange={(e) => setFormData({...formData, brand: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                     />
                   </div>
                 </div>
@@ -624,7 +638,7 @@ export default function Dashboard() {
                     <select
                       value={formData.sizeType}
                       onChange={(e) => setFormData({...formData, sizeType: e.target.value})}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                     >
                       <option value="UK">UK</option>
                       <option value="EU">EU</option>
@@ -635,7 +649,7 @@ export default function Dashboard() {
                       value={formData.size}
                       onChange={(e) => setFormData({...formData, size: e.target.value})}
                       placeholder="Enter size"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                     />
                   </div>
                 </div>
@@ -648,7 +662,7 @@ export default function Dashboard() {
                   <select
                     value={formData.condition}
                     onChange={(e) => setFormData({...formData, condition: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                   >
                     {Object.entries(conditionDescriptions).map(([condition, description]) => (
                       <option key={condition} value={condition}>
@@ -667,7 +681,7 @@ export default function Dashboard() {
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                     rows={6}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                   />
                 </div>
 
@@ -683,7 +697,7 @@ export default function Dashboard() {
                       onChange={(e) => setFormData({...formData, price: e.target.value})}
                       step="0.01"
                       min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                     />
                   </div>
                   <div>
@@ -695,7 +709,7 @@ export default function Dashboard() {
                       value={formData.quantity}
                       onChange={(e) => setFormData({...formData, quantity: e.target.value})}
                       min="1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                     />
                   </div>
                   <div>
@@ -706,7 +720,7 @@ export default function Dashboard() {
                       type="text"
                       value={formData.sku}
                       onChange={(e) => setFormData({...formData, sku: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                     />
                   </div>
                 </div>
@@ -722,10 +736,10 @@ export default function Dashboard() {
                         key={feature}
                         type="button"
                         onClick={() => toggleFeature(feature)}
-                        className={`px-3 py-1 rounded-full text-sm ${
+                        className={`px-3 py-1 rounded-full text-sm transition-colors ${
                           formData.features.includes(feature)
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
                         }`}
                       >
                         {feature}
@@ -748,7 +762,7 @@ export default function Dashboard() {
                           ...formData,
                           ukSpecific: {...formData.ukSpecific, dispatchTime: e.target.value}
                         })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                       >
                         <option value="1">1 business day</option>
                         <option value="2">2 business days</option>
@@ -765,7 +779,7 @@ export default function Dashboard() {
                           ...formData,
                           ukSpecific: {...formData.ukSpecific, postalService: e.target.value}
                         })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                       >
                         <option value="Royal Mail 2nd Class">Royal Mail 2nd Class</option>
                         <option value="Royal Mail 1st Class">Royal Mail 1st Class</option>
@@ -784,7 +798,7 @@ export default function Dashboard() {
                           ...formData,
                           ukSpecific: {...formData.ukSpecific, itemLocation: e.target.value}
                         })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
                       />
                     </div>
                   </div>
@@ -795,19 +809,19 @@ export default function Dashboard() {
                   <button
                     type="button"
                     onClick={saveDraft}
-                    className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="flex-1 py-3 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                   >
                     Save Draft
                   </button>
                   <button
                     type="button"
-                    className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="flex-1 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                   >
                     List on eBay
                   </button>
                   <button
                     type="button"
-                    className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                    className="flex-1 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
                   >
                     List on Vinted
                   </button>
@@ -829,7 +843,7 @@ export default function Dashboard() {
                   <div key={draft.id} className="border rounded-lg p-4 hover:bg-gray-50">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <h3 className="font-medium">{draft.title || 'Untitled Draft'}</h3>
+                        <h3 className="font-medium text-black">{draft.title || 'Untitled Draft'}</h3>
                         <p className="text-sm text-gray-600 mt-1">
                           {draft.brand} • {draft.category} • {draft.size}
                         </p>
@@ -840,13 +854,13 @@ export default function Dashboard() {
                       <div className="flex gap-2 ml-4">
                         <button
                           onClick={() => loadDraft(draft)}
-                          className="text-sm text-blue-600 hover:text-blue-800"
+                          className="text-sm text-white bg-blue-600 px-3 py-1 rounded hover:bg-blue-700 transition-colors"
                         >
                           Load
                         </button>
                         <button
                           onClick={() => deleteDraft(draft.id)}
-                          className="text-sm text-red-600 hover:text-red-800"
+                          className="text-sm text-white bg-red-600 px-3 py-1 rounded hover:bg-red-700 transition-colors"
                         >
                           Delete
                         </button>
@@ -881,7 +895,7 @@ export default function Dashboard() {
       {showUpgradeModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold mb-4">Insufficient Credits</h3>
+            <h3 className="text-lg font-semibold mb-4 text-black">Insufficient Credits</h3>
             <p className="text-gray-600 mb-4">
               You need {creditInfo?.creditsNeeded || 1} credit to analyze these images. 
               You currently have {creditInfo?.creditsAvailable || 0} credits.
@@ -889,13 +903,13 @@ export default function Dashboard() {
             <div className="flex gap-4">
               <button
                 onClick={() => setShowUpgradeModal(false)}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <Link
                 href="/pricing"
-                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-center"
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-center transition-colors"
               >
                 Get More Credits
               </Link>
