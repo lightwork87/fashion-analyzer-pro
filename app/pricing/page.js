@@ -14,48 +14,49 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(null);
   const [error, setError] = useState(null);
 
-  const handlePurchase = async (priceId, planName) => {
-    if (!user) {
-      window.location.href = '/sign-in';
-      return;
+ const handlePurchase = async (priceId, planName) => {
+  if (!user) {
+    window.location.href = '/sign-in';
+    return;
+  }
+
+  setLoading(priceId);
+  setError(null);
+
+  try {
+    const response = await fetch('/api/stripe/create-checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        priceId,
+        planName,
+        userEmail: user.emailAddresses?.[0]?.emailAddress || null,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to create checkout session');
     }
 
-    setLoading(priceId);
-    setError(null);
+    const stripe = await stripePromise;
+    const { error: stripeError } = await stripe.redirectToCheckout({
+      sessionId: data.sessionId,
+    });
 
-    try {
-      const response = await fetch('/api/stripe/create-checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          priceId,
-          planName,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create checkout session');
-      }
-
-      const stripe = await stripePromise;
-      const { error: stripeError } = await stripe.redirectToCheckout({
-        sessionId: data.sessionId,
-      });
-
-      if (stripeError) {
-        throw new Error(stripeError.message);
-      }
-    } catch (err) {
-      console.error('Purchase error:', err);
-      setError(err.message);
-    } finally {
-      setLoading(null);
+    if (stripeError) {
+      throw new Error(stripeError.message);
     }
-  };
+  } catch (err) {
+    console.error('Purchase error:', err);
+    setError(err.message);
+  } finally {
+    setLoading(null);
+  }
+};
 
   const handleReportIssue = () => {
     window.location.href = 'mailto:lightlisterai@outlook.com?subject=LightLister%20AI%20-%20Pricing%20Question';
