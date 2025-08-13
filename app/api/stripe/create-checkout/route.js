@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { auth, currentUser } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs';
+import { currentUser } from '@clerk/nextjs/server';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
@@ -8,7 +9,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export async function POST(request) {
   try {
-    // Get the authenticated user
+    // Get the authenticated user ID
     const { userId } = auth();
     
     if (!userId) {
@@ -50,7 +51,7 @@ export async function POST(request) {
           quantity: 1,
         },
       ],
-      customer_email: userEmail, // This is the critical line that was missing
+      customer_email: userEmail,
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://lightlisterai.co.uk'}/dashboard?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://lightlisterai.co.uk'}/pricing?cancelled=true`,
       metadata: {
