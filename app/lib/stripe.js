@@ -33,16 +33,25 @@ export const PLANS = {
     perCreditCost: 0,
     description: 'Try LightLister AI'
   },
-  starter: {
-    name: 'Credit Bundle',
+  subscription: {
+    name: 'LightLister Pro',
     credits: 150,
     price: 45,
-    priceId: 'price_XXXXX', // You'll replace this with LIVE price ID
+    priceId: 'price_1RtnkoPeSETpTi7Nw1Voasgc',
     perCreditCost: 0.30,
-    description: 'Best value for regular sellers',
+    description: '150 credits every month + access to credit packs',
     vat: true,
     popular: true,
-    color: 'blue'
+    color: 'blue',
+    recurring: true,
+    interval: 'month',
+    features: [
+      '150 credits per month',
+      'Access to additional credit packs',
+      'Priority support',
+      'Early access to new features',
+      'Cancel anytime'
+    ]
   }
 };
 
@@ -51,28 +60,31 @@ export const CREDIT_PACKS = {
     name: 'Starter Pack',
     credits: 10,
     price: 3,
-    priceId: 'price_XXXXX', // You'll replace this with LIVE price ID
+    priceId: 'price_1Rve6qPeSETpTi7NWc1VcSF4',
     perCreditCost: 0.30,
-    description: 'Perfect for trying our service',
-    vat: true
+    description: 'Quick top-up for members',
+    vat: true,
+    membersOnly: true
   },
   medium: {
     name: 'Growth Pack',
     credits: 50,
     price: 15,
-    priceId: 'price_XXXXX', // You'll replace this with LIVE price ID
+    priceId: 'price_1Rve84PeSETpTi7NSnMTnoya',
     perCreditCost: 0.30,
-    description: 'Great for growing sellers',
-    vat: true
+    description: 'Perfect for busy periods',
+    vat: true,
+    membersOnly: true
   },
   large: {
     name: 'Pro Pack',
     credits: 150,
     price: 45,
-    priceId: 'price_XXXXX', // You'll replace this with LIVE price ID
+    priceId: 'price_1RtnmLPeSETpTi7NEuhiAx41',
     perCreditCost: 0.30,
-    description: 'Best value - same as subscription',
-    vat: true
+    description: 'Maximum value for members',
+    vat: true,
+    membersOnly: true
   }
 };
 
@@ -85,4 +97,9 @@ export function calculateVAT(price, vatRate = 0.20) {
     vat: vat.toFixed(2),
     total: total.toFixed(2)
   };
+}
+
+// Check if user has active subscription
+export function hasActiveSubscription(user) {
+  return user?.subscription_status === 'active';
 }

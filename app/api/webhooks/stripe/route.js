@@ -64,7 +64,7 @@ export async function POST(request) {
           if (plan.priceId === priceId) {
             creditsToAdd = plan.credits;
             planName = plan.name;
-            isSubscription = true;
+            isSubscription = plan.recurring || false;
             break;
           }
         }
@@ -110,7 +110,7 @@ export async function POST(request) {
         
         // Update user with new credits and stripe customer ID
         if (isSubscription) {
-          // For subscriptions, replace total credits
+          // For subscriptions, replace total credits and set status
           const { error: updateError } = await supabase
             .from('users')
             .update({
@@ -118,7 +118,7 @@ export async function POST(request) {
               credits_total: creditsToAdd,
               credits_used: 0, // Reset used credits for new subscription
               subscription_status: 'active',
-              subscription_plan: planName.toLowerCase(),
+              subscription_plan: planName.toLowerCase().replace(' ', '_'),
               subscription_id: session.subscription,
               subscription_end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
               updated_at: new Date().toISOString()
