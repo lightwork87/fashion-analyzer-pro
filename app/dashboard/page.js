@@ -1,5 +1,9 @@
 'use client';
+import EnhancedDashboard from '../components/EnhancedDashboard';
 
+export default function DashboardPage() {
+  return <EnhancedDashboard />;
+}
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useUser, SignOutButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
