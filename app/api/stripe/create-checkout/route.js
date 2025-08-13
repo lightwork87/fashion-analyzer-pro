@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getAuth } from '@clerk/nextjs/server';
-import { clerkClient } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs';
+import { clerkClient } from '@clerk/nextjs/server';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
@@ -9,8 +9,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export async function POST(request) {
   try {
-    // Get the authenticated user ID from the request
-    const { userId } = getAuth(request);
+    // Get the authenticated user ID
+    const { userId } = auth();
     
     if (!userId) {
       return NextResponse.json(
