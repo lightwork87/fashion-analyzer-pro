@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { auth } from '@clerk/nextjs';
-import { currentUser } from '@clerk/nextjs/server';
-import { PLANS, CREDIT_PACKS } from '../../../lib/stripe';
+import { auth, currentUser } from '@clerk/nextjs';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
