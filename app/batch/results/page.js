@@ -46,13 +46,16 @@ export default function BatchResultsPage() {
       try {
         // Prepare images for AI analysis
         const formData = new FormData();
-        group.images.forEach((img, index) => {
+        
+        // Fix: Use for loop instead of forEach for async operations
+        for (let index = 0; index < group.images.length; index++) {
+          const img = group.images[index];
           // Convert base64 to blob
           const base64Response = await fetch(img.preview);
           const blob = await base64Response.blob();
           const file = new File([blob], img.name || `image${index}.jpg`, { type: 'image/jpeg' });
           formData.append(`image${index}`, file);
-        });
+        }
         
         // Call AI analysis
         const response = await fetch('/api/analyze-ai', {
