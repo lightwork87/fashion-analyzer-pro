@@ -5,7 +5,7 @@ import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import Image from 'next/image';
 import { loadStripe } from '@stripe/stripe-js';
-import { PLANS, CREDIT_PACKS } from '../lib/stripe';
+import { PLANS, CREDIT_PACKS, calculateVAT } from '../lib/stripe';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
@@ -14,49 +14,49 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(null);
   const [error, setError] = useState(null);
 
- const handlePurchase = async (priceId, planName) => {
-  if (!user) {
-    window.location.href = '/sign-in';
-    return;
-  }
-
-  setLoading(priceId);
-  setError(null);
-
-  try {
-    const response = await fetch('/api/stripe/create-checkout', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        priceId,
-        planName,
-        userEmail: user.emailAddresses?.[0]?.emailAddress || null,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to create checkout session');
+  const handlePurchase = async (priceId, planName) => {
+    if (!user) {
+      window.location.href = '/sign-in';
+      return;
     }
 
-    const stripe = await stripePromise;
-    const { error: stripeError } = await stripe.redirectToCheckout({
-      sessionId: data.sessionId,
-    });
+    setLoading(priceId);
+    setError(null);
 
-    if (stripeError) {
-      throw new Error(stripeError.message);
+    try {
+      const response = await fetch('/api/stripe/create-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          priceId,
+          planName,
+          userEmail: user.emailAddresses?.[0]?.emailAddress || null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+
+      const stripe = await stripePromise;
+      const { error: stripeError } = await stripe.redirectToCheckout({
+        sessionId: data.sessionId,
+      });
+
+      if (stripeError) {
+        throw new Error(stripeError.message);
+      }
+    } catch (err) {
+      console.error('Purchase error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(null);
     }
-  } catch (err) {
-    console.error('Purchase error:', err);
-    setError(err.message);
-  } finally {
-    setLoading(null);
-  }
-};
+  };
 
   const handleReportIssue = () => {
     window.location.href = 'mailto:lightlisterai@outlook.com?subject=LightLister%20AI%20-%20Pricing%20Question';
@@ -116,7 +116,7 @@ export default function PricingPage() {
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
           <p className="text-xl text-gray-600">Choose the plan that works best for your reselling business</p>
-          <p className="text-sm text-gray-500 mt-2">1 credit = 1 listing (up to 24 photos)</p>
+          <p className="text-sm text-gray-500 mt-2">1 credit = 1 listing (up to 24 photos) • All prices exclude VAT</p>
         </div>
 
         {error && (
@@ -125,32 +125,34 @@ export default function PricingPage() {
           </div>
         )}
 
-        {/* Monthly Plans */}
-        <div className="mb-12">
-          <h3 className="text-2xl font-semibold text-center mb-8">Monthly Plans</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {Object.entries(PLANS).filter(([key]) => key !== 'free').map(([key, plan]) => (
+        {/* Main Credit Bundle */}
+        <div className="mb-12 max-w-md mx-auto">
+          <h3 className="text-2xl font-semibold text-center mb-8">Credit Bundle</h3>
+          {Object.entries(PLANS).filter(([key]) => key !== 'free').map(([key, plan]) => {
+            const vatInfo = calculateVAT(plan.price);
+            return (
               <div 
                 key={key} 
-                className={`bg-white rounded-lg shadow-lg border-2 ${
-                  plan.popular ? 'border-blue-500' : 'border-gray-200'
-                } relative`}
+                className="bg-white rounded-lg shadow-lg border-2 border-blue-500 relative"
               >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-blue-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
-                      MOST POPULAR
-                    </span>
-                  </div>
-                )}
+                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                  <span className="bg-blue-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
+                    BEST VALUE
+                  </span>
+                </div>
                 
                 <div className="p-6">
                   <h4 className="text-xl font-semibold mb-2">{plan.name}</h4>
                   <p className="text-gray-600 mb-4">{plan.description}</p>
                   
                   <div className="mb-6">
-                    <span className="text-4xl font-bold">£{plan.price}</span>
-                    <span className="text-gray-600">/month</span>
+                    <div className="flex items-baseline">
+                      <span className="text-4xl font-bold">£{plan.price}</span>
+                      <span className="text-gray-600 ml-2">+ VAT</span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Total: £{vatInfo.total} (inc. £{vatInfo.vat} VAT)
+                    </p>
                   </div>
                   
                   <div className="space-y-3 mb-6">
@@ -158,7 +160,7 @@ export default function PricingPage() {
                       <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                       </svg>
-                      <span className="text-gray-700">{plan.credits} credits per month</span>
+                      <span className="text-gray-700">{plan.credits} credits</span>
                     </div>
                     <div className="flex items-center">
                       <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -166,14 +168,12 @@ export default function PricingPage() {
                       </svg>
                       <span className="text-gray-700">£{plan.perCreditCost.toFixed(2)} per listing</span>
                     </div>
-                    {plan.savings && (
-                      <div className="flex items-center">
-                        <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span className="text-green-600 font-semibold">{plan.savings}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-green-600 font-semibold">One-time purchase</span>
+                    </div>
                   </div>
                   
                   <button
@@ -182,59 +182,65 @@ export default function PricingPage() {
                     className={`w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
                       loading === plan.priceId
                         ? 'bg-gray-400 cursor-not-allowed'
-                        : plan.popular
-                        ? 'bg-blue-600 hover:bg-blue-700'
-                        : 'bg-gray-600 hover:bg-gray-700'
-                    } focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                      plan.popular ? 'focus:ring-blue-500' : 'focus:ring-gray-500'
-                    }`}
+                        : 'bg-blue-600 hover:bg-blue-700'
+                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
                   >
-                    {loading === plan.priceId ? 'Processing...' : 'Get Started'}
+                    {loading === plan.priceId ? 'Processing...' : 'Buy Credits'}
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        {/* Credit Packs */}
+        {/* Additional Credit Packs */}
         <div className="mb-12">
-          <h3 className="text-2xl font-semibold text-center mb-4">Need Extra Credits?</h3>
-          <p className="text-center text-gray-600 mb-8">One-time credit packs for when you need them</p>
+          <h3 className="text-2xl font-semibold text-center mb-4">Need More Credits?</h3>
+          <p className="text-center text-gray-600 mb-8">Additional credit packs for flexibility</p>
           
-          <div className="max-w-md mx-auto">
-            {Object.entries(CREDIT_PACKS).map(([key, pack]) => (
-              <div key={key} className="bg-white rounded-lg shadow border border-gray-200 p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <h4 className="text-lg font-semibold">{pack.name}</h4>
-                    <p className="text-gray-600">{pack.description}</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            {Object.entries(CREDIT_PACKS).map(([key, pack]) => {
+              const vatInfo = calculateVAT(pack.price);
+              return (
+                <div key={key} className="bg-white rounded-lg shadow border border-gray-200 p-6">
+                  <h4 className="text-lg font-semibold mb-2">{pack.name}</h4>
+                  <p className="text-gray-600 text-sm mb-4">{pack.description}</p>
+                  
+                  <div className="mb-4">
+                    <div className="flex items-baseline">
+                      <span className="text-2xl font-bold">£{pack.price}</span>
+                      <span className="text-gray-600 ml-1 text-sm">+ VAT</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Total: £{vatInfo.total} (inc. VAT)
+                    </p>
                   </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-bold">£{pack.price}</span>
-                    <p className="text-sm text-gray-600">{pack.credits} credits</p>
+                  
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-700">{pack.credits} credits</p>
+                    <p className="text-xs text-gray-500">£{pack.perCreditCost.toFixed(2)} per credit</p>
                   </div>
+                  
+                  <button
+                    onClick={() => handlePurchase(pack.priceId, pack.name)}
+                    disabled={loading === pack.priceId}
+                    className={`w-full py-2 px-4 border rounded-md shadow-sm text-sm font-medium ${
+                      loading === pack.priceId
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                  >
+                    {loading === pack.priceId ? 'Processing...' : 'Buy Credits'}
+                  </button>
                 </div>
-                
-                <button
-                  onClick={() => handlePurchase(pack.priceId, pack.name)}
-                  disabled={loading === pack.priceId}
-                  className={`w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium ${
-                    loading === pack.priceId
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
-                >
-                  {loading === pack.priceId ? 'Processing...' : 'Buy Credits'}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Features Section */}
         <div className="bg-white rounded-lg shadow p-8 max-w-4xl mx-auto">
-          <h3 className="text-2xl font-semibold text-center mb-8">All Plans Include</h3>
+          <h3 className="text-2xl font-semibold text-center mb-8">All Purchases Include</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex items-start">
               <svg className="w-6 h-6 text-green-500 mr-3 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -281,8 +287,8 @@ export default function PricingPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
               <div>
-                <h4 className="font-semibold mb-1">Draft Saving</h4>
-                <p className="text-gray-600 text-sm">Save and edit listings before publishing</p>
+                <h4 className="font-semibold mb-1">No Expiry</h4>
+                <p className="text-gray-600 text-sm">Credits never expire - use them when you need</p>
               </div>
             </div>
             
@@ -298,6 +304,14 @@ export default function PricingPage() {
           </div>
         </div>
 
+        {/* VAT Notice */}
+        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-lg p-4 max-w-2xl mx-auto text-center">
+          <p className="text-sm text-gray-600">
+            <strong>VAT Information:</strong> All prices shown exclude VAT (20%). 
+            VAT will be added at checkout. Business customers can enter their VAT number during checkout.
+          </p>
+        </div>
+
         {/* FAQ Section */}
         <div className="mt-12 max-w-3xl mx-auto">
           <h3 className="text-2xl font-semibold text-center mb-8">Frequently Asked Questions</h3>
@@ -305,17 +319,22 @@ export default function PricingPage() {
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow p-6">
               <h4 className="font-semibold mb-2">How do credits work?</h4>
-              <p className="text-gray-600">1 credit = 1 complete listing analysis, regardless of how many photos you upload (up to 24). Credits reset monthly with subscription plans.</p>
+              <p className="text-gray-600">1 credit = 1 complete listing analysis, regardless of how many photos you upload (up to 24). Credits never expire.</p>
             </div>
             
             <div className="bg-white rounded-lg shadow p-6">
-              <h4 className="font-semibold mb-2">Can I change or cancel my plan?</h4>
-              <p className="text-gray-600">Yes, you can upgrade, downgrade, or cancel your subscription at any time. Changes take effect at the next billing cycle.</p>
+              <h4 className="font-semibold mb-2">Is this a subscription?</h4>
+              <p className="text-gray-600">No! All our credit packs are one-time purchases. Buy credits when you need them with no recurring charges.</p>
             </div>
             
             <div className="bg-white rounded-lg shadow p-6">
-              <h4 className="font-semibold mb-2">Do unused credits roll over?</h4>
-              <p className="text-gray-600">Monthly subscription credits do not roll over. However, credits from one-time packs never expire.</p>
+              <h4 className="font-semibold mb-2">Do credits expire?</h4>
+              <p className="text-gray-600">No, your credits never expire. Use them at your own pace.</p>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+              <h4 className="font-semibold mb-2">Can I get a VAT invoice?</h4>
+              <p className="text-gray-600">Yes, VAT invoices are automatically generated and emailed after each purchase.</p>
             </div>
             
             <div className="bg-white rounded-lg shadow p-6">
@@ -327,7 +346,7 @@ export default function PricingPage() {
 
         {/* Footer CTA */}
         <div className="mt-16 text-center">
-          <p className="text-gray-600 mb-4">Not sure which plan is right for you?</p>
+          <p className="text-gray-600 mb-4">Not sure which pack is right for you?</p>
           <button
             onClick={handleReportIssue}
             className="text-blue-600 hover:text-blue-800 underline"
