@@ -1,389 +1,229 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Navigation from '../../components/Navigation';
-import { useUserData } from '../../hooks/useUserData';
+import Link from 'next/link';
+import Image from 'next/image';
 
-function BatchResultsContent() {
+export default function BatchResults() {
   const router = useRouter();
-  const userData = useUserData();
-  const { user, refreshUser } = userData || {};
-  
-  const [groups, setGroups] = useState([]);
-  const [processing, setProcessing] = useState(false);
   const [results, setResults] = useState([]);
-  const [error, setError] = useState(null);
-  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [processingStatus, setProcessingStatus] = useState({
+    total: 0,
+    successful: 0,
+    failed: 0
+  });
 
   useEffect(() => {
-    // Get grouped items from window object or navigation state
-    if (typeof window !== 'undefined' && window.batchGroupedItems) {
-      setGroups(window.batchGroupedItems);
-      // Clean up
-      delete window.batchGroupedItems;
-    } else {
-      // Try to reconstruct from sessionStorage if available
-      const groupingInfo = sessionStorage.getItem('batchGroupingInfo');
-      if (groupingInfo) {
-        setError('Please return to batch upload page to reselect images.');
-      } else {
-        setError('No grouped items found. Please start from batch upload.');
-      }
+    // Get results from sessionStorage or state
+    const storedResults = sessionStorage.getItem('batchResults');
+    if (storedResults) {
+      const parsedResults = JSON.parse(storedResults);
+      setResults(parsedResults);
+      
+      // Calculate processing status
+      const successful = parsedResults.filter(r => r.status === 'success').length;
+      const failed = parsedResults.filter(r => r.status === 'failed').length;
+      setProcessingStatus({
+        total: parsedResults.length,
+        successful,
+        failed
+      });
     }
+    setLoading(false);
   }, []);
 
-  const processAllGroups = async () => {
-    if (!user || groups.length === 0) return;
-    
-    setProcessing(true);
-    setError(null);
-    const newResults = [];
-
-    try {
-      for (const [index, group] of groups.entries()) {
-        console.log(`Processing group ${index + 1}/${groups.length}`);
-        
-        // Create FormData with actual files
-        const formData = new FormData();
-        
-        for (const img of group.images) {
-          if (img.file) {
-            formData.append('images', img.file);
-          } else if (img.originalFile) {
-            formData.append('images', img.originalFile);
-          } else if (img.blob) {
-            // Create file from blob if needed
-            const file = new File([img.blob], img.name || `image_${index}.jpg`, {
-              type: 'image/jpeg'
-            });
-            formData.append('images', file);
-          }
-        }
-        
-        // Add metadata
-        formData.append('batchMode', 'true');
-        formData.append('groupIndex', index.toString());
-        formData.append('suggestedName', group.suggestedName || '');
-        
-        try {
-          const response = await fetch('/api/analyze-ai', {
-            method: 'POST',
-            body: formData,
-          });
-
-          console.log(`Group ${index + 1} response status:`, response.status);
-
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            const text = await response.text();
-            console.error('Non-JSON response:', text);
-            throw new Error('Invalid response format');
-          }
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.error || 'Analysis failed');
-          }
-
-          newResults.push({
-            groupIndex: index,
-            success: true,
-            data: data,
-            images: group.images.map(img => ({
-              preview: img.preview,
-              name: img.name
-            }))
-          });
-        } catch (apiError) {
-          console.error(`API error for group ${index}:`, apiError);
-          newResults.push({
-            groupIndex: index,
-            error: apiError.message,
-            images: group.images.map(img => ({
-              preview: img.preview,
-              name: img.name
-            }))
-          });
-        }
-        
-        // Update results after each item
-        setResults([...newResults]);
-      }
-      
-      // Safe refresh user - check if function exists
-      if (refreshUser && typeof refreshUser === 'function') {
-        try {
-          await refreshUser();
-        } catch (refreshError) {
-          console.error('Error refreshing user:', refreshError);
-        }
-      }
-      
-      // Clear session storage
-      sessionStorage.removeItem('batchGroupingInfo');
-      sessionStorage.removeItem('batchImageCount');
-      
-    } catch (error) {
-      console.error('Batch processing error:', error);
-      setError(`Failed to process batch: ${error.message}`);
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleSelectItem = (index) => {
-    const newSelected = new Set(selectedItems);
-    if (newSelected.has(index)) {
-      newSelected.delete(index);
-    } else {
-      newSelected.add(index);
-    }
-    setSelectedItems(newSelected);
-  };
-
   const handleSelectAll = () => {
-    if (selectedItems.size === results.length) {
-      setSelectedItems(new Set());
+    if (selectedItems.length === results.length) {
+      setSelectedItems([]);
     } else {
-      setSelectedItems(new Set(results.map((_, i) => i)));
+      setSelectedItems(results.map(r => r.id));
     }
   };
 
-  const handleBulkListToEbay = async () => {
-    const selectedResults = results.filter((_, i) => selectedItems.has(i) && _.success);
-    if (selectedResults.length === 0) return;
-    
-    // TODO: Implement bulk eBay listing
-    alert(`Ready to list ${selectedResults.length} items to eBay!`);
+  const handleSelectItem = (itemId) => {
+    if (selectedItems.includes(itemId)) {
+      setSelectedItems(selectedItems.filter(id => id !== itemId));
+    } else {
+      setSelectedItems([...selectedItems, itemId]);
+    }
   };
 
-  const handleExportToCSV = () => {
-    const selectedResults = results.filter((_, i) => selectedItems.has(i) && _.success);
-    if (selectedResults.length === 0) return;
+  const handleExportCSV = () => {
+    const selectedResults = results.filter(r => selectedItems.includes(r.id));
     
     // Create CSV content
-    const headers = ['Title', 'Brand', 'Size', 'Condition', 'Price', 'Description'];
-    const rows = selectedResults.map(r => [
-      r.data?.title || r.data?.ebayTitle || '',
-      r.data?.brand || '',
-      r.data?.size || '',
-      r.data?.condition || '',
-      r.data?.price || r.data?.minPrice || '',
-      (r.data?.description || '').replace(/"/g, '""')
-    ]);
-    
-    const csv = [
+    const headers = ['Title', 'Brand', 'Category', 'Size', 'Condition', 'Price', 'Color', 'Material', 'Description'];
+    const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ...selectedResults.map(item => {
+        const a = item.analysis;
+        return [
+          `"${a.title || ''}"`,
+          `"${a.brand || ''}"`,
+          `"${a.category || ''}"`,
+          `"${a.size || ''}"`,
+          `"${a.condition || ''}"`,
+          `"${a.price || a.estimated_value_min || ''}"`,
+          `"${a.color || ''}"`,
+          `"${a.material || ''}"`,
+          `"${(a.description || '').replace(/"/g, '""')}"`
+        ].join(',');
+      })
     ].join('\n');
-    
+
     // Download CSV
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vinted_export_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `batch_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
   };
 
+  const handleListToEbay = () => {
+    const selectedResults = results.filter(r => selectedItems.includes(r.id));
+    sessionStorage.setItem('pendingBulkEbayListings', JSON.stringify(selectedResults));
+    router.push('/dashboard?bulk=true');
+  };
+
+  const viewItemDetails = (item) => {
+    // Navigate to detail page with item ID
+    router.push(`/batch/item/${item.id}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Batch Processing Results</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Review your grouped items and process them for analysis
-          </p>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4">
+        <h1 className="text-3xl font-bold mb-2">Batch Processing Results</h1>
+        <p className="text-gray-600 mb-8">Review your grouped items and process them for analysis</p>
+
+        {/* Action Bar */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleSelectAll}
+                className="text-blue-600 hover:underline text-sm"
+              >
+                {selectedItems.length === results.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <span className="text-gray-600 text-sm">
+                {selectedItems.length} items selected
+              </span>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleExportCSV}
+                disabled={selectedItems.length === 0}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Export to CSV
+              </button>
+              <button
+                onClick={handleListToEbay}
+                disabled={selectedItems.length === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                List to eBay ({selectedItems.length})
+              </button>
+            </div>
+          </div>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-            {error}
-            <button
-              onClick={() => router.push('/batch')}
-              className="ml-4 text-sm underline"
-            >
-              Return to Batch Upload
-            </button>
-          </div>
-        )}
-
-        {/* Process button */}
-        {groups.length > 0 && results.length === 0 && (
-          <div className="mb-8 bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold mb-4">Ready to Process</h3>
-            <p className="text-gray-600 mb-4">
-              Found {groups.length} items ready for analysis. This will use {groups.length} credits.
-            </p>
-            <p className="text-sm text-gray-500 mb-4">
-              {user ? `You have ${(user.credits_total || 0) + (user.bonus_credits || 0) - (user.credits_used || 0)} credits remaining.` : 'Loading user data...'}
-            </p>
-            <button
-              onClick={processAllGroups}
-              disabled={processing || !user}
-              className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {processing ? `Processing... (${results.length}/${groups.length})` : `Process All Items (${groups.length} credits)`}
-            </button>
-          </div>
-        )}
-
-        {/* Results display */}
-        {results.length > 0 && (
-          <div className="space-y-6">
-            {/* Bulk actions */}
-            <div className="bg-white rounded-lg shadow-sm p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <button
-                    onClick={handleSelectAll}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    {selectedItems.size === results.length ? 'Deselect All' : 'Select All'}
-                  </button>
-                  <span className="text-sm text-gray-600">
-                    {selectedItems.size} items selected
-                  </span>
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={handleExportToCSV}
-                    disabled={selectedItems.size === 0}
-                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Export to CSV
-                  </button>
-                  <button
-                    onClick={handleBulkListToEbay}
-                    disabled={selectedItems.size === 0}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-                  >
-                    List to eBay ({selectedItems.size})
-                  </button>
-                </div>
-              </div>
+        {/* Processing Summary */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h2 className="text-lg font-semibold mb-4">Processing Summary</h2>
+          <div className="grid grid-cols-3 gap-6">
+            <div>
+              <p className="text-sm text-gray-600">Total Items:</p>
+              <p className="text-2xl font-bold">{processingStatus.total}</p>
             </div>
-
-            {/* Summary */}
-            <div className="bg-white rounded-lg shadow-sm p-4">
-              <h3 className="font-semibold mb-2">Processing Summary</h3>
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-600">Total Items:</span>
-                  <span className="ml-2 font-medium">{results.length}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Successful:</span>
-                  <span className="ml-2 font-medium text-green-600">
-                    {results.filter(r => r.success).length}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Failed:</span>
-                  <span className="ml-2 font-medium text-red-600">
-                    {results.filter(r => !r.success).length}
-                  </span>
-                </div>
-              </div>
+            <div>
+              <p className="text-sm text-gray-600">Successful:</p>
+              <p className="text-2xl font-bold text-green-600">{processingStatus.successful}</p>
             </div>
+            <div>
+              <p className="text-sm text-gray-600">Failed:</p>
+              <p className="text-2xl font-bold text-red-600">{processingStatus.failed}</p>
+            </div>
+          </div>
+        </div>
 
-            {/* Individual results */}
-            {results.map((result, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-sm p-6">
-                <div className="flex items-start space-x-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.has(index)}
-                    onChange={() => handleSelectItem(index)}
-                    className="mt-1"
-                  />
-                  
-                  {result.success ? (
-                    <div className="flex-1">
-                      <div className="grid md:grid-cols-2 gap-6">
-                        {/* Images */}
-                        <div>
-                          <h4 className="font-semibold mb-2">Images</h4>
-                          <div className="grid grid-cols-3 gap-2">
-                            {result.images.slice(0, 6).map((img, imgIndex) => (
-                              <img
-                                key={imgIndex}
-                                src={img.preview}
-                                alt={`Item ${index + 1} - Image ${imgIndex + 1}`}
-                                className="w-full h-20 object-cover rounded"
-                              />
-                            ))}
-                          </div>
-                          {result.images.length > 6 && (
-                            <p className="text-sm text-gray-500 mt-1">
-                              +{result.images.length - 6} more images
-                            </p>
-                          )}
-                        </div>
-                        
-                        {/* Analysis results */}
-                        <div>
-                          <h4 className="font-semibold mb-2">Analysis Results</h4>
-                          <div className="space-y-1 text-sm">
-                            <p><strong>Title:</strong> {result.data?.title || result.data?.ebayTitle}</p>
-                            <p><strong>Brand:</strong> {result.data?.brand}</p>
-                            <p><strong>Size:</strong> {result.data?.size}</p>
-                            <p><strong>Condition:</strong> {result.data?.condition}</p>
-                            <p><strong>Price:</strong> £{result.data?.price || result.data?.minPrice}</p>
-                          </div>
-                          {result.data?.id && (
-                            <button
-                              onClick={() => router.push(`/listing/${result.data.id}`)}
-                              className="mt-3 text-sm text-blue-600 hover:text-blue-800"
-                            >
-                              View Full Details →
-                            </button>
-                          )}
-                        </div>
+        {/* Results Grid */}
+        <div className="space-y-6">
+          {results.map((item) => (
+            <div key={item.id} className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-start gap-6">
+                {/* Checkbox */}
+                <input
+                  type="checkbox"
+                  checked={selectedItems.includes(item.id)}
+                  onChange={() => handleSelectItem(item.id)}
+                  className="mt-1 h-5 w-5 text-blue-600 rounded border-gray-300"
+                />
+
+                {/* Images Section */}
+                <div className="flex-shrink-0">
+                  <h3 className="font-medium mb-3">Images</h3>
+                  <div className="grid grid-cols-3 gap-2 w-96">
+                    {item.images.slice(0, 6).map((image, idx) => (
+                      <div key={idx} className="aspect-square bg-gray-100 rounded overflow-hidden">
+                        <img
+                          src={image.url || image.preview}
+                          alt={`Item ${item.groupNumber} image ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex-1">
-                      <p className="text-red-600 font-medium">Processing Failed</p>
-                      <p className="text-sm text-gray-600 mt-1">Error: {result.error}</p>
-                      <div className="mt-2 grid grid-cols-3 gap-2">
-                        {result.images?.slice(0, 3).map((img, imgIndex) => (
-                          <img
-                            key={imgIndex}
-                            src={img.preview}
-                            alt={`Failed item ${index + 1}`}
-                            className="w-full h-20 object-cover rounded opacity-50"
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    ))}
+                  </div>
+                  {item.images.length > 6 && (
+                    <p className="text-sm text-gray-500 mt-2">
+                      +{item.images.length - 6} more images
+                    </p>
                   )}
                 </div>
+
+                {/* Analysis Results */}
+                <div className="flex-grow">
+                  <h3 className="font-medium mb-3">Analysis Results</h3>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">Title:</span> {item.analysis.title || `Item ${item.groupNumber}`}</p>
+                    <p><span className="font-medium">Brand:</span> {item.analysis.brand || 'Unknown Brand'}</p>
+                    <p><span className="font-medium">Size:</span> {item.analysis.size || 'One Size'}</p>
+                    <p><span className="font-medium">Condition:</span> {item.analysis.condition || 'Good'}</p>
+                    <p><span className="font-medium">Price:</span> £{item.analysis.price || item.analysis.estimated_value_min || '20'}</p>
+                  </div>
+                  <button
+                    onClick={() => viewItemDetails(item)}
+                    className="mt-4 text-blue-600 hover:underline text-sm"
+                  >
+                    View Full Details →
+                  </button>
+                </div>
               </div>
-            ))}
+            </div>
+          ))}
+        </div>
+
+        {results.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No results to display</p>
+            <Link href="/batch" className="text-blue-600 hover:underline mt-2 inline-block">
+              Start new batch processing
+            </Link>
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-export default function BatchResultsPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    }>
-      <BatchResultsContent />
-    </Suspense>
   );
 }
