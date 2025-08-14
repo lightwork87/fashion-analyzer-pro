@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { supabase } from '../../../lib/supabase';
-import { EBAY_ENDPOINTS } from '../../../lib/ebay';
+import { currentUser } from '@clerk/nextjs/server';
+import { supabase } from '../../../../lib/supabase';
+import { EBAY_ENDPOINTS } from '../../../../lib/ebay';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,10 +26,24 @@ export async function GET(request) {
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=missing_params`);
     }
     
-    // Decode and verify state
-    const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
-    const { userId } = stateData;
-    console.log('User ID from state:', userId);
+    // Get current user
+    const user = await currentUser();
+    if (!user) {
+      console.error('No authenticated user');
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=not_authenticated`);
+    }
+    
+    const userId = user.id;
+    console.log('User ID:', userId);
+    
+    // Decode state if needed
+    let stateUserId = userId;
+    try {
+      const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+      stateUserId = stateData.userId || userId;
+    } catch (e) {
+      console.log('Could not decode state, using current user ID');
+    }
     
     // Exchange code for access token
     const tokenUrl = 'https://api.ebay.com/identity/v1/oauth2/token';
@@ -46,7 +60,7 @@ export async function GET(request) {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: 'https://lightlisterai.co.uk/api/ebay/callback'
+        redirect_uri: `${process.env.NEXT_PUBLIC_BASE_URL}/api/ebay/auth/callback`
       })
     });
     
@@ -61,14 +75,14 @@ export async function GET(request) {
     console.log('Token received, saving to database...');
     
     // First, get the user from Clerk ID
-    const { data: user, error: userError } = await supabase
+    const { data: dbUser, error: userError } = await supabase
       .from('users')
       .select('id')
       .eq('clerk_id', userId)
       .single();
     
-    if (userError || !user) {
-      console.error('User not found:', userError);
+    if (userError || !dbUser) {
+      console.error('User not found in database:', userError);
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=user_not_found`);
     }
     
@@ -76,7 +90,7 @@ export async function GET(request) {
     const { error: dbError } = await supabase
       .from('ebay_tokens')
       .upsert({
-        user_id: user.id, // Use the UUID from users table
+        user_id: dbUser.id, // Use the UUID from users table
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
         expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
