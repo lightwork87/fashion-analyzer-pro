@@ -1,24 +1,7 @@
-import sharp from 'sharp';
-
+// Server-side compression without sharp
 export async function compressImage(buffer) {
-  try {
-    // Use sharp if available, otherwise return original
-    if (typeof sharp !== 'undefined') {
-      const compressed = await sharp(buffer)
-        .resize(1200, 1200, { 
-          fit: 'inside',
-          withoutEnlargement: true 
-        })
-        .jpeg({ quality: 85 })
-        .toBuffer();
-      
-      return compressed;
-    }
-  } catch (error) {
-    console.error('Sharp compression failed:', error);
-  }
-  
-  // Return original if compression fails
+  // For server-side, just return the buffer as-is
+  // Sharp is too heavy for Vercel deployment
   return buffer;
 }
 

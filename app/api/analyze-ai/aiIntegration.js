@@ -1,5 +1,3 @@
-import { GoogleAuth } from 'google-auth-library';
-
 export async function analyzeImagesWithAI(images) {
   try {
     console.log('Starting AI analysis with', images.length, 'images');
