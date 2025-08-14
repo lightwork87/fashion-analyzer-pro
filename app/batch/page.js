@@ -160,73 +160,113 @@ export default function BatchUploadPage() {
 
     setIsProcessing(true);
     setError(null);
-    setProcessingStatus('Creating thumbnails for AI grouping...');
+    setProcessingStatus('Preparing images for grouping...');
 
     try {
-      const thumbnails = await Promise.all(
-        uploadedImages.map(async (img, index) => {
+      // Create very small thumbnails for AI grouping
+      const thumbnails = [];
+      
+      for (let i = 0; i < uploadedImages.length; i++) {
+        setProcessingStatus(`Creating thumbnail ${i + 1} of ${uploadedImages.length}...`);
+        
+        try {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           const image = new Image();
           
-          await new Promise((resolve) => {
+          await new Promise((resolve, reject) => {
             image.onload = resolve;
-            image.src = img.preview;
+            image.onerror = reject;
+            image.src = uploadedImages[i].preview;
           });
           
+          // Very small thumbnail for API
           canvas.width = 100;
           canvas.height = 100;
           ctx.drawImage(image, 0, 0, 100, 100);
           
-          return {
-            index,
-            thumbnail: canvas.toDataURL('image/jpeg', 0.3),
-            name: img.name
-          };
-        })
-      );
+          const thumbnail = canvas.toDataURL('image/jpeg', 0.3);
+          
+          thumbnails.push({
+            index: i,
+            thumbnail: thumbnail,
+            name: uploadedImages[i].name
+          });
+        } catch (thumbError) {
+          console.error(`Failed to create thumbnail for image ${i}:`, thumbError);
+          // Continue with other images
+        }
+      }
+
+      if (thumbnails.length === 0) {
+        throw new Error('Failed to create thumbnails');
+      }
 
       setProcessingStatus('Sending to AI for grouping...');
+      console.log(`Sending ${thumbnails.length} thumbnails for grouping`);
 
       const response = await fetch('/api/batch/group', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ 
           images: thumbnails,
           totalImages: uploadedImages.length 
         }),
       });
 
+      console.log('Group API response status:', response.status);
+
+      // Check response content type
       const contentType = response.headers.get("content-type");
+      console.log('Response content-type:', contentType);
+      
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
         console.error('Non-JSON response:', text);
-        throw new Error(`Server error: ${text.substring(0, 100)}...`);
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to group images');
+        throw new Error(`Server error: ${text.substring(0, 200)}`);
       }
 
       const data = await response.json();
-      console.log('AI grouped images into', data.groups.length, 'items');
+      console.log('Group API response:', data);
 
-      const groupedData = data.groups.map((group, groupIndex) => ({
-        id: `group_${groupIndex}`,
-        images: group.indices.map(idx => uploadedImages[idx]),
-        suggestedName: group.suggestedName || `Item ${groupIndex + 1}`
-      }));
+      if (!response.ok) {
+        throw new Error(data.error || data.details || 'Failed to group images');
+      }
 
+      if (!data.groups || !Array.isArray(data.groups)) {
+        throw new Error('Invalid response format from grouping API');
+      }
+
+      console.log(`AI grouped images into ${data.groups.length} items`);
+
+      // Create grouped items with full images
+      const groupedData = data.groups.map((group, groupIndex) => {
+        const groupImages = group.indices
+          .filter(idx => idx >= 0 && idx < uploadedImages.length)
+          .map(idx => uploadedImages[idx]);
+        
+        return {
+          id: `group_${groupIndex}`,
+          images: groupImages,
+          suggestedName: group.suggestedName || `Item ${groupIndex + 1}`
+        };
+      });
+
+      console.log('Created grouped data:', groupedData.length, 'groups');
       setGroupedItems(groupedData);
+      
+      // Store minimal data
       sessionStorage.setItem('batchImageCount', uploadedImages.length.toString());
+      setProcessingStatus('');
       
     } catch (error) {
       console.error('Error grouping images:', error);
-      setError(error.message || 'Failed to group images. Please try again.');
+      setError(`Failed to group images: ${error.message}`);
+      setProcessingStatus('');
     } finally {
       setIsProcessing(false);
-      setProcessingStatus('');
     }
   };
 

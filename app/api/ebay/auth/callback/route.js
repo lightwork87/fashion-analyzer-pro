@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 
+export const dynamic = 'force-dynamic';
 export async function GET(request) {
   try {
     const user = await currentUser();

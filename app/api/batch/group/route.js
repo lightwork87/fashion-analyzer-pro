@@ -1,131 +1,104 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
-// Helper function to call Claude API
-async function analyzeImagesWithAI(thumbnails) {
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `You are analyzing fashion item photos for an eBay listing tool. Group these ${thumbnails.length} thumbnail images into separate items. Each item can have multiple photos (front, back, label, etc).
+// Force dynamic to prevent static generation issues
+export const dynamic = 'force-dynamic';
 
-Rules:
-1. Group photos that show the same item from different angles
-2. Maximum 24 photos per item
-3. Look for visual similarities: color, pattern, style
-4. Return JSON only with this format:
-{
-  "groups": [
-    {
-      "indices": [0, 1, 2],
-      "suggestedName": "Blue Floral Dress",
-      "confidence": 0.95
-    }
-  ]
-}
-
-Analyze these images and group them appropriately.`
-            },
-            ...thumbnails.slice(0, 50).map((img, idx) => ({
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: 'image/jpeg',
-                data: img.thumbnail.split(',')[1]
-              }
-            }))
-          ]
-        }]
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error('AI analysis failed');
-    }
-
-    const data = await response.json();
-    const content = data.content[0].text;
-    
-    // Parse the JSON response
-    const result = JSON.parse(content);
-    return result.groups;
-    
-  } catch (error) {
-    console.error('AI grouping error:', error);
-    // Fall back to simple grouping
-    return null;
-  }
-}
+// Configure max body size
+export const maxDuration = 30; // Max function duration
 
 export async function POST(request) {
+  console.log('Batch group API called');
+  
   try {
+    // Check authentication
     const { userId } = await auth();
     
     if (!userId) {
+      console.log('Unauthorized - no userId');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { images, totalImages } = await request.json();
+    // Parse request body
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError);
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    const { images, totalImages } = body;
     
-    if (!images || images.length === 0) {
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      console.log('No images provided');
       return NextResponse.json({ error: 'No images provided' }, { status: 400 });
     }
 
     console.log(`Grouping ${images.length} images into items...`);
 
-    let groups = [];
-
-    // Try AI grouping first
-    if (process.env.ANTHROPIC_API_KEY) {
-      groups = await analyzeImagesWithAI(images);
-    }
-
-    // Fall back to simple grouping if AI fails
-    if (!groups || groups.length === 0) {
-      console.log('Using simple grouping algorithm...');
+    // Simple grouping algorithm
+    // Group images by assuming they were uploaded in order
+    const groups = [];
+    const maxImagesPerGroup = 24; // eBay's max
+    const targetGroupCount = Math.min(25, Math.ceil(images.length / 6)); // Aim for ~6 images per group
+    const imagesPerGroup = Math.ceil(images.length / targetGroupCount);
+    
+    let currentIndex = 0;
+    let groupNumber = 1;
+    
+    while (currentIndex < images.length && groups.length < 25) {
+      const groupSize = Math.min(
+        imagesPerGroup,
+        maxImagesPerGroup,
+        images.length - currentIndex
+      );
       
-      const imagesPerItem = Math.max(1, Math.min(24, Math.ceil(images.length / 25)));
+      const groupIndices = [];
+      for (let i = 0; i < groupSize && currentIndex < images.length; i++) {
+        groupIndices.push(currentIndex);
+        currentIndex++;
+      }
       
-      for (let i = 0; i < images.length; i += imagesPerItem) {
-        const groupIndices = [];
-        for (let j = i; j < Math.min(i + imagesPerItem, images.length); j++) {
-          groupIndices.push(j);
-        }
-        
+      if (groupIndices.length > 0) {
         groups.push({
           indices: groupIndices,
-          suggestedName: `Item ${groups.length + 1}`,
-          confidence: 0.5
+          suggestedName: `Item ${groupNumber}`,
+          confidence: 0.7 // Simple grouping confidence
         });
+        groupNumber++;
       }
     }
 
     console.log(`Created ${groups.length} groups from ${images.length} images`);
+    console.log('Groups:', groups.map(g => ({
+      name: g.suggestedName,
+      imageCount: g.indices.length
+    })));
 
+    // Return successful response
     return NextResponse.json({ 
-      groups,
+      success: true,
+      groups: groups,
       totalGroups: groups.length,
       averageImagesPerGroup: Math.round(images.length / groups.length),
-      method: groups[0]?.confidence > 0.5 ? 'ai' : 'simple'
+      method: 'simple' // We're using simple grouping for now
     });
     
   } catch (error) {
     console.error('Batch grouping error:', error);
     return NextResponse.json(
-      { error: 'Failed to group images' },
+      { 
+        error: 'Failed to group images', 
+        details: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
+}
+
+// Handle other methods
+export async function GET() {
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }
