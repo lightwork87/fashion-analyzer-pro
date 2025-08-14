@@ -34,7 +34,8 @@ export default function Dashboard() {
   const [businessPolicies, setBusinessPolicies] = useState({
     shipping: [],
     payment: [],
-    returns: []
+    returns: [],
+    error: null
   });
 
   useEffect(() => {
@@ -79,6 +80,12 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Error loading business policies:', error);
+      setBusinessPolicies({
+        shipping: [],
+        payment: [],
+        returns: [],
+        error: 'Failed to load policies'
+      });
     }
   };
 
@@ -805,131 +812,135 @@ export default function Dashboard() {
         )}
 
         {/* Business Policies View */}
-{activeView === 'policies' && (
-  <div className="px-8 pb-8">
-    {/* eBay Connection Status */}
-    {businessPolicies.error === 'eBay account not connected' ? (
-      <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-6">
-        <p className="text-yellow-800">
-          Connect your eBay account to sync and manage business policies.
-        </p>
-      </div>
-    ) : businessPolicies.error ? (
-      <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-6">
-        <p className="text-red-800">
-          Error loading policies: {businessPolicies.error}
-        </p>
-        <button
-          onClick={loadBusinessPolicies}
-          className="mt-2 text-red-600 hover:text-red-800 underline"
-        >
-          Try Again
-        </button>
-      </div>
-    ) : (
-      <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-6">
-        <p className="text-green-800">
-          ✓ Business policies synced from your eBay account
-        </p>
-        <button
-          onClick={loadBusinessPolicies}
-          className="mt-2 text-green-600 hover:text-green-800 underline"
-        >
-          Refresh Policies
-        </button>
-      </div>
-    )}
-    
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Shipping Policies */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">Shipping Policies</h3>
-        <button 
-          className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          onClick={() => window.open('https://www.ebay.co.uk/sh/buspol', '_blank')}
-        >
-          Create on eBay
-        </button>
-        <div className="space-y-3">
-          {businessPolicies.shipping.length === 0 ? (
-            <p className="text-center text-gray-500 py-4">No shipping policies found</p>
-          ) : (
-            businessPolicies.shipping.map((policy) => (
-              <div key={policy.id} className="p-3 border rounded-lg">
-                <p className="font-medium">{policy.name}</p>
-                <p className="text-sm text-gray-600">
-                  {policy.handlingTime} day handling
+        {activeView === 'policies' && (
+          <div className="px-8 pb-8">
+            {/* eBay Connection Status */}
+            {businessPolicies.error === 'eBay account not connected' ? (
+              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-6">
+                <p className="text-yellow-800">
+                  Connect your eBay account to sync and manage business policies.
                 </p>
-                {policy.shippingOptions.length > 0 && (
-                  <p className="text-sm text-gray-600">
-                    {policy.shippingOptions[0].service} - 
-                    {policy.shippingOptions[0].cost === '0' ? ' Free' : ` £${policy.shippingOptions[0].cost}`}
-                  </p>
-                )}
               </div>
-            ))
-          )}
-        </div>
-      </div>
+            ) : businessPolicies.error ? (
+              <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-6">
+                <p className="text-red-800">
+                  Error loading policies: {businessPolicies.error}
+                </p>
+                <button
+                  onClick={loadBusinessPolicies}
+                  className="mt-2 text-red-600 hover:text-red-800 underline"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : (
+              <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-6">
+                <p className="text-green-800">
+                  ✓ Business policies synced from your eBay account
+                </p>
+                <button
+                  onClick={loadBusinessPolicies}
+                  className="mt-2 text-green-600 hover:text-green-800 underline"
+                >
+                  Refresh Policies
+                </button>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Shipping Policies */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold mb-4">Shipping Policies</h3>
+                <button 
+                  className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  onClick={() => window.open('https://www.ebay.co.uk/sh/buspol', '_blank')}
+                >
+                  Create on eBay
+                </button>
+                <div className="space-y-3">
+                  {businessPolicies.shipping.length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">No shipping policies found</p>
+                  ) : (
+                    businessPolicies.shipping.map((policy) => (
+                      <div key={policy.id} className="p-3 border rounded-lg">
+                        <p className="font-medium">{policy.name}</p>
+                        <p className="text-sm text-gray-600">
+                          {policy.handlingTime} day handling
+                        </p>
+                        {policy.shippingOptions.length > 0 && (
+                          <p className="text-sm text-gray-600">
+                            {policy.shippingOptions[0].service} - 
+                            {policy.shippingOptions[0].cost === '0' ? ' Free' : ` £${policy.shippingOptions[0].cost}`}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
 
-      {/* Payment Policies */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">Payment Policies</h3>
-        <button 
-          className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          onClick={() => window.open('https://www.ebay.co.uk/sh/buspol', '_blank')}
-        >
-          Create on eBay
-        </button>
-        <div className="space-y-3">
-          {businessPolicies.payment.length === 0 ? (
-            <p className="text-center text-gray-500 py-4">No payment policies found</p>
-          ) : (
-            businessPolicies.payment.map((policy) => (
-              <div key={policy.id} className="p-3 border rounded-lg">
-                <p className="font-medium">{policy.name}</p>
-                <p className="text-sm text-gray-600">
-                  {policy.immediatePay ? 'Immediate payment required' : 'Standard payment'}
-                </p>
-                {policy.methods.length > 0 && (
-                  <p className="text-sm text-gray-500">
-                    {policy.methods.slice(0, 3).join(', ')}
-                    {policy.methods.length > 3 && ` +${policy.methods.length - 3} more`}
-                  </p>
-                )}
+              {/* Payment Policies */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold mb-4">Payment Policies</h3>
+                <button 
+                  className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  onClick={() => window.open('https://www.ebay.co.uk/sh/buspol', '_blank')}
+                >
+                  Create on eBay
+                </button>
+                <div className="space-y-3">
+                  {businessPolicies.payment.length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">No payment policies found</p>
+                  ) : (
+                    businessPolicies.payment.map((policy) => (
+                      <div key={policy.id} className="p-3 border rounded-lg">
+                        <p className="font-medium">{policy.name}</p>
+                        <p className="text-sm text-gray-600">
+                          {policy.immediatePay ? 'Immediate payment required' : 'Standard payment'}
+                        </p>
+                        {policy.methods.length > 0 && (
+                          <p className="text-sm text-gray-500">
+                            {policy.methods.slice(0, 3).join(', ')}
+                            {policy.methods.length > 3 && ` +${policy.methods.length - 3} more`}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            ))
-          )}
-        </div>
-      </div>
 
-      {/* Return Policies */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">Return Policies</h3>
-        <button 
-          className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          onClick={() => window.open('https://www.ebay.co.uk/sh/buspol', '_blank')}
-        >
-          Create on eBay
-        </button>
-        <div className="space-y-3">
-          {businessPolicies.returns.length === 0 ? (
-            <p className="text-center text-gray-500 py-4">No return policies found</p>
-          ) : (
-            businessPolicies.returns.map((policy) => (
-              <div key={policy.id} className="p-3 border rounded-lg">
-                <p className="font-medium">{policy.name}</p>
-                <p className="text-sm text-gray-600">
-                  {policy.period} day returns - {policy.type}
-                </p>
-                <p className="text-sm text-gray-500">
-                  Shipping paid by: {policy.shippingCostPaidBy.toLowerCase()}
-                </p>
+              {/* Return Policies */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold mb-4">Return Policies</h3>
+                <button 
+                  className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  onClick={() => window.open('https://www.ebay.co.uk/sh/buspol', '_blank')}
+                >
+                  Create on eBay
+                </button>
+                <div className="space-y-3">
+                  {businessPolicies.returns.length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">No return policies found</p>
+                  ) : (
+                    businessPolicies.returns.map((policy) => (
+                      <div key={policy.id} className="p-3 border rounded-lg">
+                        <p className="font-medium">{policy.name}</p>
+                        <p className="text-sm text-gray-600">
+                          {policy.period} day returns - {policy.type}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Shipping paid by: {policy.shippingCostPaidBy.toLowerCase()}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
-  </div>
-)}
+  );
+}
