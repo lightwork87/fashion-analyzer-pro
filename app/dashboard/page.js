@@ -59,8 +59,8 @@ export default function Dashboard() {
     }
   };
 
-  // Compress image function
-  const compressImage = async (file) => {
+  // Aggressive compression for API (smaller than display)
+  const compressImageForAPI = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -71,10 +71,10 @@ export default function Dashboard() {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           
-          // Calculate new dimensions (max 1920px)
+          // Much smaller for API - 800px max
           let width = img.width;
           let height = img.height;
-          const maxSize = 1920;
+          const maxSize = 800;
           
           if (width > height && width > maxSize) {
             height = (height / width) * maxSize;
@@ -88,17 +88,63 @@ export default function Dashboard() {
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
           
+          // Convert to blob with low quality for API
           canvas.toBlob((blob) => {
-            if (blob) {
+            if (blob && blob.size < 300000) { // Keep under 300KB
               const compressedFile = new File([blob], file.name, {
                 type: 'image/jpeg',
                 lastModified: Date.now()
               });
               resolve(compressedFile);
             } else {
-              reject(new Error('Canvas to Blob failed'));
+              // If still too large, compress more
+              canvas.toBlob((smallerBlob) => {
+                const smallerFile = new File([smallerBlob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                });
+                resolve(smallerFile);
+              }, 'image/jpeg', 0.5);
             }
-          }, 'image/jpeg', 0.85);
+          }, 'image/jpeg', 0.7);
+        };
+        img.onerror = () => reject(new Error('Image load failed'));
+      };
+      reader.onerror = () => reject(new Error('File read failed'));
+    });
+  };
+
+  // Compress for display (better quality)
+  const compressImageForDisplay = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Larger for display - 1200px max
+          let width = img.width;
+          let height = img.height;
+          const maxSize = 1200;
+          
+          if (width > height && width > maxSize) {
+            height = (height / width) * maxSize;
+            width = maxSize;
+          } else if (height > maxSize) {
+            width = (width / height) * maxSize;
+            height = maxSize;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          const preview = canvas.toDataURL('image/jpeg', 0.85);
+          resolve(preview);
         };
         img.onerror = () => reject(new Error('Image load failed'));
       };
@@ -111,34 +157,33 @@ export default function Dashboard() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    console.log('Files selected:', files.length); // Debug log
+    console.log('Files selected:', files.length);
 
     try {
       const processedImages = [];
       
       for (const file of files) {
         try {
-          // Compress the image
-          const compressedFile = await compressImage(file);
+          // Create display version
+          const preview = await compressImageForDisplay(file);
           
-          // Create preview
-          const reader = new FileReader();
-          const base64 = await new Promise((resolve) => {
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(compressedFile);
-          });
+          // Create compressed version for API
+          const compressedFile = await compressImageForAPI(file);
           
           processedImages.push({
-            preview: base64,
+            preview: preview,
             file: compressedFile,
+            originalFile: file,
             name: file.name
           });
+          
+          console.log(`Processed ${file.name}: Display size: ${preview.length}, API size: ${compressedFile.size}`);
         } catch (err) {
           console.error('Error processing file:', file.name, err);
         }
       }
       
-      console.log('Processed images:', processedImages.length); // Debug log
+      console.log('Processed images:', processedImages.length);
       setUploadedImages(processedImages);
       setError(null);
       setAnalysisResult(null);
@@ -150,7 +195,7 @@ export default function Dashboard() {
 
   // Handle new listing button click
   const handleNewListing = () => {
-    console.log('New listing clicked'); // Debug log
+    console.log('New listing clicked');
     
     // Reset state
     setUploadedImages([]);
@@ -159,7 +204,7 @@ export default function Dashboard() {
     
     // Trigger file input click
     if (fileInputRef.current) {
-      console.log('Clicking file input'); // Debug log
+      console.log('Clicking file input');
       fileInputRef.current.click();
     } else {
       console.error('File input ref not found');
@@ -168,7 +213,7 @@ export default function Dashboard() {
 
   // Handle analysis
   const handleAnalyze = async () => {
-    console.log('Starting analysis...'); // Debug log
+    console.log('Starting analysis...');
     
     if (!user || uploadedImages.length === 0) {
       setError('Please select images to analyze');
@@ -190,20 +235,36 @@ export default function Dashboard() {
     try {
       const formData = new FormData();
       
-      // Add images to FormData
+      // Add compressed images to FormData
       uploadedImages.forEach((img, index) => {
-        console.log(`Adding image ${index}:`, img.name); // Debug log
+        console.log(`Adding image ${index}: ${img.name}, size: ${img.file.size}`);
         formData.append('images', img.file);
       });
 
-      console.log('Sending request to /api/analyze-ai'); // Debug log
+      // Log total size
+      let totalSize = 0;
+      uploadedImages.forEach(img => totalSize += img.file.size);
+      console.log(`Total upload size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+
+      console.log('Sending request to /api/analyze-ai');
 
       const response = await fetch('/api/analyze-ai', {
         method: 'POST',
         body: formData,
       });
 
-      console.log('Response status:', response.status); // Debug log
+      console.log('Response status:', response.status);
+
+      if (response.status === 413) {
+        throw new Error('Images are too large. Please try with fewer or smaller images.');
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text);
+        throw new Error('Server error: ' + text.substring(0, 100));
+      }
 
       const data = await response.json();
 
@@ -211,7 +272,7 @@ export default function Dashboard() {
         throw new Error(data.error || 'Analysis failed');
       }
 
-      console.log('Analysis result:', data); // Debug log
+      console.log('Analysis result:', data);
       
       setAnalysisResult(data);
       await refreshUser(); // Refresh credit count
@@ -406,12 +467,12 @@ export default function Dashboard() {
               <div>
                 <h4 className="font-medium text-gray-700 mb-3">Item Details</h4>
                 <div className="space-y-2">
-                  <p><span className="font-medium">Title:</span> {analysisResult.title}</p>
+                  <p><span className="font-medium">Title:</span> {analysisResult.title || analysisResult.ebayTitle}</p>
                   <p><span className="font-medium">Brand:</span> {analysisResult.brand}</p>
-                  <p><span className="font-medium">Category:</span> {analysisResult.category}</p>
+                  <p><span className="font-medium">Category:</span> {analysisResult.category || analysisResult.itemType}</p>
                   <p><span className="font-medium">Size:</span> {analysisResult.size}</p>
                   <p><span className="font-medium">Condition:</span> {analysisResult.condition}</p>
-                  <p><span className="font-medium">Suggested Price:</span> {formatPrice(analysisResult.price)}</p>
+                  <p><span className="font-medium">Suggested Price:</span> {formatPrice(analysisResult.price || analysisResult.minPrice)}</p>
                   <p><span className="font-medium">SKU:</span> {analysisResult.sku}</p>
                 </div>
               </div>
