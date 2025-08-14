@@ -1,498 +1,367 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
-import Navigation from '../components/Navigation';
+import { useUser } from '@clerk/nextjs';
 import { useUserData } from '../hooks/useUserData';
+import Image from 'next/image';
+import Link from 'next/link';
 
-export default function BatchUploadPage() {
-  const { userId } = useAuth();
-  const { user, loading } = useUserData();
+export default function BatchProcessing() {
   const router = useRouter();
+  const { user: clerkUser } = useUser();
+  const { user, loading: userLoading } = useUserData();
   const fileInputRef = useRef(null);
   
-  const [uploadedImages, setUploadedImages] = useState([]);
+  const [images, setImages] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [isGrouping, setIsGrouping] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
   const [error, setError] = useState(null);
-  const [groupedItems, setGroupedItems] = useState([]);
-  const [processingStatus, setProcessingStatus] = useState('');
 
-  // Move function inside component to avoid serialization issues
-  const compressImage = async (file) => {
-    if (!file || !(file instanceof File)) {
-      console.error('Invalid file object:', file);
-      return null;
-    }
+  const MAX_IMAGES = 600; // 25 items × 24 photos
+  const MAX_ITEMS = 25;
 
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      
-      reader.onerror = (error) => {
-        console.error('FileReader error:', error);
-        reject(error);
-      };
-      
-      reader.onload = (event) => {
-        if (!event?.target?.result) {
-          reject(new Error('No file data'));
-          return;
-        }
-        
-        const img = new Image();
-        
-        img.onerror = () => {
-          reject(new Error('Image load failed'));
-        };
-        
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            if (!ctx) {
-              reject(new Error('Canvas context failed'));
-              return;
-            }
-            
-            let width = img.width;
-            let height = img.height;
-            const maxSize = 600;
-            
-            if (width > height && width > maxSize) {
-              height = (height / width) * maxSize;
-              width = maxSize;
-            } else if (height > maxSize) {
-              width = (width / height) * maxSize;
-              height = maxSize;
-            }
-            
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            canvas.toBlob((blob) => {
-              if (!blob) {
-                reject(new Error('Blob creation failed'));
-                return;
-              }
-              
-              const compressedFile = new File([blob], file.name, {
-                type: 'image/jpeg',
-                lastModified: Date.now()
-              });
-              
-              resolve({
-                blob: blob,
-                preview: canvas.toDataURL('image/jpeg', 0.6),
-                file: compressedFile,
-                name: file.name,
-                originalFile: file,
-                size: blob.size
-              });
-            }, 'image/jpeg', 0.6);
-            
-          } catch (canvasError) {
-            console.error('Canvas processing error:', canvasError);
-            reject(canvasError);
-          }
-        };
-        
-        img.src = event.target.result;
-      };
-      
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleFileSelect = async (e) => {
+  const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    if (files.length > 600) {
-      setError('Maximum 600 images allowed');
+    
+    if (files.length > MAX_IMAGES) {
+      setError(`Maximum ${MAX_IMAGES} images allowed. You selected ${files.length}.`);
       return;
     }
 
-    console.log(`Selected ${files.length} files for batch processing`);
     setError(null);
-    setIsProcessing(true);
-    setProcessingStatus('Processing images...');
+    
+    // Convert files to preview URLs
+    const newImages = files.map((file, index) => ({
+      id: `img-${Date.now()}-${index}`,
+      file,
+      preview: URL.createObjectURL(file),
+      name: file.name,
+      size: file.size
+    }));
 
-    try {
-      const processedImages = [];
-      const batchSize = 5;
-      
-      for (let i = 0; i < files.length; i += batchSize) {
-        const batch = files.slice(i, i + batchSize);
-        setProcessingStatus(`Processing images ${i + 1}-${Math.min(i + batchSize, files.length)} of ${files.length}...`);
-        
-        const batchPromises = batch.map(file => {
-          return compressImage(file).catch(err => {
-            console.error(`Failed to process ${file.name}:`, err);
-            return null;
-          });
-        });
-        
-        const batchResults = await Promise.all(batchPromises);
-        processedImages.push(...batchResults.filter(img => img !== null));
-        
-        setUploadedImages([...processedImages]);
-      }
-      
-      console.log(`Successfully processed ${processedImages.length} images`);
-      const totalSize = processedImages.reduce((sum, img) => sum + img.size, 0);
-      console.log(`Total size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
-      
-      setUploadedImages(processedImages);
-      setProcessingStatus('');
-    } catch (error) {
-      console.error('Error processing images:', error);
-      setError('Failed to process some images. Please try again.');
-    } finally {
-      setIsProcessing(false);
-      setProcessingStatus('');
-    }
+    setImages(newImages);
   };
 
-  const groupImagesByAI = async () => {
-    if (uploadedImages.length === 0) return;
+  const handleGroupImages = async () => {
+    if (images.length === 0) return;
 
-    setIsProcessing(true);
+    setIsGrouping(true);
     setError(null);
-    setProcessingStatus('Preparing images for grouping...');
 
     try {
-      // Create very small thumbnails for AI grouping
-      const thumbnails = [];
-      
-      for (let i = 0; i < uploadedImages.length; i++) {
-        setProcessingStatus(`Creating thumbnail ${i + 1} of ${uploadedImages.length}...`);
-        
-        try {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const image = new Image();
-          
-          await new Promise((resolve, reject) => {
-            image.onload = resolve;
-            image.onerror = reject;
-            image.src = uploadedImages[i].preview;
-          });
-          
-          // Very small thumbnail for API
-          canvas.width = 100;
-          canvas.height = 100;
-          ctx.drawImage(image, 0, 0, 100, 100);
-          
-          const thumbnail = canvas.toDataURL('image/jpeg', 0.3);
-          
-          thumbnails.push({
-            index: i,
-            thumbnail: thumbnail,
-            name: uploadedImages[i].name
-          });
-        } catch (thumbError) {
-          console.error(`Failed to create thumbnail for image ${i}:`, thumbError);
-          // Continue with other images
-        }
-      }
-
-      if (thumbnails.length === 0) {
-        throw new Error('Failed to create thumbnails');
-      }
-
-      setProcessingStatus('Sending to AI for grouping...');
-      console.log(`Sending ${thumbnails.length} thumbnails for grouping`);
-
-      const response = await fetch('/api/batch/group', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          images: thumbnails,
-          totalImages: uploadedImages.length 
-        }),
+      // Create FormData with all images
+      const formData = new FormData();
+      images.forEach((img, index) => {
+        formData.append('images', img.file);
       });
 
-      console.log('Group API response status:', response.status);
+      // Call AI to group images
+      const response = await fetch('/api/batch/group-images', {
+        method: 'POST',
+        body: formData
+      });
 
-      // Check response content type
-      const contentType = response.headers.get("content-type");
-      console.log('Response content-type:', contentType);
-      
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        console.error('Non-JSON response:', text);
-        throw new Error(`Server error: ${text.substring(0, 200)}`);
+      if (!response.ok) {
+        throw new Error('Failed to group images');
       }
 
       const data = await response.json();
-      console.log('Group API response:', data);
-
-      if (!response.ok) {
-        throw new Error(data.error || data.details || 'Failed to group images');
-      }
-
-      if (!data.groups || !Array.isArray(data.groups)) {
-        throw new Error('Invalid response format from grouping API');
-      }
-
-      console.log(`AI grouped images into ${data.groups.length} items`);
-
-      // Create grouped items with full images
-      const groupedData = data.groups.map((group, groupIndex) => {
-        const groupImages = group.indices
-          .filter(idx => idx >= 0 && idx < uploadedImages.length)
-          .map(idx => uploadedImages[idx]);
-        
-        return {
-          id: `group_${groupIndex}`,
-          images: groupImages,
-          suggestedName: group.suggestedName || `Item ${groupIndex + 1}`
-        };
-      });
-
-      console.log('Created grouped data:', groupedData.length, 'groups');
-      setGroupedItems(groupedData);
       
-      // Store minimal data
-      sessionStorage.setItem('batchImageCount', uploadedImages.length.toString());
-      setProcessingStatus('');
-      
+      // Format groups with proper image data
+      const formattedGroups = data.groups.map((group, index) => ({
+        id: `group-${Date.now()}-${index}`,
+        groupNumber: index + 1,
+        images: group.images.map(imgIndex => images[imgIndex]),
+        confidence: group.confidence || 0.9
+      }));
+
+      setGroups(formattedGroups);
     } catch (error) {
-      console.error('Error grouping images:', error);
-      setError(`Failed to group images: ${error.message}`);
-      setProcessingStatus('');
+      console.error('Grouping error:', error);
+      setError('Failed to group images. Please try again.');
     } finally {
+      setIsGrouping(false);
+    }
+  };
+
+  const handleProcessAllGroups = async () => {
+    if (!user || groups.length === 0) return;
+
+    const creditsNeeded = groups.length;
+    const totalCredits = (user.credits_total || 0) + (user.bonus_credits || 0);
+    const creditsRemaining = totalCredits - (user.credits_used || 0);
+
+    if (creditsRemaining < creditsNeeded) {
+      setError(`Not enough credits. You need ${creditsNeeded} credits but only have ${creditsRemaining}.`);
+      return;
+    }
+
+    setIsProcessing(true);
+    setProcessingProgress(0);
+    setError(null);
+
+    const results = [];
+
+    try {
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
+        setProcessingProgress(Math.round(((i + 1) / groups.length) * 100));
+
+        // Create FormData for this group
+        const formData = new FormData();
+        
+        // Add images for this group
+        for (const img of group.images) {
+          formData.append('images', img.file);
+        }
+
+        formData.append('userId', clerkUser.id);
+        formData.append('batchMode', 'true');
+        formData.append('groupNumber', group.groupNumber.toString());
+
+        try {
+          const response = await fetch('/api/analyze-ai', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to analyze group ${group.groupNumber}`);
+          }
+
+          const analysisResult = await response.json();
+          
+          // Format the result with all necessary data
+          results.push({
+            id: group.id,
+            groupNumber: group.groupNumber,
+            images: group.images.map(img => ({
+              preview: img.preview,
+              url: img.preview, // For compatibility
+              name: img.name
+            })),
+            analysis: analysisResult,
+            status: 'success'
+          });
+
+        } catch (groupError) {
+          console.error(`Error processing group ${group.groupNumber}:`, groupError);
+          results.push({
+            id: group.id,
+            groupNumber: group.groupNumber,
+            images: group.images.map(img => ({
+              preview: img.preview,
+              url: img.preview,
+              name: img.name
+            })),
+            analysis: {
+              error: groupError.message,
+              title: `Item ${group.groupNumber} - Failed`,
+              brand: 'Unknown',
+              price: '0'
+            },
+            status: 'failed'
+          });
+        }
+      }
+
+      // Store results in sessionStorage before navigation
+      sessionStorage.setItem('batchResults', JSON.stringify(results));
+      
+      // Navigate to results page
+      router.push('/batch/results');
+
+    } catch (error) {
+      console.error('Batch processing error:', error);
+      setError('Failed to process items. Please try again.');
       setIsProcessing(false);
     }
   };
 
-  const proceedToResults = () => {
-    if (groupedItems.length === 0) return;
-    
-    // Store grouped items in sessionStorage with compressed data
-    try {
-      const dataToStore = groupedItems.map(group => ({
-        id: group.id,
-        suggestedName: group.suggestedName,
-        images: group.images.map(img => ({
-          preview: img.preview,
-          name: img.name,
-          size: img.size,
-          // Store file as base64 for retrieval
-          fileData: img.file ? 'has-file' : null,
-          originalFile: img.originalFile ? 'has-original' : null,
-          blob: img.blob ? 'has-blob' : null
-        }))
-      }));
-      
-      // Store the actual file objects separately
-      if (typeof window !== 'undefined') {
-        window.batchGroupedItems = groupedItems;
-        window.batchGroupedItemsTimestamp = Date.now();
-      }
-      
-      sessionStorage.setItem('batchGroupedData', JSON.stringify(dataToStore));
-      sessionStorage.setItem('batchGroupedTimestamp', Date.now().toString());
-      
-      console.log('Stored grouped items:', dataToStore.length);
-      
-      // Navigate to results
-      router.push('/batch/results');
-    } catch (error) {
-      console.error('Error storing grouped items:', error);
-      setError('Failed to proceed. Please try again.');
-    }
-  };
-
-  const removeImage = (index) => {
-    setUploadedImages(prev => prev.filter((_, i) => i !== index));
-    setGroupedItems([]);
-  };
-
   const removeGroup = (groupId) => {
-    setGroupedItems(prev => prev.filter(group => group.id !== groupId));
+    setGroups(groups.filter(g => g.id !== groupId));
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  const removeImageFromGroup = (groupId, imageId) => {
+    setGroups(groups.map(group => {
+      if (group.id === groupId) {
+        return {
+          ...group,
+          images: group.images.filter(img => img.id !== imageId)
+        };
+      }
+      return group;
+    }).filter(g => g.images.length > 0));
+  };
+
+  // Cleanup preview URLs
+  useEffect(() => {
+    return () => {
+      images.forEach(img => URL.revokeObjectURL(img.preview));
+    };
+  }, [images]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4">
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Batch Upload</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Upload up to 600 photos (25 items × 24 photos each). AI will automatically group them into items.
-          </p>
+          <Link href="/dashboard" className="text-blue-600 hover:underline mb-4 inline-block">
+            ← Back to Dashboard
+          </Link>
+          <h1 className="text-3xl font-bold mb-2">Batch Processing (Beta)</h1>
+          <p className="text-gray-600">Upload up to {MAX_IMAGES} photos for {MAX_ITEMS} items. AI will group them automatically.</p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-              disabled={isProcessing}
-            />
-            
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            
-            <p className="mt-2 text-sm text-gray-600">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="font-medium text-blue-600 hover:text-blue-500"
-                disabled={isProcessing}
-              >
-                Click to upload
-              </button>
-              {' '}or drag and drop
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              PNG, JPG, GIF up to 10MB each
-            </p>
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+            {error}
           </div>
+        )}
 
-          {processingStatus && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded">
-              <div className="flex items-center">
-                <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        {/* File Upload Section */}
+        {images.length === 0 && !isGrouping && !isProcessing && (
+          <div className="bg-white rounded-lg shadow-sm p-8 mb-8">
+            <div className="text-center">
+              <div className="mb-6">
+                <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                {processingStatus}
               </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
-              {error}
-            </div>
-          )}
-        </div>
-
-        {uploadedImages.length > 0 && groupedItems.length === 0 && (
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">
-                Uploaded Images ({uploadedImages.length})
-              </h3>
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-500">
-                  Total size: {(uploadedImages.reduce((sum, img) => sum + img.size, 0) / 1024 / 1024).toFixed(2)} MB
-                </span>
-                <button
-                  onClick={() => {
-                    setUploadedImages([]);
-                    setGroupedItems([]);
-                  }}
-                  className="text-sm text-red-600 hover:text-red-800"
-                >
-                  Clear All
-                </button>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 mb-6 max-h-96 overflow-y-auto">
-              {uploadedImages.map((image, index) => (
-                <div key={index} className="relative group">
-                  <img
-                    src={image.preview}
-                    alt={`Upload ${index + 1}`}
-                    className="w-full h-20 object-cover rounded"
-                  />
-                  <button
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-xs"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                disabled={isProcessing}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="batch-file-input"
+              />
+              <label
+                htmlFor="batch-file-input"
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
               >
-                Add More Images
-              </button>
-              <button
-                onClick={groupImagesByAI}
-                disabled={isProcessing || !user}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-              >
-                {isProcessing ? 'Processing...' : 'Group Images by AI'}
-              </button>
+                Select Images
+              </label>
+              <p className="mt-2 text-sm text-gray-500">
+                Select all images at once (up to {MAX_IMAGES} total)
+              </p>
             </div>
           </div>
         )}
 
-        {groupedItems.length > 0 && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">
-                  AI Grouped {groupedItems.length} Items
-                </h3>
-                <button
-                  onClick={proceedToResults}
-                  className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  Proceed to Analysis ({groupedItems.length} credits)
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                {groupedItems.map((group) => (
-                  <div key={group.id} className="border rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-medium">{group.suggestedName}</h4>
-                      <button
-                        onClick={() => removeGroup(group.id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-6 md:grid-cols-8 gap-2">
-                      {group.images.map((img, idx) => (
-                        <img
-                          key={idx}
-                          src={img.preview}
-                          alt={`${group.suggestedName} - ${idx + 1}`}
-                          className="w-full h-16 object-cover rounded"
-                        />
-                      ))}
-                    </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                      {group.images.length} photos
-                    </p>
+        {/* Selected Images Preview */}
+        {images.length > 0 && groups.length === 0 && !isGrouping && (
+          <div className="bg-white rounded-lg shadow-sm p-8 mb-8">
+            <h2 className="text-xl font-semibold mb-4">
+              {images.length} images selected
+            </h2>
+            <div className="grid grid-cols-6 gap-4 mb-6">
+              {images.slice(0, 18).map((img) => (
+                <div key={img.id} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                  <img
+                    src={img.preview}
+                    alt={img.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+              {images.length > 18 && (
+                <div className="aspect-square bg-gray-200 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-600 font-medium">
+                    +{images.length - 18} more
+                  </span>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleGroupImages}
+              disabled={isGrouping}
+              className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+            >
+              {isGrouping ? 'AI is grouping images...' : 'Group Images by Item'}
+            </button>
+          </div>
+        )}
+
+        {/* Grouped Items */}
+        {groups.length > 0 && !isProcessing && (
+          <div>
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-4">
+                AI grouped your images into {groups.length} items
+              </h2>
+              <p className="text-gray-600 mb-4">
+                Review the groups below. You can remove images or entire groups if needed.
+              </p>
+              <button
+                onClick={handleProcessAllGroups}
+                className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-medium"
+              >
+                Process All {groups.length} Items ({groups.length} credits)
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {groups.map((group) => (
+                <div key={group.id} className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-lg font-medium">
+                      Item {group.groupNumber} ({group.images.length} photos)
+                    </h3>
+                    <button
+                      onClick={() => removeGroup(group.id)}
+                      className="text-red-600 hover:text-red-700 text-sm"
+                    >
+                      Remove Group
+                    </button>
                   </div>
-                ))}
+                  <div className="grid grid-cols-6 gap-3">
+                    {group.images.map((img) => (
+                      <div key={img.id} className="relative group">
+                        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                          <img
+                            src={img.preview}
+                            alt={img.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <button
+                          onClick={() => removeImageFromGroup(group.id, img.id)}
+                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Processing Progress */}
+        {isProcessing && (
+          <div className="bg-white rounded-lg shadow-sm p-8">
+            <h2 className="text-xl font-semibold mb-4">Processing Items...</h2>
+            <div className="mb-4">
+              <div className="bg-gray-200 rounded-full h-4 overflow-hidden">
+                <div
+                  className="bg-blue-600 h-full transition-all duration-300"
+                  style={{ width: `${processingProgress}%` }}
+                />
               </div>
             </div>
+            <p className="text-center text-gray-600">
+              Processing item {Math.ceil((processingProgress / 100) * groups.length)} of {groups.length}
+            </p>
           </div>
         )}
       </div>
