@@ -62,6 +62,52 @@ export default function Dashboard() {
   const [drafts, setDrafts] = useState([]);
   const [selectedDraft, setSelectedDraft] = useState(null);
   
+  // Check if editing a listing from history page
+  useEffect(() => {
+    const editData = sessionStorage.getItem('editListing');
+    if (editData) {
+      const listing = JSON.parse(editData);
+      
+      // Populate all form fields with the listing data
+      setTitle(listing.title || '');
+      setCategory(listing.category || '');
+      setBrand(listing.brand || '');
+      setSize(listing.size || '');
+      setSizeType(listing.sizeType || 'UK');
+      setCondition(listing.condition || 'Good');
+      setDescription(listing.description || '');
+      setPrice(listing.price || listing.estimatedPrice?.mid || '');
+      setSku(listing.sku || '');
+      setShippingPolicy(listing.shippingPolicy || 'standard');
+      setReturnPolicy(listing.returnPolicy || 'returns30');
+      setDispatchTime(listing.dispatchTime || '1');
+      
+      // Handle images if they exist
+      if (listing.images && listing.images.length > 0) {
+        setImages(listing.images.map((img, index) => ({
+          ...img,
+          id: img.id || Date.now() + index,
+          file: null // Can't restore file objects from storage
+        })));
+      }
+      
+      // Set as selected draft if it has an ID
+      if (listing.id) {
+        setSelectedDraft(listing);
+      }
+      
+      // Clear the session storage
+      sessionStorage.removeItem('editListing');
+      
+      // Show a message that we're editing
+      const message = document.createElement('div');
+      message.className = 'fixed top-4 right-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+      message.textContent = 'Editing listing from history';
+      document.body.appendChild(message);
+      setTimeout(() => message.remove(), 3000);
+    }
+  }, []);
+  
   useEffect(() => {
     const savedDrafts = localStorage.getItem('lightlister_drafts');
     if (savedDrafts) {
