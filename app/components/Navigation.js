@@ -1,92 +1,78 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
-import { useUser, SignOutButton } from '@clerk/nextjs';
-import CreditDisplay from './CreditDisplay';
+import { useUser, UserButton } from '@clerk/nextjs';
+import { usePathname } from 'next/navigation';
 
 export default function Navigation() {
-  const { user, isLoaded, isSignedIn } = useUser();
+  const { isSignedIn } = useUser();
+  const pathname = usePathname();
+
+  // Don't show navigation on dashboard (it has its own sidebar)
+  if (pathname.startsWith('/dashboard')) {
+    return null;
+  }
 
   return (
-    <header className="bg-white shadow-sm border-b">
+    <nav className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
-              <Image 
-                src="/logo.png" 
-                alt="LightLister AI" 
-                width={32} 
-                height={32}
-                className="h-8 w-auto mr-3"
-              />
-              <h1 className="text-xl font-bold text-gray-900">LightLister AI</h1>
+              <span className="text-2xl font-bold text-gray-900">LightLister AI</span>
+              <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">BETA</span>
             </Link>
-            <span className="ml-3 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-semibold">
-              BETA
-            </span>
           </div>
-          
-          <div className="flex items-center gap-3">
-            {isLoaded && isSignedIn ? (
+
+          <div className="flex items-center space-x-4">
+            <Link
+              href="/"
+              className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Home
+            </Link>
+            
+            {isSignedIn ? (
               <>
-                <CreditDisplay />
-                <Link 
-                  href="/"
-                  className="text-sm bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
-                >
-                  Home
-                </Link>
-                <Link 
+                <Link
                   href="/dashboard"
-                  className="text-sm bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                  className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Dashboard
                 </Link>
-                <Link 
+                <Link
                   href="/beta"
-                  className="text-sm bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700"
+                  className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Beta
                 </Link>
-                <Link 
+                <Link
                   href="/pricing"
-                  className="text-sm bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                  className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium"
                 >
                   Get Credits
                 </Link>
-                <SignOutButton>
-                  <button className="text-sm bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">
-                    Sign Out
-                  </button>
-                </SignOutButton>
+                <UserButton afterSignOutUrl="/" />
               </>
-            ) : isLoaded ? (
+            ) : (
               <>
-                <Link 
-                  href="/"
-                  className="text-sm bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
-                >
-                  Home
-                </Link>
-                <Link 
+                <Link
                   href="/sign-in"
-                  className="text-sm bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+                  className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Sign In
                 </Link>
-                <Link 
+                <Link
                   href="/sign-up"
-                  className="text-sm bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                  className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium"
                 >
-                  Get Started
+                  Sign Up
                 </Link>
               </>
-            ) : null}
+            )}
           </div>
         </div>
       </div>
-    </header>
+    </nav>
   );
 }
