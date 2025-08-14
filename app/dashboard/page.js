@@ -6,7 +6,7 @@ import { useAuth } from '@clerk/nextjs';
 import Navigation from '../components/Navigation';
 import CreditDisplay from '../components/CreditDisplay';
 import EbayConnection from '../components/EbayConnection';
-import useUserData from '../hooks/useUserData';
+import { useUserData } from '../hooks/useUserData';
 import imageCompression from 'browser-image-compression';
 import { formatPrice } from '../utils/currency';
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '../../components/Navigation';
-import useUserData from '../../hooks/useUserData';
+import { useUserData } from '../../hooks/useUserData';
 
 export default function BatchResultsPage() {
   const router = useRouter();
