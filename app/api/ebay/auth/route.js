@@ -16,16 +16,20 @@ export async function GET(request) {
       timestamp: Date.now()
     })).toString('base64');
     
-    // Build eBay OAuth URL
+    // Build eBay OAuth URL with correct parameters
     const params = new URLSearchParams({
       client_id: process.env.EBAY_CLIENT_ID,
       response_type: 'code',
-      redirect_uri: EBAY_ENDPOINTS.redirectUri,
+      redirect_uri: 'https://lightlisterai.co.uk/api/ebay/callback', // Hard-code this for now
       scope: EBAY_SCOPES.join(' '),
-      state: state
+      state: state,
+      prompt: 'login' // This forces the OAuth flow
     });
     
-    const authUrl = `${EBAY_ENDPOINTS.authUrl}?${params.toString()}`;
+    // Use the correct OAuth endpoint
+    const authUrl = `https://auth.ebay.com/oauth2/authorize?${params.toString()}`;
+    
+    console.log('OAuth URL:', authUrl); // For debugging
     
     return NextResponse.json({ authUrl });
   } catch (error) {
