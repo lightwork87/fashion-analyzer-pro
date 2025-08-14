@@ -273,11 +273,39 @@ export default function BatchUploadPage() {
   const proceedToResults = () => {
     if (groupedItems.length === 0) return;
     
-    if (typeof window !== 'undefined') {
-      window.batchGroupedItems = groupedItems;
+    // Store grouped items in sessionStorage with compressed data
+    try {
+      const dataToStore = groupedItems.map(group => ({
+        id: group.id,
+        suggestedName: group.suggestedName,
+        images: group.images.map(img => ({
+          preview: img.preview,
+          name: img.name,
+          size: img.size,
+          // Store file as base64 for retrieval
+          fileData: img.file ? 'has-file' : null,
+          originalFile: img.originalFile ? 'has-original' : null,
+          blob: img.blob ? 'has-blob' : null
+        }))
+      }));
+      
+      // Store the actual file objects separately
+      if (typeof window !== 'undefined') {
+        window.batchGroupedItems = groupedItems;
+        window.batchGroupedItemsTimestamp = Date.now();
+      }
+      
+      sessionStorage.setItem('batchGroupedData', JSON.stringify(dataToStore));
+      sessionStorage.setItem('batchGroupedTimestamp', Date.now().toString());
+      
+      console.log('Stored grouped items:', dataToStore.length);
+      
+      // Navigate to results
+      router.push('/batch/results');
+    } catch (error) {
+      console.error('Error storing grouped items:', error);
+      setError('Failed to proceed. Please try again.');
     }
-    
-    router.push('/batch/results');
   };
 
   const removeImage = (index) => {
