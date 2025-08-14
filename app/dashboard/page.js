@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import CreditDisplay from '../components/CreditDisplay';
 import { compressImage } from '../utils/imageCompression';
+import EbayConnection from '../components/EbayConnection';
 
 export default function Dashboard() {
   const { user, isLoaded, isSignedIn } = useUser();
@@ -361,6 +362,49 @@ export default function Dashboard() {
     setError(null);
   };
 
+  // List on eBay function
+  const listOnEbay = async () => {
+    if (!title || !price || !sku) {
+      alert('Please fill in all required fields (Title, Price, SKU)');
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/ebay/list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title,
+          category,
+          brand,
+          size,
+          sizeType,
+          condition,
+          description,
+          price,
+          sku,
+          images,
+          shippingPolicyId: 'YOUR_SHIPPING_POLICY_ID', // You'll need to set these up in eBay
+          paymentPolicyId: 'YOUR_PAYMENT_POLICY_ID',   
+          returnPolicyId: 'YOUR_RETURN_POLICY_ID'      
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        alert(`Listed successfully! View at: ${result.listingUrl}`);
+        clearForm();
+      } else {
+        alert(`Failed to list: ${result.error}`);
+      }
+    } catch (error) {
+      alert('Failed to list on eBay. Please check your connection.');
+    }
+  };
+
   if (!isLoaded || !isSignedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -413,51 +457,14 @@ export default function Dashboard() {
               <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
               <div className="flex flex-wrap gap-4">
                 <button
-  onClick={async () => {
-    if (!title || !price || !sku) {
-      alert('Please fill in all required fields');
-      return;
-    }
-    
-    try {
-      const response = await fetch('/api/ebay/list', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          title,
-          category,
-          brand,
-          size,
-          sizeType,
-          condition,
-          description,
-          price,
-          sku,
-          images,
-          shippingPolicyId: 'YOUR_SHIPPING_POLICY_ID', // Set up in eBay
-          paymentPolicyId: 'YOUR_PAYMENT_POLICY_ID',   // Set up in eBay
-          returnPolicyId: 'YOUR_RETURN_POLICY_ID'      // Set up in eBay
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        alert(`Listed successfully! View at: ${result.listingUrl}`);
-        clearForm();
-      } else {
-        alert(`Failed to list: ${result.error}`);
-      }
-    } catch (error) {
-      alert('Failed to list on eBay');
-    }
-  }}
-  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
->
-  List on eBay
-</button>
+                  onClick={() => document.getElementById('file-upload').click()}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Listing
+                </button>
                 
                 <Link 
                   href="/batch"
@@ -745,6 +752,7 @@ export default function Dashboard() {
                   </button>
                   
                   <button
+                    onClick={listOnEbay}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >
                     List on eBay
@@ -858,6 +866,9 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* eBay Connection - NEW SECTION */}
+            <EbayConnection userId={user?.id} />
 
             {/* Help & Support */}
             <div className="bg-blue-50 rounded-lg p-6">
