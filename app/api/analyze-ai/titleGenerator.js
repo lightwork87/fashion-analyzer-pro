@@ -1,52 +1,103 @@
-export function generateEbayTitle(item) {
-  const parts = [];
+export async function generateProfessionalTitle(info) {
+  // Title components in order of importance
+  const components = [];
   
-  // Brand
-  if (item.brand && item.brand !== 'Unknown') {
-    parts.push(item.brand);
+  // 1. Brand (always first if known)
+  if (info.brand && info.brand !== 'Unknown Brand') {
+    components.push(info.brand);
   }
   
-  // Gender/Department
-  if (item.department) {
-    parts.push(item.department);
+  // 2. Gender/Department
+  const department = detectDepartment(info.itemType);
+  if (department) {
+    components.push(department);
   }
   
-  // Item Type
-  if (item.itemType) {
-    parts.push(item.itemType);
+  // 3. Item Type
+  components.push(capitalizeWords(info.itemType));
+  
+  // 4. Key Features (pick most important)
+  const keyFeatures = [];
+  
+  // Material is important for certain items
+  if (info.material && shouldIncludeMaterial(info.itemType, info.material)) {
+    keyFeatures.push(info.material);
   }
   
-  // Key features
-  if (item.style) {
-    parts.push(item.style);
+  // Style is important
+  if (info.style && info.style !== 'Casual') {
+    keyFeatures.push(info.style);
   }
   
-  if (item.color) {
-    parts.push(item.color);
+  // Color (always include if known)
+  if (info.color && info.color !== 'Multicoloured') {
+    keyFeatures.push(info.color);
   }
   
-  // Size
-  if (item.size && item.size !== 'Not Visible') {
-    parts.push(`Size ${item.size}`);
+  // Add up to 2 key features
+  components.push(...keyFeatures.slice(0, 2));
+  
+  // 5. Size (crucial for clothing)
+  if (info.size) {
+    components.push(`Size ${info.size}`);
   }
   
-  // Material
-  if (item.material && item.material !== 'Not Specified') {
-    parts.push(item.material);
+  // 6. Condition (if not "Good" which is default)
+  if (info.condition && info.condition !== 'Good') {
+    if (info.condition === 'New with tags') {
+      components.push('BNWT'); // Brand New With Tags
+    } else if (info.condition === 'New without tags') {
+      components.push('BNWOT'); // Brand New Without Tags
+    }
   }
   
-  // Pattern
-  if (item.pattern) {
-    parts.push(item.pattern);
+  // Join components and ensure under 80 characters
+  let title = components.join(' ');
+  
+  // If too long, remove features one by one
+  while (title.length > 80 && components.length > 3) {
+    components.splice(-2, 1); // Remove second to last (keep size last)
+    title = components.join(' ');
   }
   
-  // Join and ensure under 80 characters
-  let title = parts.filter(Boolean).join(' ');
-  
-  // Trim if too long
+  // If still too long, truncate
   if (title.length > 80) {
     title = title.substring(0, 77) + '...';
   }
   
-  return title || 'Fashion Item';
+  return title;
+}
+
+function detectDepartment(itemType) {
+  const type = itemType.toLowerCase();
+  
+  if (type.includes('dress') || type.includes('skirt') || type.includes('blouse')) {
+    return "Women's";
+  }
+  if (type.includes('shirt') && !type.includes('t-shirt')) {
+    return "Men's";
+  }
+  if (type.includes('unisex')) {
+    return "Unisex";
+  }
+  
+  // Default to Women's for fashion items
+  return "Women's";
+}
+
+function shouldIncludeMaterial(itemType, material) {
+  const importantMaterials = [
+    'leather', 'suede', 'silk', 'cashmere', 'wool',
+    'linen', 'velvet', 'satin', 'lace', 'fur'
+  ];
+  
+  return importantMaterials.some(m => 
+    material.toLowerCase().includes(m)
+  );
+}
+
+function capitalizeWords(str) {
+  return str.split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
