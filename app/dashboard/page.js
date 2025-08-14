@@ -7,7 +7,6 @@ import Navigation from '../components/Navigation';
 import CreditDisplay from '../components/CreditDisplay';
 import EbayConnection from '../components/EbayConnection';
 import { useUserData } from '../hooks/useUserData';
-import imageCompression from 'browser-image-compression';
 import { formatPrice } from '../utils/currency';
 
 export default function Dashboard() {
@@ -27,8 +26,6 @@ export default function Dashboard() {
     soldListings: 0,
     totalRevenue: 0
   });
-  const [showDraftModal, setShowDraftModal] = useState(false);
-  const [draftTitle, setDraftTitle] = useState('');
 
   // Load recent listings and stats
   useEffect(() => {
@@ -62,37 +59,87 @@ export default function Dashboard() {
     }
   };
 
+  // Compress image function
+  const compressImage = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Calculate new dimensions (max 1920px)
+          let width = img.width;
+          let height = img.height;
+          const maxSize = 1920;
+          
+          if (width > height && width > maxSize) {
+            height = (height / width) * maxSize;
+            width = maxSize;
+          } else if (height > maxSize) {
+            width = (width / height) * maxSize;
+            height = maxSize;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            } else {
+              reject(new Error('Canvas to Blob failed'));
+            }
+          }, 'image/jpeg', 0.85);
+        };
+        img.onerror = () => reject(new Error('Image load failed'));
+      };
+      reader.onerror = () => reject(new Error('File read failed'));
+    });
+  };
+
   // Handle file selection
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    console.log('Files selected:', files.length); // Debug log
+
     try {
-      const compressedImages = [];
+      const processedImages = [];
       
       for (const file of files) {
-        const options = {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 1920,
-          useWebWorker: true
-        };
-        
-        const compressedFile = await imageCompression(file, options);
-        const reader = new FileReader();
-        
-        const base64 = await new Promise((resolve) => {
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(compressedFile);
-        });
-        
-        compressedImages.push({
-          preview: base64,
-          file: compressedFile,
-          name: file.name
-        });
+        try {
+          // Compress the image
+          const compressedFile = await compressImage(file);
+          
+          // Create preview
+          const reader = new FileReader();
+          const base64 = await new Promise((resolve) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(compressedFile);
+          });
+          
+          processedImages.push({
+            preview: base64,
+            file: compressedFile,
+            name: file.name
+          });
+        } catch (err) {
+          console.error('Error processing file:', file.name, err);
+        }
       }
       
-      setUploadedImages(compressedImages);
+      console.log('Processed images:', processedImages.length); // Debug log
+      setUploadedImages(processedImages);
       setError(null);
       setAnalysisResult(null);
     } catch (error) {
@@ -103,6 +150,8 @@ export default function Dashboard() {
 
   // Handle new listing button click
   const handleNewListing = () => {
+    console.log('New listing clicked'); // Debug log
+    
     // Reset state
     setUploadedImages([]);
     setAnalysisResult(null);
@@ -110,13 +159,21 @@ export default function Dashboard() {
     
     // Trigger file input click
     if (fileInputRef.current) {
+      console.log('Clicking file input'); // Debug log
       fileInputRef.current.click();
+    } else {
+      console.error('File input ref not found');
     }
   };
 
   // Handle analysis
   const handleAnalyze = async () => {
-    if (!user || uploadedImages.length === 0) return;
+    console.log('Starting analysis...'); // Debug log
+    
+    if (!user || uploadedImages.length === 0) {
+      setError('Please select images to analyze');
+      return;
+    }
 
     // Check credits
     const totalCredits = (user.credits_total || 0) + (user.bonus_credits || 0);
@@ -132,14 +189,21 @@ export default function Dashboard() {
 
     try {
       const formData = new FormData();
+      
+      // Add images to FormData
       uploadedImages.forEach((img, index) => {
-        formData.append(`images`, img.file);
+        console.log(`Adding image ${index}:`, img.name); // Debug log
+        formData.append('images', img.file);
       });
+
+      console.log('Sending request to /api/analyze-ai'); // Debug log
 
       const response = await fetch('/api/analyze-ai', {
         method: 'POST',
         body: formData,
       });
+
+      console.log('Response status:', response.status); // Debug log
 
       const data = await response.json();
 
@@ -147,6 +211,8 @@ export default function Dashboard() {
         throw new Error(data.error || 'Analysis failed');
       }
 
+      console.log('Analysis result:', data); // Debug log
+      
       setAnalysisResult(data);
       await refreshUser(); // Refresh credit count
       
@@ -155,60 +221,9 @@ export default function Dashboard() {
       
     } catch (error) {
       console.error('Analysis error:', error);
-      setError(error.message || 'Failed to analyze images');
+      setError(error.message || 'Failed to analyze images. Please try again.');
     } finally {
       setIsAnalyzing(false);
-    }
-  };
-
-  // Save as draft
-  const handleSaveAsDraft = async () => {
-    if (!analysisResult || !draftTitle) return;
-
-    try {
-      const response = await fetch('/api/listings/draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...analysisResult,
-          title: draftTitle,
-          isDraft: true
-        }),
-      });
-
-      if (response.ok) {
-        showNotification('Draft saved successfully!', 'success');
-        setShowDraftModal(false);
-        loadRecentListings();
-      }
-    } catch (error) {
-      console.error('Error saving draft:', error);
-      showNotification('Failed to save draft', 'error');
-    }
-  };
-
-  // List to eBay
-  const handleListToEbay = async () => {
-    if (!analysisResult) return;
-
-    try {
-      const response = await fetch('/api/ebay/list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(analysisResult),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        showNotification('Successfully listed to eBay!', 'success');
-        router.push(`/listing/${data.listingId}`);
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (error) {
-      console.error('Error listing to eBay:', error);
-      showNotification(error.message || 'Failed to list to eBay', 'error');
     }
   };
 
@@ -252,65 +267,6 @@ export default function Dashboard() {
           <p className="mt-1 text-sm text-gray-600">
             Welcome back! Ready to list some items?
           </p>
-        </div>
-
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Total Listings</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.totalListings}</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Active Listings</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.activeListings}</p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Items Sold</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.soldListings}</p>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-full">
-                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-semibold text-gray-900">{formatPrice(stats.totalRevenue)}</p>
-              </div>
-              <div className="p-3 bg-yellow-100 rounded-full">
-                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Main Grid */}
@@ -370,7 +326,7 @@ export default function Dashboard() {
           accept="image/*"
           onChange={handleFileSelect}
           className="hidden"
-          id="file-upload"
+          style={{ display: 'none' }}
         />
 
         {/* Image upload area (if images selected) */}
@@ -470,93 +426,12 @@ export default function Dashboard() {
                     Edit Listing
                   </button>
                   <button
-                    onClick={() => setShowDraftModal(true)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    Save as Draft
-                  </button>
-                  <button
-                    onClick={handleListToEbay}
+                    onClick={() => router.push('/history')}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >
-                    List to eBay
+                    View All Listings
                   </button>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Recent Listings */}
-        {recentListings.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Recent Listings</h3>
-              <button
-                onClick={() => router.push('/history')}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                View All →
-              </button>
-            </div>
-            <div className="space-y-3">
-              {recentListings.slice(0, 5).map((listing) => (
-                <div key={listing.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{listing.title}</p>
-                    <p className="text-sm text-gray-600">
-                      {listing.brand} • {listing.size} • {formatPrice(listing.price)}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      listing.status === 'active' ? 'bg-green-100 text-green-800' :
-                      listing.status === 'sold' ? 'bg-purple-100 text-purple-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {listing.status}
-                    </span>
-                    <button
-                      onClick={() => router.push(`/listing/${listing.id}`)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Draft Modal */}
-        {showDraftModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h3 className="text-lg font-semibold mb-4">Save as Draft</h3>
-              <input
-                type="text"
-                value={draftTitle}
-                onChange={(e) => setDraftTitle(e.target.value)}
-                placeholder="Enter a title for this draft"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md mb-4"
-              />
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowDraftModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveAsDraft}
-                  disabled={!draftTitle}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  Save Draft
-                </button>
               </div>
             </div>
           </div>
