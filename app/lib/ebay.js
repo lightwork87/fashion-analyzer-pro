@@ -20,13 +20,14 @@ export const EBAY_CONFIG = {
 export const EBAY_ENV = process.env.EBAY_ENVIRONMENT === 'PRODUCTION' ? 'PRODUCTION' : 'SANDBOX';
 export const EBAY_ENDPOINTS = EBAY_CONFIG[EBAY_ENV];
 
-// Scopes needed for listing
+// Scopes needed for listing and account management
 export const EBAY_SCOPES = [
   'https://api.ebay.com/oauth/api_scope',
   'https://api.ebay.com/oauth/api_scope/sell.inventory',
-  'https://api.ebay.com/oauth/api_scope/sell.marketing',
   'https://api.ebay.com/oauth/api_scope/sell.account',
-  'https://api.ebay.com/oauth/api_scope/sell.fulfillment'
+  'https://api.ebay.com/oauth/api_scope/sell.account.readonly',
+  'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+  'https://api.ebay.com/oauth/api_scope/sell.marketing'
 ];
 
 // Map our categories to eBay category IDs

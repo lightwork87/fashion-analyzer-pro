@@ -10,6 +10,8 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log('Fetching business policies for user:', userId);
+
     // First, get the user from Supabase
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -65,12 +67,12 @@ export async function GET(request) {
       accessToken = refreshResult.access_token;
     }
 
-    // Fetch business policies from eBay
     console.log('Fetching business policies from eBay...');
     
-    // Get Fulfillment (Shipping) Policies
-    const shippingResponse = await fetch(
-      'https://api.ebay.com/sell/account/v1/fulfillment_policy',
+    // Try different API endpoints based on eBay documentation
+    // First try the Business Policies Management API
+    const policiesResponse = await fetch(
+      'https://api.ebay.com/sell/account/v1/privilege',
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -79,10 +81,42 @@ export async function GET(request) {
         }
       }
     );
+
+    console.log('Privileges response status:', policiesResponse.status);
+    
+    if (policiesResponse.ok) {
+      const privilegesData = await policiesResponse.json();
+      console.log('User privileges:', privilegesData);
+    }
+
+    // Get Fulfillment (Shipping) Policies - Updated endpoint
+    const shippingResponse = await fetch(
+      'https://api.ebay.com/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_GB',
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    console.log('Shipping policies response status:', shippingResponse.status);
+    
+    // Log the raw response for debugging
+    const shippingText = await shippingResponse.text();
+    console.log('Shipping response raw:', shippingText.substring(0, 500));
+    
+    let shippingData = { fulfillmentPolicies: [] };
+    try {
+      shippingData = shippingText ? JSON.parse(shippingText) : { fulfillmentPolicies: [] };
+    } catch (e) {
+      console.error('Failed to parse shipping response:', e);
+    }
 
     // Get Payment Policies
     const paymentResponse = await fetch(
-      'https://api.ebay.com/sell/account/v1/payment_policy',
+      'https://api.ebay.com/sell/account/v1/payment_policy?marketplace_id=EBAY_GB',
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -91,10 +125,22 @@ export async function GET(request) {
         }
       }
     );
+
+    console.log('Payment policies response status:', paymentResponse.status);
+    
+    const paymentText = await paymentResponse.text();
+    console.log('Payment response raw:', paymentText.substring(0, 500));
+    
+    let paymentData = { paymentPolicies: [] };
+    try {
+      paymentData = paymentText ? JSON.parse(paymentText) : { paymentPolicies: [] };
+    } catch (e) {
+      console.error('Failed to parse payment response:', e);
+    }
 
     // Get Return Policies
     const returnResponse = await fetch(
-      'https://api.ebay.com/sell/account/v1/return_policy',
+      'https://api.ebay.com/sell/account/v1/return_policy?marketplace_id=EBAY_GB',
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -104,46 +150,82 @@ export async function GET(request) {
       }
     );
 
-    // Parse responses
-    const shippingData = shippingResponse.ok ? await shippingResponse.json() : { fulfillmentPolicies: [] };
-    const paymentData = paymentResponse.ok ? await paymentResponse.json() : { paymentPolicies: [] };
-    const returnData = returnResponse.ok ? await returnResponse.json() : { returnPolicies: [] };
+    console.log('Return policies response status:', returnResponse.status);
+    
+    const returnText = await returnResponse.text();
+    console.log('Return response raw:', returnText.substring(0, 500));
+    
+    let returnData = { returnPolicies: [] };
+    try {
+      returnData = returnText ? JSON.parse(returnText) : { returnPolicies: [] };
+    } catch (e) {
+      console.error('Failed to parse return response:', e);
+    }
 
-    console.log('Policies fetched:', {
+    console.log('Policies found:', {
       shipping: shippingData.fulfillmentPolicies?.length || 0,
       payment: paymentData.paymentPolicies?.length || 0,
       returns: returnData.returnPolicies?.length || 0
     });
 
-    // Format the policies for our frontend
+    // Check if we have the correct response structure
+    console.log('Shipping data structure:', Object.keys(shippingData));
+    console.log('Payment data structure:', Object.keys(paymentData));
+    console.log('Return data structure:', Object.keys(returnData));
+
+    // Format the policies for our frontend - Updated to handle different response structures
     const formattedPolicies = {
-      shipping: (shippingData.fulfillmentPolicies || []).map(policy => ({
-        id: policy.fulfillmentPolicyId,
-        name: policy.name,
-        description: policy.description || '',
-        handlingTime: policy.handlingTime?.value || 1,
-        shippingOptions: (policy.shippingOptions || []).map(opt => ({
-          service: opt.optionType,
-          cost: opt.shippingCost?.value || '0',
-          currency: opt.shippingCost?.currency || 'GBP'
-        }))
-      })),
-      payment: (paymentData.paymentPolicies || []).map(policy => ({
-        id: policy.paymentPolicyId,
-        name: policy.name,
-        description: policy.description || '',
-        immediatePay: policy.immediatePay || false,
-        methods: policy.paymentMethods?.map(m => m.paymentMethodType) || []
-      })),
-      returns: (returnData.returnPolicies || []).map(policy => ({
-        id: policy.returnPolicyId,
-        name: policy.name,
-        description: policy.description || '',
-        period: policy.returnPeriod?.value || 30,
-        type: policy.returnsAccepted ? 'Returns Accepted' : 'No Returns',
-        shippingCostPaidBy: policy.returnShippingCostPayer || 'BUYER'
-      }))
+      shipping: Array.isArray(shippingData.fulfillmentPolicies) ? 
+        shippingData.fulfillmentPolicies.map(policy => ({
+          id: policy.fulfillmentPolicyId,
+          name: policy.name,
+          description: policy.description || '',
+          handlingTime: policy.handlingTime?.value || 1,
+          shippingOptions: (policy.shippingOptions || []).map(opt => ({
+            service: opt.shippingService?.shippingServiceCode || opt.optionType || 'Standard',
+            cost: opt.shippingCost?.value || '0',
+            currency: opt.shippingCost?.currency || 'GBP'
+          }))
+        })) : [],
+      payment: Array.isArray(paymentData.paymentPolicies) ? 
+        paymentData.paymentPolicies.map(policy => ({
+          id: policy.paymentPolicyId,
+          name: policy.name,
+          description: policy.description || '',
+          immediatePay: policy.immediatePay || false,
+          methods: policy.paymentMethods?.map(m => m.paymentMethodType || m.brands?.[0] || 'Unknown') || []
+        })) : [],
+      returns: Array.isArray(returnData.returnPolicies) ? 
+        returnData.returnPolicies.map(policy => ({
+          id: policy.returnPolicyId,
+          name: policy.name,
+          description: policy.description || '',
+          period: policy.returnPeriod?.value || 30,
+          type: policy.returnsAccepted ? 'Returns Accepted' : 'No Returns',
+          shippingCostPaidBy: policy.returnShippingCostPayer || 'BUYER'
+        })) : []
     };
+
+    // If no policies found, add debug info
+    if (formattedPolicies.shipping.length === 0 && 
+        formattedPolicies.payment.length === 0 && 
+        formattedPolicies.returns.length === 0) {
+      console.log('No policies found. Debug info:', {
+        shippingResponse: shippingResponse.status,
+        paymentResponse: paymentResponse.status,
+        returnResponse: returnResponse.status,
+        shippingData: shippingData,
+        paymentData: paymentData,
+        returnData: returnData
+      });
+      
+      formattedPolicies.debug = {
+        message: 'No policies found. Check console logs.',
+        shippingStatus: shippingResponse.status,
+        paymentStatus: paymentResponse.status,
+        returnStatus: returnResponse.status
+      };
+    }
 
     return NextResponse.json(formattedPolicies);
 
@@ -153,7 +235,11 @@ export async function GET(request) {
       shipping: [],
       payment: [],
       returns: [],
-      error: error.message
+      error: error.message,
+      debug: {
+        stack: error.stack,
+        message: error.message
+      }
     });
   }
 }
@@ -171,7 +257,8 @@ async function refreshEbayToken(refreshToken, userId) {
       },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: refreshToken
+        refresh_token: refreshToken,
+        scope: 'https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/sell.account https://api.ebay.com/oauth/api_scope/sell.inventory'
       })
     });
 
@@ -205,81 +292,5 @@ async function refreshEbayToken(refreshToken, userId) {
   } catch (error) {
     console.error('Token refresh error:', error);
     return { error: error.message };
-  }
-}
-
-// POST endpoint to create a new business policy
-export async function POST(request) {
-  try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { type, policy } = body; // type: 'shipping', 'payment', or 'returns'
-
-    // Get user and tokens (similar to GET)
-    const { data: user } = await supabase
-      .from('users')
-      .select('id')
-      .eq('clerk_id', userId)
-      .single();
-
-    const { data: tokens } = await supabase
-      .from('ebay_tokens')
-      .select('access_token')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!tokens) {
-      return NextResponse.json({ error: 'eBay not connected' }, { status: 400 });
-    }
-
-    // Map policy type to eBay API endpoint
-    const endpoints = {
-      shipping: 'fulfillment_policy',
-      payment: 'payment_policy',
-      returns: 'return_policy'
-    };
-
-    const endpoint = endpoints[type];
-    if (!endpoint) {
-      return NextResponse.json({ error: 'Invalid policy type' }, { status: 400 });
-    }
-
-    // Create policy on eBay
-    const response = await fetch(
-      `https://api.ebay.com/sell/account/v1/${endpoint}`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${tokens.access_token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(policy)
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('Failed to create policy:', error);
-      return NextResponse.json(
-        { error: 'Failed to create policy on eBay' },
-        { status: response.status }
-      );
-    }
-
-    const createdPolicy = await response.json();
-    return NextResponse.json(createdPolicy);
-
-  } catch (error) {
-    console.error('Create policy error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create policy' },
-      { status: 500 }
-    );
   }
 }
