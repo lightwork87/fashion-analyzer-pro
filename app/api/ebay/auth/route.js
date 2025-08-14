@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { EBAY_ENDPOINTS, EBAY_SCOPES } from '../../../lib/ebay';
 
+export const dynamic = 'force-dynamic';
 export async function GET(request) {
   try {
     const { userId } = await auth();
