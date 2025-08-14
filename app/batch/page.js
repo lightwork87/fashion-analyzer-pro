@@ -16,8 +16,9 @@ export default function BatchUploadPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [groupedItems, setGroupedItems] = useState([]);
+  const [processingStatus, setProcessingStatus] = useState('');
 
-  // Compress image to reduce size
+  // Compress image more aggressively for batch
   const compressImage = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -29,10 +30,10 @@ export default function BatchUploadPage() {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           
-          // Calculate new dimensions (max 800px for batch)
+          // Smaller size for batch processing
           let width = img.width;
           let height = img.height;
-          const maxSize = 800;
+          const maxSize = 600; // Reduced from 800
           
           if (width > height && width > maxSize) {
             height = (height / width) * maxSize;
@@ -46,22 +47,37 @@ export default function BatchUploadPage() {
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
           
+          // Lower quality for smaller file size
           canvas.toBlob((blob) => {
-            if (blob) {
+            if (blob && blob.size < 500000) { // Ensure under 500KB
               resolve({
                 blob: blob,
-                preview: canvas.toDataURL('image/jpeg', 0.7),
+                preview: canvas.toDataURL('image/jpeg', 0.6),
                 file: new File([blob], file.name, {
                   type: 'image/jpeg',
                   lastModified: Date.now()
                 }),
                 name: file.name,
-                originalFile: file
+                originalFile: file,
+                size: blob.size
               });
             } else {
-              reject(new Error('Canvas to Blob failed'));
+              // If still too large, compress more
+              canvas.toBlob((smallerBlob) => {
+                resolve({
+                  blob: smallerBlob,
+                  preview: canvas.toDataURL('image/jpeg', 0.4),
+                  file: new File([smallerBlob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: Date.now()
+                  }),
+                  name: file.name,
+                  originalFile: file,
+                  size: smallerBlob.size
+                });
+              }, 'image/jpeg', 0.4);
             }
-          }, 'image/jpeg', 0.7);
+          }, 'image/jpeg', 0.6);
         };
         img.onerror = () => reject(new Error('Image load failed'));
       };
@@ -73,32 +89,50 @@ export default function BatchUploadPage() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    if (files.length > 600) {
+      setError('Maximum 600 images allowed');
+      return;
+    }
+
     console.log(`Selected ${files.length} files for batch processing`);
     setError(null);
     setIsProcessing(true);
+    setProcessingStatus('Processing images...');
 
     try {
       const processedImages = [];
+      const batchSize = 5; // Process 5 at a time to avoid memory issues
       
-      // Process images in chunks to avoid memory issues
-      const chunkSize = 10;
-      for (let i = 0; i < files.length; i += chunkSize) {
-        const chunk = files.slice(i, i + chunkSize);
-        const chunkPromises = chunk.map(file => compressImage(file));
-        const chunkResults = await Promise.all(chunkPromises);
-        processedImages.push(...chunkResults);
+      for (let i = 0; i < files.length; i += batchSize) {
+        const batch = files.slice(i, i + batchSize);
+        setProcessingStatus(`Processing images ${i + 1}-${Math.min(i + batchSize, files.length)} of ${files.length}...`);
         
-        // Update progress
+        const batchPromises = batch.map(file => {
+          return compressImage(file).catch(err => {
+            console.error(`Failed to process ${file.name}:`, err);
+            return null;
+          });
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        processedImages.push(...batchResults.filter(img => img !== null));
+        
+        // Update UI
         setUploadedImages([...processedImages]);
       }
       
-      console.log(`Processed ${processedImages.length} images`);
+      console.log(`Successfully processed ${processedImages.length} images`);
+      const totalSize = processedImages.reduce((sum, img) => sum + img.size, 0);
+      console.log(`Total size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+      
       setUploadedImages(processedImages);
+      setProcessingStatus('');
     } catch (error) {
       console.error('Error processing images:', error);
       setError('Failed to process some images. Please try again.');
     } finally {
       setIsProcessing(false);
+      setProcessingStatus('');
     }
   };
 
@@ -107,9 +141,10 @@ export default function BatchUploadPage() {
 
     setIsProcessing(true);
     setError(null);
+    setProcessingStatus('Creating thumbnails for AI grouping...');
 
     try {
-      // Create thumbnails for AI grouping (very small for API)
+      // Create very small thumbnails for AI grouping
       const thumbnails = await Promise.all(
         uploadedImages.map(async (img, index) => {
           const canvas = document.createElement('canvas');
@@ -121,20 +156,22 @@ export default function BatchUploadPage() {
             image.src = img.preview;
           });
           
-          // Create small thumbnail for AI
-          canvas.width = 150;
-          canvas.height = 150;
-          ctx.drawImage(image, 0, 0, 150, 150);
+          // Very small thumbnail for AI
+          canvas.width = 100;
+          canvas.height = 100;
+          ctx.drawImage(image, 0, 0, 100, 100);
           
           return {
             index,
-            thumbnail: canvas.toDataURL('image/jpeg', 0.5),
+            thumbnail: canvas.toDataURL('image/jpeg', 0.3),
             name: img.name
           };
         })
       );
 
-      // Send only thumbnails to AI for grouping
+      setProcessingStatus('Sending to AI for grouping...');
+
+      // Send to AI for grouping with better error handling
       const response = await fetch('/api/batch/group', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -144,8 +181,17 @@ export default function BatchUploadPage() {
         }),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text);
+        throw new Error(`Server error: ${text.substring(0, 100)}...`);
+      }
+
       if (!response.ok) {
-        throw new Error('Failed to group images');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to group images');
       }
 
       const { groups } = await response.json();
@@ -160,37 +206,27 @@ export default function BatchUploadPage() {
 
       setGroupedItems(groupedData);
       
-      // Store only the grouping info, not the images
-      const groupingInfo = groups.map(group => ({
-        indices: group.indices,
-        suggestedName: group.suggestedName
-      }));
-      
-      // Store minimal data in session
-      sessionStorage.setItem('batchGroupingInfo', JSON.stringify(groupingInfo));
+      // Store minimal data
       sessionStorage.setItem('batchImageCount', uploadedImages.length.toString());
       
     } catch (error) {
       console.error('Error grouping images:', error);
-      setError('Failed to group images. Please try again.');
+      setError(error.message || 'Failed to group images. Please try again.');
     } finally {
       setIsProcessing(false);
+      setProcessingStatus('');
     }
   };
 
   const proceedToResults = () => {
     if (groupedItems.length === 0) return;
     
-    // Pass data through navigation state instead of sessionStorage
-    router.push('/batch/results', {
-      query: { fromBatch: true }
-    });
-    
-    // Store grouped items in a global state management solution or pass via props
-    // For now, we'll use a workaround with window object
+    // Store grouped items temporarily
     if (typeof window !== 'undefined') {
       window.batchGroupedItems = groupedItems;
     }
+    
+    router.push('/batch/results');
   };
 
   const removeImage = (index) => {
@@ -235,6 +271,7 @@ export default function BatchUploadPage() {
               accept="image/*"
               onChange={handleFileSelect}
               className="hidden"
+              disabled={isProcessing}
             />
             
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,6 +282,7 @@ export default function BatchUploadPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="font-medium text-blue-600 hover:text-blue-500"
+                disabled={isProcessing}
               >
                 Click to upload
               </button>
@@ -254,6 +292,18 @@ export default function BatchUploadPage() {
               PNG, JPG, GIF up to 10MB each
             </p>
           </div>
+
+          {processingStatus && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded">
+              <div className="flex items-center">
+                <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {processingStatus}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
@@ -269,15 +319,20 @@ export default function BatchUploadPage() {
               <h3 className="text-lg font-semibold">
                 Uploaded Images ({uploadedImages.length})
               </h3>
-              <button
-                onClick={() => {
-                  setUploadedImages([]);
-                  setGroupedItems([]);
-                }}
-                className="text-sm text-red-600 hover:text-red-800"
-              >
-                Clear All
-              </button>
+              <div className="flex items-center space-x-4">
+                <span className="text-sm text-gray-500">
+                  Total size: {(uploadedImages.reduce((sum, img) => sum + img.size, 0) / 1024 / 1024).toFixed(2)} MB
+                </span>
+                <button
+                  onClick={() => {
+                    setUploadedImages([]);
+                    setGroupedItems([]);
+                  }}
+                  className="text-sm text-red-600 hover:text-red-800"
+                >
+                  Clear All
+                </button>
+              </div>
             </div>
             
             <div className="grid grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 mb-6 max-h-96 overflow-y-auto">
@@ -302,6 +357,7 @@ export default function BatchUploadPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                disabled={isProcessing}
               >
                 Add More Images
               </button>
@@ -310,7 +366,7 @@ export default function BatchUploadPage() {
                 disabled={isProcessing || !user}
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
               >
-                {isProcessing ? 'Grouping Images...' : 'Group Images by AI'}
+                {isProcessing ? 'Processing...' : 'Group Images by AI'}
               </button>
             </div>
           </div>
