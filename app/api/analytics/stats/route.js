@@ -9,3 +9,4 @@ export async function GET(request) {
     avgSalePrice: 0,
     listingsThisWeek: 0
   });
+}
