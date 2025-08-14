@@ -7,7 +7,8 @@ import { useUserData } from '../../hooks/useUserData';
 
 function BatchResultsContent() {
   const router = useRouter();
-  const { user, refreshUser } = useUserData();
+  const userData = useUserData();
+  const { user, refreshUser } = userData || {};
   
   const [groups, setGroups] = useState([]);
   const [processing, setProcessing] = useState(false);
@@ -51,6 +52,12 @@ function BatchResultsContent() {
             formData.append('images', img.file);
           } else if (img.originalFile) {
             formData.append('images', img.originalFile);
+          } else if (img.blob) {
+            // Create file from blob if needed
+            const file = new File([img.blob], img.name || `image_${index}.jpg`, {
+              type: 'image/jpeg'
+            });
+            formData.append('images', file);
           }
         }
         
@@ -64,6 +71,15 @@ function BatchResultsContent() {
             method: 'POST',
             body: formData,
           });
+
+          console.log(`Group ${index + 1} response status:`, response.status);
+
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('Non-JSON response:', text);
+            throw new Error('Invalid response format');
+          }
 
           const data = await response.json();
 
@@ -96,8 +112,14 @@ function BatchResultsContent() {
         setResults([...newResults]);
       }
       
-      // Refresh user credits
-      await refreshUser();
+      // Safe refresh user - check if function exists
+      if (refreshUser && typeof refreshUser === 'function') {
+        try {
+          await refreshUser();
+        } catch (refreshError) {
+          console.error('Error refreshing user:', refreshError);
+        }
+      }
       
       // Clear session storage
       sessionStorage.removeItem('batchGroupingInfo');
@@ -105,7 +127,7 @@ function BatchResultsContent() {
       
     } catch (error) {
       console.error('Batch processing error:', error);
-      setError('Failed to process batch. Please try again.');
+      setError(`Failed to process batch: ${error.message}`);
     } finally {
       setProcessing(false);
     }
@@ -144,12 +166,12 @@ function BatchResultsContent() {
     // Create CSV content
     const headers = ['Title', 'Brand', 'Size', 'Condition', 'Price', 'Description'];
     const rows = selectedResults.map(r => [
-      r.data.title || '',
-      r.data.brand || '',
-      r.data.size || '',
-      r.data.condition || '',
-      r.data.price || '',
-      (r.data.description || '').replace(/"/g, '""')
+      r.data?.title || r.data?.ebayTitle || '',
+      r.data?.brand || '',
+      r.data?.size || '',
+      r.data?.condition || '',
+      r.data?.price || r.data?.minPrice || '',
+      (r.data?.description || '').replace(/"/g, '""')
     ]);
     
     const csv = [
@@ -198,6 +220,9 @@ function BatchResultsContent() {
             <p className="text-gray-600 mb-4">
               Found {groups.length} items ready for analysis. This will use {groups.length} credits.
             </p>
+            <p className="text-sm text-gray-500 mb-4">
+              {user ? `You have ${(user.credits_total || 0) + (user.bonus_credits || 0) - (user.credits_used || 0)} credits remaining.` : 'Loading user data...'}
+            </p>
             <button
               onClick={processAllGroups}
               disabled={processing || !user}
@@ -208,7 +233,7 @@ function BatchResultsContent() {
           </div>
         )}
 
-        {/* Results display remains the same */}
+        {/* Results display */}
         {results.length > 0 && (
           <div className="space-y-6">
             {/* Bulk actions */}
@@ -240,6 +265,29 @@ function BatchResultsContent() {
                   >
                     List to eBay ({selectedItems.size})
                   </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <h3 className="font-semibold mb-2">Processing Summary</h3>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Total Items:</span>
+                  <span className="ml-2 font-medium">{results.length}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Successful:</span>
+                  <span className="ml-2 font-medium text-green-600">
+                    {results.filter(r => r.success).length}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Failed:</span>
+                  <span className="ml-2 font-medium text-red-600">
+                    {results.filter(r => !r.success).length}
+                  </span>
                 </div>
               </div>
             </div>
@@ -282,24 +330,27 @@ function BatchResultsContent() {
                         <div>
                           <h4 className="font-semibold mb-2">Analysis Results</h4>
                           <div className="space-y-1 text-sm">
-                            <p><strong>Title:</strong> {result.data.title}</p>
-                            <p><strong>Brand:</strong> {result.data.brand}</p>
-                            <p><strong>Size:</strong> {result.data.size}</p>
-                            <p><strong>Condition:</strong> {result.data.condition}</p>
-                            <p><strong>Price:</strong> £{result.data.price}</p>
+                            <p><strong>Title:</strong> {result.data?.title || result.data?.ebayTitle}</p>
+                            <p><strong>Brand:</strong> {result.data?.brand}</p>
+                            <p><strong>Size:</strong> {result.data?.size}</p>
+                            <p><strong>Condition:</strong> {result.data?.condition}</p>
+                            <p><strong>Price:</strong> £{result.data?.price || result.data?.minPrice}</p>
                           </div>
-                          <button
-                            onClick={() => router.push(`/listing/${result.data.id}`)}
-                            className="mt-3 text-sm text-blue-600 hover:text-blue-800"
-                          >
-                            View Full Details →
-                          </button>
+                          {result.data?.id && (
+                            <button
+                              onClick={() => router.push(`/listing/${result.data.id}`)}
+                              className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+                            >
+                              View Full Details →
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div className="flex-1">
-                      <p className="text-red-600">Error: {result.error}</p>
+                      <p className="text-red-600 font-medium">Processing Failed</p>
+                      <p className="text-sm text-gray-600 mt-1">Error: {result.error}</p>
                       <div className="mt-2 grid grid-cols-3 gap-2">
                         {result.images?.slice(0, 3).map((img, imgIndex) => (
                           <img
