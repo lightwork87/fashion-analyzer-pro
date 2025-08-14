@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useUserData } from '../hooks/useUserData';
-import CreditDisplay from '../components/CreditDisplay';
 import EbayConnection from '../components/EbayConnection';
 
 export default function Dashboard() {
   const router = useRouter();
   const { user: clerkUser } = useUser();
   const { user, loading: userLoading } = useUserData();
+  const fileInputRef = useRef(null);
   
   const [activeView, setActiveView] = useState('inventory');
   const [listings, setListings] = useState([]);
@@ -24,9 +24,11 @@ export default function Dashboard() {
     listingsThisWeek: 0
   });
   const [selectedListings, setSelectedListings] = useState([]);
-  const [viewMode, setViewMode] = useState('grid'); // grid or list
+  const [viewMode, setViewMode] = useState('grid');
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Business Policies
   const [businessPolicies, setBusinessPolicies] = useState({
@@ -35,50 +37,34 @@ export default function Dashboard() {
     returns: []
   });
 
-  // eBay Item Specifics
-  const ebayCategories = {
-    'Clothing': {
-      required: ['Brand', 'Size', 'Color', 'Condition'],
-      optional: ['Material', 'Style', 'Pattern', 'Sleeve Length', 'Season']
-    },
-    'Shoes': {
-      required: ['Brand', 'US Shoe Size', 'Color', 'Condition'],
-      optional: ['Style', 'Upper Material', 'Width', 'Heel Height']
-    },
-    'Bags': {
-      required: ['Brand', 'Color', 'Condition'],
-      optional: ['Material', 'Size', 'Style', 'Features']
-    }
-  };
-
-  // Vinted Categories
-  const vintedCategories = {
-    'Women': ['Coats & Jackets', 'Dresses', 'Tops', 'Trousers', 'Skirts', 'Shoes', 'Bags'],
-    'Men': ['Jackets & Coats', 'Shirts', 'T-shirts', 'Trousers', 'Shoes', 'Accessories'],
-    'Kids': ['Girls', 'Boys', 'Baby']
-  };
-
   useEffect(() => {
-    loadListings();
-    loadStats();
-    loadBusinessPolicies();
+    if (clerkUser) {
+      loadListings();
+      loadStats();
+      loadBusinessPolicies();
+    }
   }, [clerkUser]);
 
   const loadListings = async () => {
     try {
       const response = await fetch('/api/listings?limit=50');
-      const data = await response.json();
-      setListings(data.listings || []);
+      if (response.ok) {
+        const data = await response.json();
+        setListings(data.listings || []);
+      }
     } catch (error) {
       console.error('Error loading listings:', error);
+      setListings([]);
     }
   };
 
   const loadStats = async () => {
     try {
       const response = await fetch('/api/analytics/stats');
-      const data = await response.json();
-      setStats(data);
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -87,10 +73,68 @@ export default function Dashboard() {
   const loadBusinessPolicies = async () => {
     try {
       const response = await fetch('/api/ebay/business-policies');
-      const data = await response.json();
-      setBusinessPolicies(data);
+      if (response.ok) {
+        const data = await response.json();
+        setBusinessPolicies(data);
+      }
     } catch (error) {
       console.error('Error loading business policies:', error);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const newImages = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file)
+    }));
+    setImages(newImages);
+  };
+
+  const handleQuickAnalysis = async () => {
+    if (images.length === 0 || !user || !clerkUser) return;
+
+    const creditsNeeded = 1;
+    const totalCredits = (user.credits_total || 0) + (user.bonus_credits || 0);
+    const creditsRemaining = totalCredits - (user.credits_used || 0);
+
+    if (creditsRemaining < creditsNeeded) {
+      alert('Not enough credits. Please purchase more credits.');
+      router.push('/pricing');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const formData = new FormData();
+      images.forEach(img => {
+        formData.append('images', img.file);
+      });
+      formData.append('userId', clerkUser.id);
+
+      const response = await fetch('/api/analyze-ai', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Analysis failed');
+      }
+
+      const data = await response.json();
+      
+      // Store the result and redirect to edit page
+      sessionStorage.setItem('analysisResult', JSON.stringify(data));
+      router.push('/dashboard/new-listing');
+
+    } catch (error) {
+      console.error('Analysis error:', error);
+      alert('Failed to analyze images. Please try again.');
+    } finally {
+      setIsProcessing(false);
+      setImages([]);
     }
   };
 
@@ -99,16 +143,14 @@ export default function Dashboard() {
 
     switch (action) {
       case 'list-ebay':
-        // Handle bulk eBay listing
-        router.push(`/bulk-list/ebay?ids=${selectedListings.join(',')}`);
+        alert('Bulk eBay listing coming soon!');
         break;
       case 'list-vinted':
-        // Handle Vinted CSV export
         exportVintedCSV(selectedListings);
         break;
       case 'delete':
         if (confirm(`Delete ${selectedListings.length} listings?`)) {
-          await deleteListings(selectedListings);
+          alert('Delete functionality coming soon!');
         }
         break;
     }
@@ -116,44 +158,59 @@ export default function Dashboard() {
 
   const exportVintedCSV = (listingIds) => {
     const selectedItems = listings.filter(l => listingIds.includes(l.id));
-    const csv = generateVintedCSV(selectedItems);
-    downloadCSV(csv, 'vinted_export.csv');
-  };
-
-  const generateVintedCSV = (items) => {
+    if (selectedItems.length === 0) {
+      alert('No items selected for export');
+      return;
+    }
+    
     const headers = ['Title', 'Brand', 'Size', 'Condition', 'Price', 'Category', 'Color', 'Description'];
-    const rows = items.map(item => [
-      item.title,
-      item.brand,
-      item.size,
-      item.condition,
-      item.price,
-      item.category,
-      item.color,
-      item.description.replace(/,/g, ';')
+    const rows = selectedItems.map(item => [
+      item.title || '',
+      item.brand || '',
+      item.size || '',
+      item.condition || '',
+      item.price || '',
+      item.category || '',
+      item.color || '',
+      (item.description || '').replace(/,/g, ';')
     ]);
     
-    return [headers, ...rows].map(row => row.join(',')).join('\n');
-  };
-
-  const downloadCSV = (content, filename) => {
-    const blob = new Blob([content], { type: 'text/csv' });
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = 'vinted_export.csv';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleListingAction = (listingId, action) => {
+    switch (action) {
+      case 'duplicate':
+        alert('Duplicate functionality coming soon!');
+        break;
+      case 'edit':
+        router.push(`/listing/${listingId}`);
+        break;
+    }
   };
 
   const filteredListings = listings.filter(listing => {
     const matchesStatus = filterStatus === 'all' || listing.status === filterStatus;
     const matchesSearch = searchQuery === '' || 
-      listing.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      listing.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       listing.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       listing.sku?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
+
+  // Clean up image previews
+  useEffect(() => {
+    return () => {
+      images.forEach(img => URL.revokeObjectURL(img.preview));
+    };
+  }, [images]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -211,6 +268,16 @@ export default function Dashboard() {
             Batch Processing
           </Link>
 
+          <Link
+            href="/history"
+            className={`w-full flex items-center px-6 py-3 text-left hover:bg-gray-50 transition-colors text-gray-700`}
+          >
+            <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Listing History
+          </Link>
+
           <button
             onClick={() => setActiveView('policies')}
             className={`w-full flex items-center px-6 py-3 text-left hover:bg-gray-50 transition-colors ${
@@ -232,11 +299,21 @@ export default function Dashboard() {
             </svg>
             Get Credits
           </Link>
+
+          <Link
+            href="/beta"
+            className="w-full flex items-center px-6 py-3 text-left hover:bg-gray-50 transition-colors text-gray-700"
+          >
+            <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            Beta Program
+          </Link>
         </nav>
 
-        {/* Credit Display in Sidebar */}
+        {/* eBay Connection in Sidebar */}
         <div className="p-6 mt-auto">
-          <CreditDisplay user={user} />
+          <EbayConnection userId={clerkUser?.id} />
         </div>
       </aside>
 
@@ -254,10 +331,10 @@ export default function Dashboard() {
               </h1>
               
               <div className="flex items-center gap-4">
-                <EbayConnection userId={clerkUser?.id} />
                 <button
                   onClick={() => router.push('/account')}
                   className="p-2 hover:bg-gray-100 rounded-lg"
+                  title="Account Settings"
                 >
                   <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -362,6 +439,7 @@ export default function Dashboard() {
                     <button
                       onClick={() => setViewMode('grid')}
                       className={`p-2 rounded ${viewMode === 'grid' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                      title="Grid View"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -370,6 +448,7 @@ export default function Dashboard() {
                     <button
                       onClick={() => setViewMode('list')}
                       className={`p-2 rounded ${viewMode === 'list' ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                      title="List View"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -408,8 +487,22 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Listings Grid/List */}
-            {viewMode === 'grid' ? (
+            {/* Listings Display */}
+            {filteredListings.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+                <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No listings yet</h3>
+                <p className="text-gray-600 mb-4">Create your first listing to get started</p>
+                <button
+                  onClick={() => setActiveView('list-new')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Create Listing
+                </button>
+              </div>
+            ) : viewMode === 'grid' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredListings.map((listing) => (
                   <div key={listing.id} className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
@@ -439,16 +532,16 @@ export default function Dashboard() {
                         listing.status === 'draft' ? 'bg-gray-100 text-gray-800' :
                         'bg-red-100 text-red-800'
                       }`}>
-                        {listing.status}
+                        {listing.status || 'draft'}
                       </span>
                     </div>
                     <div className="p-4">
-                      <h3 className="font-medium text-gray-900 truncate">{listing.title}</h3>
-                      <p className="text-sm text-gray-600 mt-1">{listing.brand}</p>
+                      <h3 className="font-medium text-gray-900 truncate">{listing.title || 'Untitled'}</h3>
+                      <p className="text-sm text-gray-600 mt-1">{listing.brand || 'No brand'}</p>
                       <div className="flex justify-between items-center mt-3">
-                        <span className="text-lg font-bold">£{listing.price}</span>
+                        <span className="text-lg font-bold">£{listing.price || '0'}</span>
                         <button
-                          onClick={() => router.push(`/listing/${listing.id}`)}
+                          onClick={() => handleListingAction(listing.id, 'edit')}
                           className="text-blue-600 hover:text-blue-800 text-sm"
                         >
                           Edit
@@ -520,8 +613,8 @@ export default function Dashboard() {
                               )}
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">{listing.title}</div>
-                              <div className="text-sm text-gray-500">{listing.brand}</div>
+                              <div className="text-sm font-medium text-gray-900">{listing.title || 'Untitled'}</div>
+                              <div className="text-sm text-gray-500">{listing.brand || 'No brand'}</div>
                             </div>
                           </div>
                         </td>
@@ -529,7 +622,7 @@ export default function Dashboard() {
                           {listing.sku || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          £{listing.price}
+                          £{listing.price || '0'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -538,7 +631,7 @@ export default function Dashboard() {
                             listing.status === 'draft' ? 'bg-gray-100 text-gray-800' :
                             'bg-red-100 text-red-800'
                           }`}>
-                            {listing.status}
+                            {listing.status || 'draft'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -546,7 +639,7 @@ export default function Dashboard() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <button
-                            onClick={() => router.push(`/listing/${listing.id}`)}
+                            onClick={() => handleListingAction(listing.id, 'edit')}
                             className="text-blue-600 hover:text-blue-900 mr-3"
                           >
                             Edit
@@ -575,8 +668,12 @@ export default function Dashboard() {
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h3 className="text-lg font-semibold mb-4">Sales Overview</h3>
                 <div className="h-64 flex items-center justify-center text-gray-400">
-                  {/* Chart would go here */}
-                  Sales Chart Placeholder
+                  <div className="text-center">
+                    <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4v16" />
+                    </svg>
+                    <p>Sales analytics coming soon</p>
+                  </div>
                 </div>
               </div>
 
@@ -584,18 +681,7 @@ export default function Dashboard() {
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h3 className="text-lg font-semibold mb-4">Top Performing Brands</h3>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Nike</span>
-                    <span className="font-medium">£450</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Adidas</span>
-                    <span className="font-medium">£380</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Zara</span>
-                    <span className="font-medium">£290</span>
-                  </div>
+                  <p className="text-center text-gray-400 py-8">No sales data yet</p>
                 </div>
               </div>
             </div>
@@ -609,16 +695,73 @@ export default function Dashboard() {
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <h2 className="text-xl font-semibold mb-6">Create New Listing</h2>
                 
+                {/* Quick Single Item Upload */}
+                <div className="mb-8 p-6 bg-gray-50 rounded-lg">
+                  <h3 className="text-lg font-medium mb-4">Quick Upload</h3>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    id="quick-upload"
+                  />
+                  
+                  {images.length === 0 ? (
+                    <label
+                      htmlFor="quick-upload"
+                      className="block w-full text-center p-8 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer"
+                    >
+                      <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p className="text-gray-600">Click to upload photos for quick analysis</p>
+                      <p className="text-sm text-gray-500 mt-2">Upload up to 24 photos</p>
+                    </label>
+                  ) : (
+                    <div>
+                      <div className="grid grid-cols-4 gap-4 mb-4">
+                        {images.map((img, idx) => (
+                          <div key={idx} className="aspect-square relative">
+                            <img src={img.preview} alt="" className="w-full h-full object-cover rounded-lg" />
+                            <button
+                              onClick={() => {
+                                const newImages = [...images];
+                                URL.revokeObjectURL(newImages[idx].preview);
+                                newImages.splice(idx, 1);
+                                setImages(newImages);
+                              }}
+                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={handleQuickAnalysis}
+                        disabled={isProcessing}
+                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                      >
+                        {isProcessing ? 'Analyzing...' : 'Analyze with AI (1 credit)'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Link
                     href="/dashboard/new-listing"
                     className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors"
                   >
                     <svg className="w-12 h-12 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <h3 className="text-lg font-medium mb-2">Single Item</h3>
-                    <p className="text-gray-600">Upload photos and create one listing</p>
+                    <h3 className="text-lg font-medium mb-2">Manual Entry</h3>
+                    <p className="text-gray-600">Create listing manually</p>
                   </Link>
 
                   <Link
@@ -635,22 +778,26 @@ export default function Dashboard() {
 
                 <div className="mt-8">
                   <h3 className="text-lg font-medium mb-4">Recent Drafts</h3>
-                  <div className="space-y-3">
-                    {listings.filter(l => l.status === 'draft').slice(0, 5).map(draft => (
-                      <div key={draft.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50">
-                        <div>
-                          <p className="font-medium">{draft.title}</p>
-                          <p className="text-sm text-gray-600">Created {new Date(draft.created_at).toLocaleDateString()}</p>
+                  {listings.filter(l => l.status === 'draft').length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">No drafts yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {listings.filter(l => l.status === 'draft').slice(0, 5).map(draft => (
+                        <div key={draft.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50">
+                          <div>
+                            <p className="font-medium">{draft.title || 'Untitled Draft'}</p>
+                            <p className="text-sm text-gray-600">Created {new Date(draft.created_at).toLocaleDateString()}</p>
+                          </div>
+                          <button
+                            onClick={() => router.push(`/listing/${draft.id}`)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            Continue
+                          </button>
                         </div>
-                        <button
-                          onClick={() => router.push(`/listing/${draft.id}`)}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          Continue
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -660,6 +807,12 @@ export default function Dashboard() {
         {/* Business Policies View */}
         {activeView === 'policies' && (
           <div className="px-8 pb-8">
+            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-6">
+              <p className="text-yellow-800">
+                Business policies sync with your eBay account. Connect your eBay account to manage policies.
+              </p>
+            </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Shipping Policies */}
               <div className="bg-white rounded-lg shadow-sm p-6">
@@ -668,12 +821,16 @@ export default function Dashboard() {
                   Add Shipping Policy
                 </button>
                 <div className="space-y-3">
-                  {businessPolicies.shipping.map((policy, idx) => (
-                    <div key={idx} className="p-3 border rounded-lg">
-                      <p className="font-medium">{policy.name}</p>
-                      <p className="text-sm text-gray-600">{policy.service} - £{policy.cost}</p>
-                    </div>
-                  ))}
+                  {businessPolicies.shipping.length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">No shipping policies yet</p>
+                  ) : (
+                    businessPolicies.shipping.map((policy, idx) => (
+                      <div key={idx} className="p-3 border rounded-lg">
+                        <p className="font-medium">{policy.name}</p>
+                        <p className="text-sm text-gray-600">{policy.service} - £{policy.cost}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -684,12 +841,16 @@ export default function Dashboard() {
                   Add Payment Policy
                 </button>
                 <div className="space-y-3">
-                  {businessPolicies.payment.map((policy, idx) => (
-                    <div key={idx} className="p-3 border rounded-lg">
-                      <p className="font-medium">{policy.name}</p>
-                      <p className="text-sm text-gray-600">{policy.methods.join(', ')}</p>
-                    </div>
-                  ))}
+                  {businessPolicies.payment.length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">No payment policies yet</p>
+                  ) : (
+                    businessPolicies.payment.map((policy, idx) => (
+                      <div key={idx} className="p-3 border rounded-lg">
+                        <p className="font-medium">{policy.name}</p>
+                        <p className="text-sm text-gray-600">{policy.methods.join(', ')}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -700,12 +861,16 @@ export default function Dashboard() {
                   Add Return Policy
                 </button>
                 <div className="space-y-3">
-                  {businessPolicies.returns.map((policy, idx) => (
-                    <div key={idx} className="p-3 border rounded-lg">
-                      <p className="font-medium">{policy.name}</p>
-                      <p className="text-sm text-gray-600">{policy.period} days - {policy.type}</p>
-                    </div>
-                  ))}
+                  {businessPolicies.returns.length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">No return policies yet</p>
+                  ) : (
+                    businessPolicies.returns.map((policy, idx) => (
+                      <div key={idx} className="p-3 border rounded-lg">
+                        <p className="font-medium">{policy.name}</p>
+                        <p className="text-sm text-gray-600">{policy.period} days - {policy.type}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
