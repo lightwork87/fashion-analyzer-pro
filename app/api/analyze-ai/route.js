@@ -1,5 +1,5 @@
 // app/api/analyze-ai/route.js
-// COMPLETE WORKING AI ANALYSIS WITH GOOGLE VISION + CLAUDE
+// SAME CODE AS BEFORE BUT WITH CREDIT CHECK BYPASS
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -19,10 +19,9 @@ export const maxDuration = 30;
 function cleanBrandName(brand) {
   if (!brand) return 'Unknown Brand';
   
-  // Remove common punctuation and clean up
   return brand
-    .replace(/[.,!?'"]/g, '') // Remove punctuation
-    .replace(/\s+/g, ' ') // Clean up spaces
+    .replace(/[.,!?'"]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -180,21 +179,41 @@ export async function POST(request) {
 
     console.log(`📸 Processing ${images.length} images`);
 
-    // Check user credits
-    const { data: userData } = await supabase
+    // Get or create user with default credits
+    let { data: userData } = await supabase
       .from('users')
       .select('credits_total, credits_used')
       .eq('clerk_id', userId)
       .single();
 
-    const creditsAvailable = (userData?.credits_total || 0) - (userData?.credits_used || 0);
+    // If user doesn't exist, create with free credits
+    if (!userData) {
+      console.log('Creating new user with 50 free credits');
+      const { data: newUser } = await supabase
+        .from('users')
+        .insert({
+          clerk_id: userId,
+          email: 'user@example.com', // You might want to get this from Clerk
+          credits_total: 50, // Free credits for new users
+          credits_used: 0
+        })
+        .select()
+        .single();
+      
+      userData = newUser;
+    }
+
+    const creditsAvailable = (userData?.credits_total || 50) - (userData?.credits_used || 0);
     
+    // TEMPORARY: Comment out credit check for testing
+    /*
     if (creditsAvailable <= 0) {
       return NextResponse.json({ 
         error: 'No credits available',
         credits_remaining: 0 
       }, { status: 402 });
     }
+    */
 
     // Analyze first image with Google Vision
     let visionData = null;
@@ -227,7 +246,7 @@ export async function POST(request) {
     const completeAnalysis = {
       ...getFallbackAnalysis(images.length), // Start with fallback
       ...analysis, // Override with actual analysis
-      credits_remaining: creditsAvailable - 1
+      credits_remaining: Math.max(0, creditsAvailable - 1)
     };
 
     // Save to database
@@ -261,13 +280,15 @@ export async function POST(request) {
       console.error('Failed to save analysis:', saveError);
     }
 
-    // Update user credits
-    await supabase
-      .from('users')
-      .update({ 
-        credits_used: (userData?.credits_used || 0) + 1 
-      })
-      .eq('clerk_id', userId);
+    // Update user credits (only if not bypassed)
+    if (creditsAvailable > 0) {
+      await supabase
+        .from('users')
+        .update({ 
+          credits_used: (userData?.credits_used || 0) + 1 
+        })
+        .eq('clerk_id', userId);
+    }
 
     // Return success
     return NextResponse.json({
