@@ -1,5 +1,5 @@
 // app/dashboard/create-listing/page.js
-// NEW ROUTE with built-in compression
+// VERSION WITH TEST API - To isolate the issue
 
 'use client';
 
@@ -12,84 +12,25 @@ export default function CreateListingPage() {
   const [images, setImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
-  const [progress, setProgress] = useState('');
+  const [debugInfo, setDebugInfo] = useState('');
   const router = useRouter();
 
-  // Version check
-  console.log('Create Listing Page v4 - With Compression');
-
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     
     if (images.length + files.length > 5) {
-      setError('Currently limited to 5 images to prevent server errors');
+      setError('Limited to 5 images');
       return;
     }
 
-    setProgress('Processing images...');
-    const newImages = [];
-
-    for (const file of files) {
-      // Compress on upload
-      const compressed = await compressImageFile(file);
-      newImages.push({
-        file: compressed.file,
-        preview: compressed.preview,
-        original: file,
-        id: Math.random().toString(36).substr(2, 9)
-      });
-    }
+    const newImages = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+      id: Math.random().toString(36).substr(2, 9)
+    }));
 
     setImages([...images, ...newImages]);
     setError('');
-    setProgress('');
-  };
-
-  const compressImageFile = async (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        const img = new Image();
-        
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 500;
-          const MAX_HEIGHT = 500;
-          let width = img.width;
-          let height = img.height;
-          
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = Math.round(height * (MAX_WIDTH / width));
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = Math.round(width * (MAX_HEIGHT / height));
-              height = MAX_HEIGHT;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          canvas.toBlob((blob) => {
-            resolve({
-              file: blob,
-              preview: canvas.toDataURL('image/jpeg', 0.6)
-            });
-          }, 'image/jpeg', 0.6);
-        };
-        
-        img.src = e.target.result;
-      };
-      
-      reader.readAsDataURL(file);
-    });
   };
 
   const removeImage = (id) => {
@@ -104,49 +45,78 @@ export default function CreateListingPage() {
 
     setIsAnalyzing(true);
     setError('');
-    setProgress('Preparing images...');
+    setDebugInfo('Starting analysis...');
 
     try {
-      // Convert to base64
-      const base64Images = [];
+      // First, test with the simple test API
+      setDebugInfo('Calling test API...');
       
-      for (let i = 0; i < images.length; i++) {
-        setProgress(`Processing image ${i + 1} of ${images.length}...`);
-        base64Images.push(images[i].preview);
-      }
-
-      setProgress('Sending to server...');
-
-      // Make API call
-      const response = await fetch('/api/analyze-ai', {
+      const testResponse = await fetch('/api/analyze-test', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          images: base64Images
+          test: true,
+          imageCount: images.length
         }),
       });
 
-      const data = await response.json();
+      const testData = await testResponse.json();
       
-      if (!response.ok) {
-        throw new Error(data.error || `Server error: ${response.status}`);
+      setDebugInfo(`Test API response: ${testResponse.status} - ${JSON.stringify(testData).substring(0, 100)}...`);
+
+      if (!testResponse.ok) {
+        throw new Error(`Test API failed: ${testData.error || testResponse.status}`);
       }
 
-      if (data.success && data.analysis) {
-        sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
-        router.push('/dashboard/listing-results');
-      } else {
-        throw new Error('Invalid response from server');
+      if (testData.success) {
+        // If test works, try the real API
+        setDebugInfo('Test API works! Now trying real API...');
+        
+        // Convert first image only for testing
+        const reader = new FileReader();
+        const base64 = await new Promise((resolve) => {
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsDataURL(images[0].file);
+        });
+
+        const response = await fetch('/api/analyze-ai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            images: [base64]
+          }),
+        });
+
+        const data = await response.json();
+        
+        setDebugInfo(`Real API response: ${response.status} - ${JSON.stringify(data).substring(0, 100)}...`);
+
+        if (!response.ok) {
+          // Use test data as fallback
+          console.log('Real API failed, using test data');
+          sessionStorage.setItem('analysisResult', JSON.stringify(testData.analysis));
+          router.push('/dashboard/listing-results');
+          return;
+        }
+
+        if (data.success && data.analysis) {
+          sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
+          router.push('/dashboard/listing-results');
+        } else {
+          throw new Error('Invalid response from server');
+        }
       }
 
     } catch (err) {
       console.error('Error:', err);
       setError(err.message || 'Failed to analyze images');
+      setDebugInfo(`Error: ${err.message}`);
     } finally {
       setIsAnalyzing(false);
-      setProgress('');
     }
   };
 
@@ -157,13 +127,16 @@ export default function CreateListingPage() {
           <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <h1 className="text-2xl font-semibold">Create Listing (New)</h1>
+          <h1 className="text-2xl font-semibold">Create Listing (Debug Mode)</h1>
         </div>
       </div>
 
-      <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
-        <strong>Notice:</strong> Images are automatically compressed. Limited to 5 images temporarily.
-      </div>
+      {/* Debug Info */}
+      {debugInfo && (
+        <div className="mb-4 p-4 bg-gray-100 border border-gray-300 rounded-lg font-mono text-sm">
+          {debugInfo}
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
@@ -171,17 +144,11 @@ export default function CreateListingPage() {
         </div>
       )}
 
-      {progress && (
-        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
-          {progress}
-        </div>
-      )}
-
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <div className="mb-4">
           <h2 className="text-lg font-medium mb-2">Upload Images</h2>
           <p className="text-sm text-gray-600">
-            Select up to 5 images. They will be compressed automatically.
+            Testing with simple API first.
           </p>
         </div>
 
@@ -194,13 +161,11 @@ export default function CreateListingPage() {
             onChange={handleImageUpload}
             className="hidden"
             id="image-upload"
-            disabled={isAnalyzing || images.length >= 5}
+            disabled={isAnalyzing}
           />
           <label
             htmlFor="image-upload"
-            className={`inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer ${
-              images.length >= 5 ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
           >
             Select Images
           </label>
@@ -209,9 +174,9 @@ export default function CreateListingPage() {
         {images.length > 0 && (
           <div className="mt-6">
             <p className="text-sm text-gray-600 mb-3">
-              {images.length} compressed image{images.length !== 1 ? 's' : ''} ready
+              {images.length} image{images.length !== 1 ? 's' : ''} selected
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               {images.map((image) => (
                 <div key={image.id} className="relative group">
                   <img
@@ -248,10 +213,10 @@ export default function CreateListingPage() {
           {isAnalyzing ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {progress || 'Analyzing...'}
+              Testing...
             </>
           ) : (
-            'Analyze Images'
+            'Test Analysis'
           )}
         </button>
       </div>
