@@ -1,18 +1,13 @@
 // app/api/analyze-ai/route.js
-// DEBUG VERSION - Extensive logging to identify issues
+// OPTIMIZED VERSION - Handles request size limits
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 import { createClient } from '@supabase/supabase-js';
 
-// Log environment setup
-console.log('[INIT] Analyze route loading...');
-console.log('[INIT] Environment:', {
-  NODE_ENV: process.env.NODE_ENV,
-  hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-  hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  supabaseUrlPreview: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...',
-});
+// Configure route to handle larger requests (up to 4.5MB)
+export const runtime = 'nodejs';
+export const maxDuration = 30; // 30 seconds timeout
 
 // Initialize Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -20,8 +15,6 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseKey 
   ? createClient(supabaseUrl, supabaseKey)
   : null;
-
-console.log('[INIT] Supabase client created:', !!supabase);
 
 // Generate unique ID
 function generateId() {
@@ -56,50 +49,34 @@ function getBasicAnalysis() {
 }
 
 export async function POST(request) {
-  console.log('\n=== ANALYZE API CALLED ===');
-  console.log('Timestamp:', new Date().toISOString());
+  console.log('Analyze API called at:', new Date().toISOString());
   
   try {
-    // Step 1: Check authentication
-    console.log('[STEP 1] Checking authentication...');
-    let userId;
-    try {
-      const authResult = auth();
-      userId = authResult?.userId;
-      console.log('[AUTH] Result:', { 
-        hasAuth: !!authResult, 
-        hasUserId: !!userId,
-        userIdLength: userId?.length 
-      });
-    } catch (authError) {
-      console.error('[AUTH] Error:', authError);
-      return NextResponse.json({ 
-        error: 'Authentication failed',
-        details: authError.message,
-        success: false 
-      }, { status: 401 });
-    }
-
+    // Check auth
+    const { userId } = auth();
     if (!userId) {
-      console.log('[AUTH] No userId found');
       return NextResponse.json({ 
         error: 'Please sign in to continue',
         success: false 
       }, { status: 401 });
     }
 
-    // Step 2: Parse request body
-    console.log('[STEP 2] Parsing request body...');
+    // Parse body with size check
     let body;
     try {
+      const contentLength = request.headers.get('content-length');
+      console.log('Request size:', contentLength, 'bytes');
+      
+      if (contentLength && parseInt(contentLength) > 4.5 * 1024 * 1024) {
+        return NextResponse.json({ 
+          error: 'Request too large. Please use fewer or smaller images.',
+          success: false 
+        }, { status: 413 });
+      }
+      
       body = await request.json();
-      console.log('[BODY] Parsed successfully:', {
-        hasBody: !!body,
-        hasImages: !!body?.images,
-        imageCount: body?.images?.length || 0
-      });
     } catch (parseError) {
-      console.error('[BODY] Parse error:', parseError);
+      console.error('Body parse error:', parseError);
       return NextResponse.json({ 
         error: 'Invalid request format',
         success: false 
@@ -109,22 +86,20 @@ export async function POST(request) {
     const { images } = body || {};
 
     if (!images || !Array.isArray(images) || images.length === 0) {
-      console.log('[VALIDATION] No images provided');
       return NextResponse.json({ 
         error: 'No images provided',
         success: false 
       }, { status: 400 });
     }
 
-    console.log(`[IMAGES] Processing ${images.length} images`);
+    console.log(`Processing ${images.length} images for user ${userId}`);
 
-    // Step 3: Database operations
-    console.log('[STEP 3] Database operations...');
-    let credits = 10; // Default credits
+    // Default values
+    let credits = 10;
     let userRecord = null;
 
+    // Try to get user from database
     if (supabase) {
-      console.log('[DB] Supabase client available, fetching user...');
       try {
         // Get existing user
         const { data: existingUser, error: fetchError } = await supabase
@@ -133,31 +108,22 @@ export async function POST(request) {
           .eq('clerk_id', userId)
           .single();
 
-        console.log('[DB] User fetch result:', {
-          hasData: !!existingUser,
-          hasError: !!fetchError,
-          errorCode: fetchError?.code,
-          errorMessage: fetchError?.message
-        });
-
         if (existingUser) {
           userRecord = existingUser;
           const total = (existingUser.credits_total || 0) + (existingUser.bonus_credits || 0);
           const used = existingUser.credits_used || 0;
           credits = total - used;
-          console.log('[DB] Existing user found:', {
-            id: existingUser.id,
-            credits: { total, used, available: credits }
-          });
+          console.log('User found, credits available:', credits);
         } else if (fetchError?.code === 'PGRST116') {
-          // User not found, create new one
-          console.log('[DB] User not found, creating new user...');
+          // Create new user
+          console.log('Creating new user...');
           const newUserData = {
             id: generateId(),
             clerk_id: userId,
             credits_total: 10,
             credits_used: 0,
-            bonus_credits: 0
+            bonus_credits: 0,
+            created_at: new Date().toISOString()
           };
 
           const { data: newUser, error: createError } = await supabase
@@ -166,31 +132,21 @@ export async function POST(request) {
             .select()
             .single();
 
-          console.log('[DB] User creation result:', {
-            success: !!newUser,
-            hasError: !!createError,
-            errorMessage: createError?.message
-          });
-
           if (newUser) {
             userRecord = newUser;
             credits = 10;
+            console.log('New user created successfully');
+          } else {
+            console.error('Failed to create user:', createError);
           }
         }
-      } catch (dbError) {
-        console.error('[DB] Database error:', dbError);
-        console.log('[DB] Continuing without database...');
+      } catch (err) {
+        console.error('Database error:', err);
       }
-    } else {
-      console.log('[DB] No Supabase client, using defaults');
     }
 
-    // Step 4: Check credits
-    console.log('[STEP 4] Checking credits...');
-    console.log('[CREDITS]', { available: credits });
-    
+    // Check credits
     if (credits < 1) {
-      console.log('[CREDITS] Insufficient credits');
       return NextResponse.json({ 
         error: 'No credits remaining. Please purchase more credits.',
         success: false,
@@ -198,45 +154,36 @@ export async function POST(request) {
       }, { status: 402 });
     }
 
-    // Step 5: Generate analysis
-    console.log('[STEP 5] Generating analysis...');
+    // Generate analysis
     const analysis = getBasicAnalysis();
     const analysisId = generateId();
-    console.log('[ANALYSIS] Generated:', {
-      id: analysisId,
-      sku: analysis.sku
-    });
 
-    // Step 6: Save to database (optional)
+    // Save to database if possible
     if (supabase && userRecord) {
-      console.log('[STEP 6] Saving to database...');
       try {
         // Save analysis
-        const { error: saveError } = await supabase
-          .from('analyses')
-          .insert({
-            id: analysisId,
-            user_id: userRecord.id,
-            images_count: images.length,
-            brand: analysis.brand,
-            item_type: analysis.item_type,
-            condition_score: analysis.condition_score,
-            estimated_value_min: analysis.estimated_value_min,
-            estimated_value_max: analysis.estimated_value_max,
-            sku: analysis.sku,
-            ebay_title: analysis.ebay_title,
-            description: analysis.description,
-            metadata: {
-              size: analysis.size,
-              category: analysis.category,
-              suggested_price: analysis.suggested_price
-            }
-          });
+        const { error: saveError } = await supabase.from('analyses').insert({
+          id: analysisId,
+          user_id: userRecord.id,
+          images_count: images.length,
+          brand: analysis.brand,
+          item_type: analysis.item_type,
+          condition_score: analysis.condition_score,
+          estimated_value_min: analysis.estimated_value_min,
+          estimated_value_max: analysis.estimated_value_max,
+          sku: analysis.sku,
+          ebay_title: analysis.ebay_title,
+          description: analysis.description,
+          metadata: {
+            size: analysis.size,
+            category: analysis.category,
+            suggested_price: analysis.suggested_price,
+            created_at: new Date().toISOString()
+          }
+        });
 
         if (saveError) {
-          console.error('[DB] Analysis save error:', saveError);
-        } else {
-          console.log('[DB] Analysis saved successfully');
+          console.error('Analysis save error:', saveError);
         }
 
         // Update credits
@@ -248,21 +195,26 @@ export async function POST(request) {
           .eq('id', userRecord.id);
 
         if (updateError) {
-          console.error('[DB] Credits update error:', updateError);
-        } else {
-          console.log('[DB] Credits updated successfully');
+          console.error('Credits update error:', updateError);
         }
 
-      } catch (saveErr) {
-        console.error('[DB] Save operation error:', saveErr);
+        // Log credit usage
+        await supabase.from('credit_usage').insert({
+          user_id: userRecord.id,
+          credits_used: 1,
+          action: 'analysis',
+          analysis_id: analysisId,
+          created_at: new Date().toISOString()
+        });
+
+      } catch (err) {
+        console.error('Database operation error:', err);
       }
-    } else {
-      console.log('[STEP 6] Skipping database save (no client or user)');
     }
 
-    // Step 7: Return success
-    console.log('[STEP 7] Returning success response...');
-    const response = {
+    // Return success
+    console.log('Analysis complete:', analysisId);
+    return NextResponse.json({
       success: true,
       analysis: {
         id: analysisId,
@@ -270,24 +222,12 @@ export async function POST(request) {
         images_count: images.length,
         credits_remaining: Math.max(0, credits - 1)
       }
-    };
-
-    console.log('[RESPONSE] Success:', {
-      analysisId: response.analysis.id,
-      creditsRemaining: response.analysis.credits_remaining
     });
 
-    return NextResponse.json(response);
-
   } catch (error) {
-    console.error('\n=== UNEXPECTED ERROR ===');
-    console.error('Type:', error.constructor.name);
-    console.error('Message:', error.message);
-    console.error('Stack:', error.stack);
-    
+    console.error('Unexpected error:', error);
     return NextResponse.json({
-      error: 'Server error occurred',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      error: 'An error occurred while processing your request',
       success: false
     }, { status: 500 });
   }

@@ -1,5 +1,5 @@
 // app/dashboard/new-listing/page.js
-// DEBUG VERSION - Better error display
+// FIXED VERSION - With image compression to avoid 413 errors
 
 'use client';
 
@@ -12,7 +12,7 @@ export default function NewListingPage() {
   const [images, setImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
-  const [debugInfo, setDebugInfo] = useState({});
+  const [progress, setProgress] = useState('');
   const router = useRouter();
 
   const handleImageUpload = (e) => {
@@ -37,18 +37,62 @@ export default function NewListingPage() {
     setImages(images.filter(img => img.id !== id));
   };
 
-  const convertToBase64 = (file) => {
+  // Compress image before converting to base64
+  const compressImage = (file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const img = new Image();
+        
+        img.onload = () => {
+          // Calculate new dimensions
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > maxWidth) {
+              height = height * (maxWidth / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = width * (maxHeight / height);
+              height = maxHeight;
+            }
+          }
+          
+          // Create canvas for compression
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to base64 with compression
+          canvas.toBlob(
+            (blob) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      
+      reader.onerror = reject;
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = error => reject(error);
     });
   };
 
   const handleAnalyze = async () => {
-    console.log('=== STARTING ANALYSIS ===');
-    
     if (images.length === 0) {
       setError('Please upload at least one image');
       return;
@@ -56,81 +100,81 @@ export default function NewListingPage() {
 
     setIsAnalyzing(true);
     setError('');
-    setDebugInfo({});
+    setProgress('Compressing images...');
 
     try {
-      // Convert images to base64
-      console.log('Converting images to base64...');
-      const base64Images = await Promise.all(
-        images.map(img => convertToBase64(img.file))
-      );
-      console.log(`Converted ${base64Images.length} images`);
+      // Compress all images
+      const compressedImages = [];
+      let totalSize = 0;
+      
+      for (let i = 0; i < images.length; i++) {
+        setProgress(`Compressing image ${i + 1} of ${images.length}...`);
+        
+        try {
+          const compressed = await compressImage(images[i].file);
+          compressedImages.push(compressed);
+          
+          // Calculate size (base64 length * 3/4 for approximate bytes)
+          const sizeInBytes = (compressed.length * 3) / 4;
+          totalSize += sizeInBytes;
+          
+          // If total size is getting too large, compress more aggressively
+          if (totalSize > 3 * 1024 * 1024 && i < images.length - 1) { // 3MB limit
+            setProgress('Images too large, applying additional compression...');
+            // Re-compress remaining images with lower quality
+            for (let j = 0; j <= i; j++) {
+              const recompressed = await compressImage(images[j].file, 800, 800, 0.5);
+              compressedImages[j] = recompressed;
+            }
+            totalSize = compressedImages.reduce((sum, img) => sum + (img.length * 3) / 4, 0);
+          }
+        } catch (err) {
+          console.error(`Failed to compress image ${i + 1}:`, err);
+          throw new Error(`Failed to process image ${i + 1}`);
+        }
+      }
+
+      // Check final size
+      const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+      console.log(`Total payload size: ${totalSizeMB}MB`);
+      
+      if (totalSize > 4 * 1024 * 1024) { // 4MB limit
+        throw new Error(`Images too large (${totalSizeMB}MB). Please use fewer or smaller images.`);
+      }
+
+      setProgress('Analyzing images...');
 
       // Make API call
-      console.log('Calling /api/analyze-ai...');
-      const startTime = Date.now();
-      
       const response = await fetch('/api/analyze-ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          images: base64Images
+          images: compressedImages
         }),
       });
 
-      const responseTime = Date.now() - startTime;
-      console.log(`API responded in ${responseTime}ms with status: ${response.status}`);
-
-      // Get response data
       const data = await response.json();
-      console.log('API Response:', data);
-
-      // Update debug info
-      setDebugInfo({
-        status: response.status,
-        ok: response.ok,
-        responseTime: `${responseTime}ms`,
-        success: data.success,
-        hasAnalysis: !!data.analysis,
-        error: data.error,
-        details: data.details
-      });
-
-      // Check response
+      
       if (!response.ok) {
         throw new Error(data.error || `Server error: ${response.status}`);
       }
 
       if (!data.success || !data.analysis) {
-        throw new Error('Invalid response structure - missing analysis data');
+        throw new Error('Invalid response from server');
       }
 
       // Success - store and navigate
-      console.log('Success! Storing result and navigating...');
       sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
       router.push('/dashboard/listing-results');
 
     } catch (err) {
-      console.error('=== ANALYSIS ERROR ===');
-      console.error('Error:', err);
-      
-      // Set detailed error message
-      let errorMessage = err.message || 'Failed to analyze images';
-      
-      // Add more context based on error type
-      if (err.message.includes('fetch')) {
-        errorMessage = 'Network error - could not reach server';
-      } else if (err.message.includes('401')) {
-        errorMessage = 'Authentication error - please sign in again';
-      } else if (err.message.includes('402')) {
-        errorMessage = 'No credits remaining - please purchase more';
-      }
-      
-      setError(errorMessage);
+      console.error('Analysis error:', err);
+      setError(err.message || 'Failed to analyze images. Please try again.');
     } finally {
       setIsAnalyzing(false);
+      setProgress('');
     }
   };
 
@@ -148,16 +192,15 @@ export default function NewListingPage() {
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="text-red-700 font-medium">Error: {error}</div>
-          {Object.keys(debugInfo).length > 0 && (
-            <details className="mt-2">
-              <summary className="text-sm text-red-600 cursor-pointer">Debug Info</summary>
-              <pre className="mt-2 text-xs bg-red-100 p-2 rounded overflow-auto">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </details>
-          )}
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      {/* Progress Message */}
+      {progress && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
+          {progress}
         </div>
       )}
 
@@ -166,7 +209,7 @@ export default function NewListingPage() {
         <div className="mb-4">
           <h2 className="text-lg font-medium mb-2">Upload Images</h2>
           <p className="text-sm text-gray-600">
-            Upload up to 24 images of your item. The AI will analyze them to create your listing.
+            Upload up to 24 images of your item. Large images will be automatically compressed.
           </p>
         </div>
 
@@ -189,6 +232,9 @@ export default function NewListingPage() {
           >
             Select Images
           </label>
+          <p className="text-xs text-gray-500 mt-2">
+            Maximum 24 images • JPEG, PNG supported
+          </p>
         </div>
 
         {/* Image Preview Grid */}
@@ -220,38 +266,27 @@ export default function NewListingPage() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between">
         <Link
           href="/dashboard"
           className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
         >
           Cancel
         </Link>
-        <div className="flex items-center gap-4">
-          {/* Test API Button */}
-          <Link
-            href="/api/test"
-            target="_blank"
-            className="text-sm text-blue-600 hover:underline"
-          >
-            Test API Connection
-          </Link>
-          
-          <button
-            onClick={handleAnalyze}
-            disabled={images.length === 0 || isAnalyzing}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {isAnalyzing ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              'Analyze Images'
-            )}
-          </button>
-        </div>
+        <button
+          onClick={handleAnalyze}
+          disabled={images.length === 0 || isAnalyzing}
+          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {isAnalyzing ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {progress || 'Analyzing...'}
+            </>
+          ) : (
+            'Analyze Images'
+          )}
+        </button>
       </div>
     </div>
   );
