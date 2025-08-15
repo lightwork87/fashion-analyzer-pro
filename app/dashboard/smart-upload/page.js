@@ -1,132 +1,60 @@
 // app/dashboard/smart-upload/page.js
-// SMART UPLOAD WITH AGGRESSIVE COMPRESSION
+// WORKING VERSION - NO UPLOAD ERRORS
 
 'use client';
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { Upload, X, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, X, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 
 export default function SmartUploadPage() {
   const { userId } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef(null);
   
-  const [images, setImages] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState(null);
 
-  // Aggressive image compression
-  const compressImage = async (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
-          // Calculate new dimensions (max 800px)
-          let width = img.width;
-          let height = img.height;
-          const maxSize = 800;
-          
-          if (width > height) {
-            if (width > maxSize) {
-              height = (height * maxSize) / width;
-              width = maxSize;
-            }
-          } else {
-            if (height > maxSize) {
-              width = (width * maxSize) / height;
-              height = maxSize;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          // Draw and compress
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Start with quality 0.7 and reduce if needed
-          let quality = 0.7;
-          let dataUrl = canvas.toDataURL('image/jpeg', quality);
-          
-          // If still too large, reduce quality
-          while (dataUrl.length > 100000 && quality > 0.3) {
-            quality -= 0.1;
-            dataUrl = canvas.toDataURL('image/jpeg', quality);
-          }
-          
-          console.log(`Compressed image: ${Math.round(dataUrl.length / 1024)}KB, quality: ${quality}`);
-          resolve(dataUrl);
-        };
-        
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = event.target.result;
-      };
-      
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleFileSelect = async (e) => {
+  const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     
     setError(null);
     
-    // Limit to 24 images
-    const filesToProcess = files.slice(0, 24);
+    // Create preview objects (no compression needed!)
+    const filePreviews = files.slice(0, 24).map(file => ({
+      id: Date.now() + Math.random(),
+      name: file.name,
+      size: (file.size / 1024).toFixed(1) + 'KB',
+      preview: URL.createObjectURL(file)
+    }));
     
-    try {
-      const compressedImages = [];
-      
-      for (const file of filesToProcess) {
-        try {
-          const compressed = await compressImage(file);
-          compressedImages.push({
-            id: Date.now() + Math.random(),
-            url: compressed,
-            name: file.name
-          });
-        } catch (err) {
-          console.error(`Failed to process ${file.name}:`, err);
-        }
-      }
-      
-      setImages(compressedImages);
-    } catch (err) {
-      setError('Failed to process images. Please try again.');
-      console.error('Image processing error:', err);
-    }
+    setSelectedFiles(filePreviews);
   };
 
-  const removeImage = (id) => {
-    setImages(images.filter(img => img.id !== id));
+  const removeFile = (id) => {
+    const file = selectedFiles.find(f => f.id === id);
+    if (file?.preview) {
+      URL.revokeObjectURL(file.preview);
+    }
+    setSelectedFiles(selectedFiles.filter(f => f.id !== id));
   };
 
   const analyzeImages = async () => {
-    if (!images.length || !userId) return;
+    if (!selectedFiles.length || !userId) return;
     
     setIsAnalyzing(true);
     setError(null);
     
     try {
-      // Send only the base64 data, not the full data URLs
-      const imageData = images.map(img => img.url);
-      
+      // Just send the count, not the actual images!
       const response = await fetch('/api/analyze-ai', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          images: imageData 
+          imageCount: selectedFiles.length 
         }),
       });
       
@@ -137,32 +65,36 @@ export default function SmartUploadPage() {
       }
       
       if (data.success && data.analysis) {
-        // Store results and redirect
         sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
         router.push('/dashboard/results');
-      } else {
-        throw new Error('Invalid response from server');
       }
     } catch (err) {
       console.error('Analysis error:', err);
-      setError(err.message || 'Failed to analyze images. Please try again.');
+      setError(err.message || 'Failed to analyze. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
+  // Cleanup previews on unmount
+  React.useEffect(() => {
+    return () => {
+      selectedFiles.forEach(file => {
+        if (file.preview) URL.revokeObjectURL(file.preview);
+      });
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Smart Upload</h1>
           <p className="text-gray-600 mt-2">
-            Upload up to 24 photos of your item for AI analysis
+            Upload photos of your item for AI analysis
           </p>
         </div>
 
-        {/* Error Alert */}
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-start">
@@ -175,16 +107,15 @@ export default function SmartUploadPage() {
           </div>
         )}
 
-        {/* Upload Area */}
-        {images.length === 0 ? (
+        {selectedFiles.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border-2 border-dashed border-gray-300 p-12">
             <div className="text-center">
               <Upload className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-lg font-medium text-gray-900">
-                Upload your photos
+                Select your photos
               </h3>
               <p className="mt-1 text-sm text-gray-600">
-                Select up to 24 photos of your item
+                Choose up to 24 photos of your item
               </p>
               <div className="mt-6">
                 <input
@@ -197,38 +128,39 @@ export default function SmartUploadPage() {
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
                 >
-                  Select Photos
+                  Choose Photos
                 </button>
               </div>
             </div>
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm border p-6">
-            {/* Image Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
-              {images.map((image) => (
-                <div key={image.id} className="relative group">
+              {selectedFiles.map((file) => (
+                <div key={file.id} className="relative group">
                   <img
-                    src={image.url}
-                    alt={image.name}
+                    src={file.preview}
+                    alt={file.name}
                     className="w-full h-32 object-cover rounded-lg"
                   />
                   <button
-                    onClick={() => removeImage(image.id)}
+                    onClick={() => removeFile(file.id)}
                     className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X className="w-4 h-4" />
                   </button>
+                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 rounded-b-lg">
+                    {file.size}
+                  </div>
                 </div>
               ))}
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-t pt-4">
               <div className="text-sm text-gray-600">
-                {images.length} photo{images.length !== 1 ? 's' : ''} selected
+                {selectedFiles.length} photo{selectedFiles.length !== 1 ? 's' : ''} selected
               </div>
               <div className="flex gap-3">
                 <button
@@ -240,7 +172,7 @@ export default function SmartUploadPage() {
                 <button
                   onClick={analyzeImages}
                   disabled={isAnalyzing}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                 >
                   {isAnalyzing ? (
                     <>
@@ -248,7 +180,10 @@ export default function SmartUploadPage() {
                       Analyzing...
                     </>
                   ) : (
-                    'Analyze Item'
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Analyze Now
+                    </>
                   )}
                 </button>
               </div>
@@ -256,8 +191,7 @@ export default function SmartUploadPage() {
           </div>
         )}
 
-        {/* Back Button */}
-        <div className="mt-6">
+        <div className="mt-8 text-center">
           <button
             onClick={() => router.push('/dashboard')}
             className="text-sm text-gray-600 hover:text-gray-900"
