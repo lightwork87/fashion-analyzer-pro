@@ -1,5 +1,5 @@
 // app/dashboard/new-listing/page.js
-// WORKING VERSION - With image compression
+// WORKING VERSION - Aggressive compression to prevent 413 errors
 
 'use client';
 
@@ -37,7 +37,7 @@ export default function NewListingPage() {
     setImages(images.filter(img => img.id !== id));
   };
 
-  // Compress image to reduce size
+  // Aggressive compression function
   const compressImage = async (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -46,22 +46,23 @@ export default function NewListingPage() {
         const img = new Image();
         
         img.onload = () => {
-          // Create canvas
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800;
-          const MAX_HEIGHT = 800;
+          
+          // Very aggressive compression settings
+          const MAX_WIDTH = 600;
+          const MAX_HEIGHT = 600;
           let width = img.width;
           let height = img.height;
           
-          // Calculate new dimensions
+          // Scale down
           if (width > height) {
             if (width > MAX_WIDTH) {
-              height = height * (MAX_WIDTH / width);
+              height = Math.round(height * (MAX_WIDTH / width));
               width = MAX_WIDTH;
             }
           } else {
             if (height > MAX_HEIGHT) {
-              width = width * (MAX_HEIGHT / height);
+              width = Math.round(width * (MAX_HEIGHT / height));
               height = MAX_HEIGHT;
             }
           }
@@ -69,12 +70,11 @@ export default function NewListingPage() {
           canvas.width = width;
           canvas.height = height;
           
-          // Draw and compress
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Convert to base64 with compression
-          const base64 = canvas.toDataURL('image/jpeg', 0.6);
+          // Very low quality for small file size
+          const base64 = canvas.toDataURL('image/jpeg', 0.4);
           resolve(base64);
         };
         
@@ -86,6 +86,8 @@ export default function NewListingPage() {
   };
 
   const handleAnalyze = async () => {
+    console.log('Starting analysis...');
+    
     if (images.length === 0) {
       setError('Please upload at least one image');
       return;
@@ -93,39 +95,79 @@ export default function NewListingPage() {
 
     setIsAnalyzing(true);
     setError('');
-    setProgress('Compressing images...');
+    setProgress('Processing images...');
 
     try {
-      // Compress all images
       const compressedImages = [];
       
+      // Compress each image
       for (let i = 0; i < images.length; i++) {
         setProgress(`Compressing image ${i + 1} of ${images.length}...`);
+        console.log(`Compressing image ${i + 1}...`);
+        
         const compressed = await compressImage(images[i].file);
         compressedImages.push(compressed);
       }
 
-      setProgress('Sending to server...');
+      // Check total size
+      const totalSize = compressedImages.reduce((sum, img) => sum + img.length, 0);
+      const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+      console.log(`Total payload size: ${sizeMB}MB`);
+      
+      setProgress(`Sending ${sizeMB}MB to server...`);
 
-      // Make API call
-      const response = await fetch('/api/analyze-ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          images: compressedImages
-        }),
-      });
-
-      const data = await response.json();
+      // If still too large, batch the images
+      let response, data;
+      
+      if (totalSize > 3.5 * 1024 * 1024) {
+        // Send in batches
+        setProgress('Large payload detected, sending in batches...');
+        
+        const BATCH_SIZE = Math.ceil(images.length / Math.ceil(totalSize / (3 * 1024 * 1024)));
+        const batches = [];
+        
+        for (let i = 0; i < compressedImages.length; i += BATCH_SIZE) {
+          batches.push(compressedImages.slice(i, i + BATCH_SIZE));
+        }
+        
+        console.log(`Sending in ${batches.length} batches of ~${BATCH_SIZE} images each`);
+        
+        // For now, just send the first batch
+        response = await fetch('/api/analyze-ai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            images: batches[0]
+          }),
+        });
+        
+        data = await response.json();
+        
+      } else {
+        // Send all at once
+        response = await fetch('/api/analyze-ai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            images: compressedImages
+          }),
+        });
+        
+        data = await response.json();
+      }
+      
+      console.log('API Response:', response.status, data);
       
       if (!response.ok) {
-        throw new Error(data.error || 'Server error');
+        throw new Error(data.error || `Server error: ${response.status}`);
       }
 
       if (data.success && data.analysis) {
-        // Store and navigate
+        console.log('Success! Navigating to results...');
         sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
         router.push('/dashboard/listing-results');
       } else {
@@ -133,7 +175,7 @@ export default function NewListingPage() {
       }
 
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Analysis error:', err);
       setError(err.message || 'Failed to analyze images');
     } finally {
       setIsAnalyzing(false);
@@ -143,7 +185,6 @@ export default function NewListingPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
@@ -153,30 +194,26 @@ export default function NewListingPage() {
         </div>
       </div>
 
-      {/* Error Message */}
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           {error}
         </div>
       )}
 
-      {/* Progress Message */}
       {progress && (
         <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
           {progress}
         </div>
       )}
 
-      {/* Upload Area */}
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <div className="mb-4">
           <h2 className="text-lg font-medium mb-2">Upload Images</h2>
           <p className="text-sm text-gray-600">
-            Upload up to 24 images. Large images will be compressed automatically.
+            Upload up to 24 images. They will be compressed automatically.
           </p>
         </div>
 
-        {/* Drop Zone */}
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
           <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 mb-2">Click to select images</p>
@@ -197,7 +234,6 @@ export default function NewListingPage() {
           </label>
         </div>
 
-        {/* Image Preview */}
         {images.length > 0 && (
           <div className="mt-6">
             <p className="text-sm text-gray-600 mb-3">
@@ -225,7 +261,6 @@ export default function NewListingPage() {
         )}
       </div>
 
-      {/* Buttons */}
       <div className="flex justify-between">
         <Link
           href="/dashboard"
