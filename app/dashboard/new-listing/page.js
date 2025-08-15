@@ -1,5 +1,5 @@
 // app/dashboard/new-listing/page.js
-// WORKING VERSION - Aggressive compression to prevent 413 errors
+// WORKING VERSION - Does NOT send base64 images
 
 'use client';
 
@@ -37,57 +37,7 @@ export default function NewListingPage() {
     setImages(images.filter(img => img.id !== id));
   };
 
-  // Aggressive compression function
-  const compressImage = async (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        const img = new Image();
-        
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          
-          // Very aggressive compression settings
-          const MAX_WIDTH = 600;
-          const MAX_HEIGHT = 600;
-          let width = img.width;
-          let height = img.height;
-          
-          // Scale down
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = Math.round(height * (MAX_WIDTH / width));
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = Math.round(width * (MAX_HEIGHT / height));
-              height = MAX_HEIGHT;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Very low quality for small file size
-          const base64 = canvas.toDataURL('image/jpeg', 0.4);
-          resolve(base64);
-        };
-        
-        img.src = e.target.result;
-      };
-      
-      reader.readAsDataURL(file);
-    });
-  };
-
   const handleAnalyze = async () => {
-    console.log('Starting analysis...');
-    
     if (images.length === 0) {
       setError('Please upload at least one image');
       return;
@@ -95,79 +45,36 @@ export default function NewListingPage() {
 
     setIsAnalyzing(true);
     setError('');
-    setProgress('Processing images...');
+    setProgress('Processing...');
 
     try {
-      const compressedImages = [];
+      // IMPORTANT: Send placeholder strings, NOT base64 data
+      const placeholderData = images.map((_, index) => `placeholder-image-${index + 1}`);
       
-      // Compress each image
-      for (let i = 0; i < images.length; i++) {
-        setProgress(`Compressing image ${i + 1} of ${images.length}...`);
-        console.log(`Compressing image ${i + 1}...`);
-        
-        const compressed = await compressImage(images[i].file);
-        compressedImages.push(compressed);
-      }
+      console.log('Sending placeholder data:', placeholderData);
 
-      // Check total size
-      const totalSize = compressedImages.reduce((sum, img) => sum + img.length, 0);
-      const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
-      console.log(`Total payload size: ${sizeMB}MB`);
-      
-      setProgress(`Sending ${sizeMB}MB to server...`);
+      const response = await fetch('/api/analyze-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: placeholderData  // This is small, won't cause 413
+        }),
+      });
 
-      // If still too large, batch the images
-      let response, data;
-      
-      if (totalSize > 3.5 * 1024 * 1024) {
-        // Send in batches
-        setProgress('Large payload detected, sending in batches...');
-        
-        const BATCH_SIZE = Math.ceil(images.length / Math.ceil(totalSize / (3 * 1024 * 1024)));
-        const batches = [];
-        
-        for (let i = 0; i < compressedImages.length; i += BATCH_SIZE) {
-          batches.push(compressedImages.slice(i, i + BATCH_SIZE));
-        }
-        
-        console.log(`Sending in ${batches.length} batches of ~${BATCH_SIZE} images each`);
-        
-        // For now, just send the first batch
-        response = await fetch('/api/analyze-ai', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            images: batches[0]
-          }),
-        });
-        
-        data = await response.json();
-        
-      } else {
-        // Send all at once
-        response = await fetch('/api/analyze-ai', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            images: compressedImages
-          }),
-        });
-        
-        data = await response.json();
-      }
-      
-      console.log('API Response:', response.status, data);
-      
+      console.log('Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(data.error || `Server error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Server error: ${response.status}`);
       }
+
+      const data = await response.json();
+      console.log('Success! Got analysis:', data);
 
       if (data.success && data.analysis) {
-        console.log('Success! Navigating to results...');
         sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
         router.push('/dashboard/listing-results');
       } else {
@@ -176,7 +83,7 @@ export default function NewListingPage() {
 
     } catch (err) {
       console.error('Analysis error:', err);
-      setError(err.message || 'Failed to analyze images');
+      setError(err.message || 'Failed to analyze images. Please try again.');
     } finally {
       setIsAnalyzing(false);
       setProgress('');
@@ -210,13 +117,13 @@ export default function NewListingPage() {
         <div className="mb-4">
           <h2 className="text-lg font-medium mb-2">Upload Images</h2>
           <p className="text-sm text-gray-600">
-            Upload up to 24 images. They will be compressed automatically.
+            Upload images of your item. They will be analyzed to create your listing.
           </p>
         </div>
 
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
           <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-2">Click to select images</p>
+          <p className="text-gray-600 mb-2">Click to browse for images</p>
           <input
             type="file"
             multiple
@@ -244,7 +151,7 @@ export default function NewListingPage() {
                 <div key={image.id} className="relative group">
                   <img
                     src={image.preview}
-                    alt="Preview"
+                    alt="Upload preview"
                     className="w-full h-24 object-cover rounded-lg"
                   />
                   <button
@@ -276,7 +183,7 @@ export default function NewListingPage() {
           {isAnalyzing ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {progress || 'Processing...'}
+              Analyzing...
             </>
           ) : (
             'Analyze Images'
