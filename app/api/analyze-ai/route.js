@@ -3,7 +3,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 import { createClient } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -287,6 +286,14 @@ function generateSKU(analysis) {
   return `${brandPrefix}${typePrefix}${randomNum}`;
 }
 
+// Generate unique ID without uuid package
+function generateUniqueId() {
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 15);
+  const randomPart2 = Math.random().toString(36).substring(2, 15);
+  return `${timestamp}-${randomPart}-${randomPart2}`;
+}
+
 // Main API route handler
 export async function POST(request) {
   try {
@@ -330,7 +337,7 @@ export async function POST(request) {
     const analysisResult = await performAnalysis(images);
 
     // Save analysis to database
-    const analysisId = uuidv4();
+    const analysisId = generateUniqueId();
     const { error: insertError } = await supabase
       .from('analyses')
       .insert({
