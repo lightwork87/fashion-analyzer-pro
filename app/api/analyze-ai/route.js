@@ -1,20 +1,16 @@
 // app/api/analyze-ai/route.js
-// OPTIMIZED VERSION - Handles request size limits
+// EDGE VERSION - Can handle larger requests
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 import { createClient } from '@supabase/supabase-js';
 
-// Configure route to handle larger requests (up to 4.5MB)
-export const runtime = 'nodejs';
-export const maxDuration = 30; // 30 seconds timeout
+// Use Edge Runtime for better limits
+export const runtime = 'edge';
 
 // Initialize Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey 
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
 
 // Generate unique ID
 function generateId() {
@@ -49,11 +45,11 @@ function getBasicAnalysis() {
 }
 
 export async function POST(request) {
-  console.log('Analyze API called at:', new Date().toISOString());
-  
   try {
-    // Check auth
-    const { userId } = auth();
+    // Get auth in Edge-compatible way
+    const authResult = auth();
+    const userId = authResult?.userId;
+    
     if (!userId) {
       return NextResponse.json({ 
         error: 'Please sign in to continue',
@@ -61,28 +57,8 @@ export async function POST(request) {
       }, { status: 401 });
     }
 
-    // Parse body with size check
-    let body;
-    try {
-      const contentLength = request.headers.get('content-length');
-      console.log('Request size:', contentLength, 'bytes');
-      
-      if (contentLength && parseInt(contentLength) > 4.5 * 1024 * 1024) {
-        return NextResponse.json({ 
-          error: 'Request too large. Please use fewer or smaller images.',
-          success: false 
-        }, { status: 413 });
-      }
-      
-      body = await request.json();
-    } catch (parseError) {
-      console.error('Body parse error:', parseError);
-      return NextResponse.json({ 
-        error: 'Invalid request format',
-        success: false 
-      }, { status: 400 });
-    }
-
+    // Parse body
+    const body = await request.json();
     const { images } = body || {};
 
     if (!images || !Array.isArray(images) || images.length === 0) {
@@ -92,63 +68,37 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    console.log(`Processing ${images.length} images for user ${userId}`);
+    console.log(`Processing ${images.length} images`);
 
-    // Default values
+    // For Edge runtime, we'll use a simpler approach
     let credits = 10;
-    let userRecord = null;
-
-    // Try to get user from database
-    if (supabase) {
+    
+    // If Supabase is configured, try to check credits
+    if (supabaseUrl && supabaseKey) {
       try {
-        // Get existing user
-        const { data: existingUser, error: fetchError } = await supabase
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        // Check user
+        const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('clerk_id', userId)
           .single();
-
-        if (existingUser) {
-          userRecord = existingUser;
-          const total = (existingUser.credits_total || 0) + (existingUser.bonus_credits || 0);
-          const used = existingUser.credits_used || 0;
+          
+        if (userData) {
+          const total = (userData.credits_total || 0) + (userData.bonus_credits || 0);
+          const used = userData.credits_used || 0;
           credits = total - used;
-          console.log('User found, credits available:', credits);
-        } else if (fetchError?.code === 'PGRST116') {
-          // Create new user
-          console.log('Creating new user...');
-          const newUserData = {
-            id: generateId(),
-            clerk_id: userId,
-            credits_total: 10,
-            credits_used: 0,
-            bonus_credits: 0,
-            created_at: new Date().toISOString()
-          };
-
-          const { data: newUser, error: createError } = await supabase
-            .from('users')
-            .insert(newUserData)
-            .select()
-            .single();
-
-          if (newUser) {
-            userRecord = newUser;
-            credits = 10;
-            console.log('New user created successfully');
-          } else {
-            console.error('Failed to create user:', createError);
-          }
         }
       } catch (err) {
-        console.error('Database error:', err);
+        console.error('Supabase error:', err);
       }
     }
 
     // Check credits
     if (credits < 1) {
       return NextResponse.json({ 
-        error: 'No credits remaining. Please purchase more credits.',
+        error: 'No credits remaining',
         success: false,
         credits_remaining: 0
       }, { status: 402 });
@@ -158,62 +108,7 @@ export async function POST(request) {
     const analysis = getBasicAnalysis();
     const analysisId = generateId();
 
-    // Save to database if possible
-    if (supabase && userRecord) {
-      try {
-        // Save analysis
-        const { error: saveError } = await supabase.from('analyses').insert({
-          id: analysisId,
-          user_id: userRecord.id,
-          images_count: images.length,
-          brand: analysis.brand,
-          item_type: analysis.item_type,
-          condition_score: analysis.condition_score,
-          estimated_value_min: analysis.estimated_value_min,
-          estimated_value_max: analysis.estimated_value_max,
-          sku: analysis.sku,
-          ebay_title: analysis.ebay_title,
-          description: analysis.description,
-          metadata: {
-            size: analysis.size,
-            category: analysis.category,
-            suggested_price: analysis.suggested_price,
-            created_at: new Date().toISOString()
-          }
-        });
-
-        if (saveError) {
-          console.error('Analysis save error:', saveError);
-        }
-
-        // Update credits
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({ 
-            credits_used: (userRecord.credits_used || 0) + 1 
-          })
-          .eq('id', userRecord.id);
-
-        if (updateError) {
-          console.error('Credits update error:', updateError);
-        }
-
-        // Log credit usage
-        await supabase.from('credit_usage').insert({
-          user_id: userRecord.id,
-          credits_used: 1,
-          action: 'analysis',
-          analysis_id: analysisId,
-          created_at: new Date().toISOString()
-        });
-
-      } catch (err) {
-        console.error('Database operation error:', err);
-      }
-    }
-
     // Return success
-    console.log('Analysis complete:', analysisId);
     return NextResponse.json({
       success: true,
       analysis: {
@@ -225,9 +120,9 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('Error:', error);
     return NextResponse.json({
-      error: 'An error occurred while processing your request',
+      error: 'Server error',
       success: false
     }, { status: 500 });
   }
