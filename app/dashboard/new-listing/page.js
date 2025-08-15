@@ -1,22 +1,23 @@
 // app/dashboard/new-listing/page.js
+// DEBUG VERSION - Better error display
 
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Upload, X, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { ArrowLeft, Upload, X, Loader2 } from 'lucide-react';
 
 export default function NewListingPage() {
   const [images, setImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState({});
   const router = useRouter();
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     
-    // Limit to 24 images
     if (images.length + files.length > 24) {
       setError('Maximum 24 images allowed per listing');
       return;
@@ -46,6 +47,8 @@ export default function NewListingPage() {
   };
 
   const handleAnalyze = async () => {
+    console.log('=== STARTING ANALYSIS ===');
+    
     if (images.length === 0) {
       setError('Please upload at least one image');
       return;
@@ -53,14 +56,20 @@ export default function NewListingPage() {
 
     setIsAnalyzing(true);
     setError('');
+    setDebugInfo({});
 
     try {
-      // Convert all images to base64
+      // Convert images to base64
+      console.log('Converting images to base64...');
       const base64Images = await Promise.all(
         images.map(img => convertToBase64(img.file))
       );
+      console.log(`Converted ${base64Images.length} images`);
 
-      // Call the analyze API
+      // Make API call
+      console.log('Calling /api/analyze-ai...');
+      const startTime = Date.now();
+      
       const response = await fetch('/api/analyze-ai', {
         method: 'POST',
         headers: {
@@ -71,26 +80,55 @@ export default function NewListingPage() {
         }),
       });
 
+      const responseTime = Date.now() - startTime;
+      console.log(`API responded in ${responseTime}ms with status: ${response.status}`);
+
+      // Get response data
       const data = await response.json();
       console.log('API Response:', data);
 
+      // Update debug info
+      setDebugInfo({
+        status: response.status,
+        ok: response.ok,
+        responseTime: `${responseTime}ms`,
+        success: data.success,
+        hasAnalysis: !!data.analysis,
+        error: data.error,
+        details: data.details
+      });
+
+      // Check response
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to analyze images');
+        throw new Error(data.error || `Server error: ${response.status}`);
       }
 
-      if (data.success && data.analysis) {
-        // Store the analysis result in sessionStorage
-        sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
-        
-        // Navigate to the results page
-        router.push('/dashboard/listing-results');
-      } else {
-        throw new Error('Invalid response from server');
+      if (!data.success || !data.analysis) {
+        throw new Error('Invalid response structure - missing analysis data');
       }
+
+      // Success - store and navigate
+      console.log('Success! Storing result and navigating...');
+      sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
+      router.push('/dashboard/listing-results');
 
     } catch (err) {
-      console.error('Analysis error:', err);
-      setError(err.message || 'Failed to analyze images. Please try again.');
+      console.error('=== ANALYSIS ERROR ===');
+      console.error('Error:', err);
+      
+      // Set detailed error message
+      let errorMessage = err.message || 'Failed to analyze images';
+      
+      // Add more context based on error type
+      if (err.message.includes('fetch')) {
+        errorMessage = 'Network error - could not reach server';
+      } else if (err.message.includes('401')) {
+        errorMessage = 'Authentication error - please sign in again';
+      } else if (err.message.includes('402')) {
+        errorMessage = 'No credits remaining - please purchase more';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsAnalyzing(false);
     }
@@ -110,8 +148,16 @@ export default function NewListingPage() {
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          {error}
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="text-red-700 font-medium">Error: {error}</div>
+          {Object.keys(debugInfo).length > 0 && (
+            <details className="mt-2">
+              <summary className="text-sm text-red-600 cursor-pointer">Debug Info</summary>
+              <pre className="mt-2 text-xs bg-red-100 p-2 rounded overflow-auto">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </details>
+          )}
         </div>
       )}
 
@@ -127,7 +173,7 @@ export default function NewListingPage() {
         {/* Drop Zone */}
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
           <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-2">Drag and drop images here, or click to browse</p>
+          <p className="text-gray-600 mb-2">Click to browse for images</p>
           <input
             type="file"
             multiple
@@ -139,7 +185,7 @@ export default function NewListingPage() {
           />
           <label
             htmlFor="image-upload"
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Select Images
           </label>
@@ -174,27 +220,38 @@ export default function NewListingPage() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex justify-between">
+      <div className="flex justify-between items-center">
         <Link
           href="/dashboard"
           className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
         >
           Cancel
         </Link>
-        <button
-          onClick={handleAnalyze}
-          disabled={images.length === 0 || isAnalyzing}
-          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {isAnalyzing ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Analyzing...
-            </>
-          ) : (
-            'Analyze Images'
-          )}
-        </button>
+        <div className="flex items-center gap-4">
+          {/* Test API Button */}
+          <Link
+            href="/api/test"
+            target="_blank"
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Test API Connection
+          </Link>
+          
+          <button
+            onClick={handleAnalyze}
+            disabled={images.length === 0 || isAnalyzing}
+            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              'Analyze Images'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
