@@ -1,5 +1,5 @@
-// app/dashboard/listing/[id]/ebay/page.js
-// EBAY LISTING PAGE
+// app/dashboard/listings/[id]/ebay/page.js
+// EBAY LISTING PAGE - CORRECTED PATH
 
 'use client';
 

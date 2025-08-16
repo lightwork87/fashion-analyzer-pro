@@ -323,13 +323,13 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Link
-                        href={`/dashboard/listing/${analysis.id}/ebay`}
+                        href={`/dashboard/listings/${analysis.id}/ebay`}
                         className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
                       >
                         List on eBay
                       </Link>
                       <Link
-                        href={`/dashboard/listing/${analysis.id}/vinted`}
+                        href={`/dashboard/listings/${analysis.id}/vinted`}
                         className="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
                       >
                         List on Vinted

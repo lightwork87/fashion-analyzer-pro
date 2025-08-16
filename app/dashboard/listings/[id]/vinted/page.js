@@ -1,5 +1,5 @@
-// app/dashboard/listing/[id]/vinted/page.js
-// VINTED EXPORT PAGE
+// app/dashboard/listings/[id]/vinted/page.js
+// VINTED EXPORT PAGE - CORRECTED PATH
 
 'use client';
 
