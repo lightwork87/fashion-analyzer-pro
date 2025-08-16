@@ -1,5 +1,5 @@
 // app/dashboard/listings/[id]/ebay/page.js
-// EBAY LISTING PAGE - CORRECTED PATH
+// EBAY LISTING PAGE - FIXED SYNTAX
 
 'use client';
 
@@ -85,7 +85,6 @@ export default function EbayListingPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
           <Link
             href={`/dashboard/results?id=${params.id}`}
@@ -101,9 +100,7 @@ export default function EbayListingPage() {
           </p>
         </div>
 
-        {/* eBay Listing Details */}
         <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-          {/* Title */}
           <div className="mb-6">
             <div className="flex items-start justify-between mb-2">
               <div className="flex-1">
@@ -130,7 +127,6 @@ export default function EbayListingPage() {
             </div>
           </div>
 
-          {/* Category */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Category
@@ -138,7 +134,6 @@ export default function EbayListingPage() {
             <p className="text-gray-900">{analysis.category}</p>
           </div>
 
-          {/* Item Specifics */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Item Specifics
@@ -171,7 +166,6 @@ export default function EbayListingPage() {
             </div>
           </div>
 
-          {/* Price */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Starting Price
@@ -186,7 +180,6 @@ export default function EbayListingPage() {
             </div>
           </div>
 
-          {/* Description */}
           <div className="mb-6">
             <div className="flex items-start justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">
@@ -210,7 +203,6 @@ export default function EbayListingPage() {
             </div>
           </div>
 
-          {/* SKU */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               SKU (Custom Label)
@@ -219,7 +211,6 @@ export default function EbayListingPage() {
           </div>
         </div>
 
-        {/* eBay Listing Tips */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
           <h3 className="font-semibold text-blue-900 mb-3">eBay UK Listing Tips</h3>
           <ul className="space-y-2 text-sm text-blue-800">
@@ -231,23 +222,14 @@ export default function EbayListingPage() {
           </ul>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex gap-4">
-          
-            href="https://www.ebay.co.uk/sl/sell"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
+          <a href="https://www.ebay.co.uk/sl/sell" target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
             <ShoppingBag className="w-5 h-5" />
             Open eBay Sell Form
             <ExternalLink className="w-4 h-4" />
           </a>
           
-          <Link
-            href="/dashboard"
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-          >
+          <Link href="/dashboard" className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
             Back to Dashboard
           </Link>
         </div>

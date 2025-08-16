@@ -1,5 +1,5 @@
 // app/dashboard/listings/[id]/vinted/page.js
-// VINTED EXPORT PAGE - CORRECTED PATH
+// VINTED EXPORT PAGE - FIXED SYNTAX
 
 'use client';
 
@@ -54,7 +54,6 @@ export default function VintedListingPage() {
   };
 
   const generateVintedTitle = () => {
-    // Vinted titles are usually shorter and more casual
     return `${analysis.brand} ${analysis.item_type} ${analysis.color} Size ${analysis.size}`.trim();
   };
 
@@ -105,7 +104,6 @@ Feel free to ask any questions! 😊`;
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
           <Link
             href={`/dashboard/results?id=${params.id}`}
@@ -121,9 +119,7 @@ Feel free to ask any questions! 😊`;
           </p>
         </div>
 
-        {/* Vinted Listing Details */}
         <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-          {/* Title */}
           <div className="mb-6">
             <div className="flex items-start justify-between mb-2">
               <div className="flex-1">
@@ -147,7 +143,6 @@ Feel free to ask any questions! 😊`;
             </div>
           </div>
 
-          {/* Category & Brand */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -163,7 +158,6 @@ Feel free to ask any questions! 😊`;
             </div>
           </div>
 
-          {/* Size & Condition */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -179,7 +173,6 @@ Feel free to ask any questions! 😊`;
             </div>
           </div>
 
-          {/* Colour & Material */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -195,7 +188,6 @@ Feel free to ask any questions! 😊`;
             </div>
           </div>
 
-          {/* Price */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Price
@@ -210,7 +202,6 @@ Feel free to ask any questions! 😊`;
             </div>
           </div>
 
-          {/* Description */}
           <div className="mb-6">
             <div className="flex items-start justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">
@@ -234,7 +225,6 @@ Feel free to ask any questions! 😊`;
             </div>
           </div>
 
-          {/* Hashtags */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Suggested Hashtags
@@ -254,7 +244,6 @@ Feel free to ask any questions! 😊`;
           </div>
         </div>
 
-        {/* Vinted Tips */}
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 mb-6">
           <h3 className="font-semibold text-purple-900 mb-3">Vinted UK Tips</h3>
           <ul className="space-y-2 text-sm text-purple-800">
@@ -267,22 +256,13 @@ Feel free to ask any questions! 😊`;
           </ul>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex gap-4">
-          
-            href="https://www.vinted.co.uk/items/new"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-          >
+          <a href="https://www.vinted.co.uk/items/new" target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
             <Package className="w-5 h-5" />
             Open Vinted
           </a>
           
-          <Link
-            href="/dashboard"
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-          >
+          <Link href="/dashboard" className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
             Back to Dashboard
           </Link>
         </div>
