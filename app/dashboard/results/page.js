@@ -1,11 +1,22 @@
 // app/dashboard/results/page.js
-// RESULTS DISPLAY PAGE
+// ENHANCED RESULTS PAGE WITH AI DATA
 
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Package, DollarSign, Tag, FileText, Copy, Check } from 'lucide-react';
+import { 
+  Package, 
+  Tag, 
+  PoundSterling, 
+  FileText, 
+  Copy, 
+  Check,
+  ExternalLink,
+  Edit,
+  ArrowLeft,
+  Sparkles
+} from 'lucide-react';
 
 export default function ResultsPage() {
   const router = useRouter();
@@ -41,136 +52,223 @@ export default function ResultsPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Analysis Results</h1>
-          <p className="text-gray-600 mt-2">
-            Your item has been analyzed successfully
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back to Dashboard
+          </button>
+          
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-6 h-6 text-purple-600" />
+            <h1 className="text-3xl font-bold text-gray-900">AI Analysis Complete</h1>
+          </div>
+          <p className="text-gray-600">
+            Your item has been analyzed and listing created
           </p>
         </div>
 
-        {/* Main Results */}
-        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+        {/* Main Results Card */}
+        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
           {/* Title Section */}
-          <div className="mb-6 pb-6 border-b">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 border-b">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <label className="text-sm font-medium text-gray-700">eBay Title</label>
-                <h2 className="text-xl font-semibold text-gray-900 mt-1">
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  eBay UK Title (AI Generated)
+                </label>
+                <h2 className="text-xl font-semibold text-gray-900">
                   {analysis.ebay_title}
                 </h2>
               </div>
               <button
                 onClick={() => copyToClipboard(analysis.ebay_title, 'title')}
-                className="ml-4 p-2 text-gray-600 hover:text-gray-900"
+                className="ml-4 p-2 hover:bg-white/50 rounded transition"
               >
-                {copied === 'title' ? <Check className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5" />}
+                {copied === 'title' ? 
+                  <Check className="w-5 h-5 text-green-600" /> : 
+                  <Copy className="w-5 h-5 text-gray-600" />
+                }
               </button>
             </div>
           </div>
 
-          {/* Key Details Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-            <div>
-              <div className="flex items-center text-sm text-gray-600 mb-1">
-                <Package className="w-4 h-4 mr-1" />
-                Brand
-              </div>
-              <p className="font-semibold">{analysis.brand}</p>
-            </div>
-            
-            <div>
-              <div className="flex items-center text-sm text-gray-600 mb-1">
-                <Tag className="w-4 h-4 mr-1" />
-                Type
-              </div>
-              <p className="font-semibold">{analysis.item_type}</p>
-            </div>
-            
-            <div>
-              <div className="flex items-center text-sm text-gray-600 mb-1">
-                <DollarSign className="w-4 h-4 mr-1" />
-                Price Range
-              </div>
-              <p className="font-semibold">
-                ${analysis.estimated_value_min} - ${analysis.estimated_value_max}
-              </p>
-            </div>
-            
-            <div>
-              <div className="flex items-center text-sm text-gray-600 mb-1">
-                <FileText className="w-4 h-4 mr-1" />
-                SKU
-              </div>
-              <p className="font-semibold">{analysis.sku}</p>
-            </div>
-          </div>
-
-          {/* Additional Details */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 text-sm">
-            <div>
-              <span className="text-gray-600">Size:</span>
-              <span className="ml-2 font-medium">{analysis.size || 'Not specified'}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Condition:</span>
-              <span className="ml-2 font-medium">{analysis.condition_score}/10</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Suggested Price:</span>
-              <span className="ml-2 font-medium">${analysis.suggested_price}</span>
-            </div>
-            {analysis.color && (
+          <div className="p-6">
+            {/* Key Details Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
               <div>
-                <span className="text-gray-600">Color:</span>
-                <span className="ml-2 font-medium">{analysis.color}</span>
+                <div className="flex items-center text-sm text-gray-600 mb-1">
+                  <Package className="w-4 h-4 mr-1" />
+                  Brand
+                </div>
+                <p className="font-semibold text-gray-900">{analysis.brand}</p>
+              </div>
+              
+              <div>
+                <div className="flex items-center text-sm text-gray-600 mb-1">
+                  <Tag className="w-4 h-4 mr-1" />
+                  Type
+                </div>
+                <p className="font-semibold text-gray-900">{analysis.item_type}</p>
+              </div>
+              
+              <div>
+                <div className="flex items-center text-sm text-gray-600 mb-1">
+                  <PoundSterling className="w-4 h-4 mr-1" />
+                  Price Range
+                </div>
+                <p className="font-semibold text-gray-900">
+                  £{analysis.estimated_value_min} - £{analysis.estimated_value_max}
+                </p>
+              </div>
+              
+              <div>
+                <div className="flex items-center text-sm text-gray-600 mb-1">
+                  <FileText className="w-4 h-4 mr-1" />
+                  SKU
+                </div>
+                <p className="font-semibold text-gray-900">{analysis.sku}</p>
+              </div>
+            </div>
+
+            {/* Additional Details */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Item Specifics</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Size:</span>
+                  <span className="ml-2 font-medium">{analysis.size}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Colour:</span>
+                  <span className="ml-2 font-medium">{analysis.color || 'Not specified'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Condition:</span>
+                  <span className="ml-2 font-medium">{analysis.condition_score}/10</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Gender:</span>
+                  <span className="ml-2 font-medium">{analysis.gender || 'Unisex'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Material:</span>
+                  <span className="ml-2 font-medium">{analysis.material || 'See label'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Category:</span>
+                  <span className="ml-2 font-medium">{analysis.category}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Suggested Price */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-green-800">AI Suggested Price</p>
+                  <p className="text-2xl font-bold text-green-900">£{analysis.suggested_price}</p>
+                </div>
+                <PoundSterling className="w-8 h-8 text-green-600" />
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="mb-6">
+              <div className="flex items-start justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">
+                  eBay Description (AI Generated)
+                </label>
+                <button
+                  onClick={() => copyToClipboard(analysis.description, 'description')}
+                  className="p-1 hover:bg-gray-100 rounded transition"
+                >
+                  {copied === 'description' ? 
+                    <Check className="w-4 h-4 text-green-600" /> : 
+                    <Copy className="w-4 h-4 text-gray-600" />
+                  }
+                </button>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {analysis.description}
+                </p>
+              </div>
+            </div>
+
+            {/* Keywords */}
+            {analysis.keywords && (
+              <div className="mb-6">
+                <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                  Search Keywords
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {analysis.keywords.map((keyword, index) => (
+                    <span 
+                      key={index}
+                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm"
+                    >
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
-            {analysis.material && (
-              <div>
-                <span className="text-gray-600">Material:</span>
-                <span className="ml-2 font-medium">{analysis.material}</span>
-              </div>
+
+            {/* Vision Data (Debug - Remove in production) */}
+            {analysis.vision_data && (
+              <details className="mb-6">
+                <summary className="text-sm text-gray-600 cursor-pointer">
+                  AI Detection Details
+                </summary>
+                <pre className="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto">
+                  {JSON.stringify(analysis.vision_data, null, 2)}
+                </pre>
+              </details>
             )}
-            <div>
-              <span className="text-gray-600">Category:</span>
-              <span className="ml-2 font-medium">{analysis.category}</span>
-            </div>
           </div>
 
-          {/* Description */}
-          <div className="pt-6 border-t">
-            <div className="flex items-start justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">Description</label>
+          {/* Action Buttons */}
+          <div className="bg-gray-50 px-6 py-4 border-t">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
-                onClick={() => copyToClipboard(analysis.description, 'description')}
-                className="p-1 text-gray-600 hover:text-gray-900"
+                onClick={() => router.push(`/dashboard/listing/${analysis.id}/ebay`)}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
               >
-                {copied === 'description' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                <ExternalLink className="w-4 h-4" />
+                List on eBay UK
+              </button>
+              
+              <button
+                onClick={() => router.push(`/dashboard/listing/${analysis.id}/vinted`)}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Export for Vinted
+              </button>
+              
+              <button
+                onClick={() => router.push(`/dashboard/listing/${analysis.id}/edit`)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
               </button>
             </div>
-            <p className="text-gray-700 whitespace-pre-wrap">{analysis.description}</p>
           </div>
         </div>
 
-        {/* Credits Remaining */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <p className="text-sm text-blue-900">
+        {/* Credits Info */}
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
             Credits remaining: <span className="font-semibold">{analysis.credits_remaining}</span>
           </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-4">
           <button
-            onClick={() => router.push('/dashboard/smart-upload')}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            onClick={() => router.push('/dashboard/analyze-single')}
+            className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
           >
-            Analyze Another Item
-          </button>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-          >
-            Back to Dashboard
+            Analyze Another Item →
           </button>
         </div>
       </div>
