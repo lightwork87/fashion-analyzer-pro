@@ -1,5 +1,5 @@
-// app/dashboard/listings/[id]/ebay/page.js
-// EBAY LISTING PAGE - FIXED SYNTAX
+// app/dashboard/listing/[id]/ebay/page.js
+// EBAY LISTING PAGE - CORRECT PATH (singular)
 
 'use client';
 

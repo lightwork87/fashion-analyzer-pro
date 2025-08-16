@@ -1,5 +1,5 @@
-// app/dashboard/listings/[id]/vinted/page.js
-// VINTED EXPORT PAGE - FIXED SYNTAX
+// app/dashboard/listing/[id]/vinted/page.js
+// VINTED EXPORT PAGE - CORRECT PATH (singular)
 
 'use client';
 
