@@ -1,10 +1,10 @@
 // app/dashboard/results/page.js
-// ENHANCED RESULTS PAGE WITH AI DATA
+// UPDATED TO HANDLE BOTH STORAGE AND URL PARAMETER
 
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Package, 
   Tag, 
@@ -15,23 +15,54 @@ import {
   ExternalLink,
   Edit,
   ArrowLeft,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 
 export default function ResultsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [analysis, setAnalysis] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('analysisResult');
-    if (stored) {
-      setAnalysis(JSON.parse(stored));
-      sessionStorage.removeItem('analysisResult');
-    } else {
-      router.push('/dashboard');
-    }
-  }, [router]);
+    const loadAnalysis = async () => {
+      try {
+        // First try sessionStorage
+        const stored = sessionStorage.getItem('analysisResult');
+        if (stored) {
+          setAnalysis(JSON.parse(stored));
+          sessionStorage.removeItem('analysisResult');
+          setLoading(false);
+          return;
+        }
+
+        // If not in storage, check URL parameter
+        const analysisId = searchParams.get('id');
+        if (analysisId) {
+          // Fetch from database
+          const response = await fetch(`/api/analyses/${analysisId}`);
+          if (response.ok) {
+            const data = await response.json();
+            setAnalysis(data.analysis);
+          } else {
+            setError('Analysis not found');
+          }
+        } else {
+          // No analysis available
+          router.push('/dashboard');
+        }
+      } catch (err) {
+        setError('Failed to load analysis');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAnalysis();
+  }, [router, searchParams]);
 
   const copyToClipboard = (text, field) => {
     navigator.clipboard.writeText(text);
@@ -39,10 +70,27 @@ export default function ResultsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (!analysis) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">Loading results...</div>
+      </div>
+    );
+  }
+
+  if (error || !analysis) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-gray-600">{error || 'No analysis found'}</p>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="mt-4 text-blue-600 hover:text-blue-700"
+          >
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -148,14 +196,18 @@ export default function ResultsPage() {
                   <span className="text-gray-600">Condition:</span>
                   <span className="ml-2 font-medium">{analysis.condition_score}/10</span>
                 </div>
-                <div>
-                  <span className="text-gray-600">Gender:</span>
-                  <span className="ml-2 font-medium">{analysis.gender || 'Unisex'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Material:</span>
-                  <span className="ml-2 font-medium">{analysis.material || 'See label'}</span>
-                </div>
+                {analysis.gender && (
+                  <div>
+                    <span className="text-gray-600">Gender:</span>
+                    <span className="ml-2 font-medium">{analysis.gender}</span>
+                  </div>
+                )}
+                {analysis.material && (
+                  <div>
+                    <span className="text-gray-600">Material:</span>
+                    <span className="ml-2 font-medium">{analysis.material}</span>
+                  </div>
+                )}
                 <div>
                   <span className="text-gray-600">Category:</span>
                   <span className="ml-2 font-medium">{analysis.category}</span>
@@ -198,7 +250,7 @@ export default function ResultsPage() {
             </div>
 
             {/* Keywords */}
-            {analysis.keywords && (
+            {analysis.keywords && analysis.keywords.length > 0 && (
               <div className="mb-6">
                 <label className="text-sm font-semibold text-gray-700 mb-2 block">
                   Search Keywords
@@ -214,18 +266,6 @@ export default function ResultsPage() {
                   ))}
                 </div>
               </div>
-            )}
-
-            {/* Vision Data (Debug - Remove in production) */}
-            {analysis.vision_data && (
-              <details className="mb-6">
-                <summary className="text-sm text-gray-600 cursor-pointer">
-                  AI Detection Details
-                </summary>
-                <pre className="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto">
-                  {JSON.stringify(analysis.vision_data, null, 2)}
-                </pre>
-              </details>
             )}
           </div>
 
@@ -262,7 +302,7 @@ export default function ResultsPage() {
         {/* Credits Info */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            Credits remaining: <span className="font-semibold">{analysis.credits_remaining}</span>
+            Credits remaining: <span className="font-semibold">{analysis.credits_remaining || 'N/A'}</span>
           </p>
           <button
             onClick={() => router.push('/dashboard/analyze-single')}
