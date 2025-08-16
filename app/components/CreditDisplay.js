@@ -37,4 +37,4 @@ export default function CreditDisplay({ className = '' }) {
       </div>
     </div>
   );
-}
+}// Force rebuild Sat 16 Aug 2025 17:33:00 BST
