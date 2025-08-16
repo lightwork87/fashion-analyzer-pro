@@ -1,5 +1,5 @@
 // app/api/analyses/[id]/route.js
-// NEW FILE - FETCH SINGLE ANALYSIS
+// API TO FETCH SINGLE ANALYSIS
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -18,24 +18,68 @@ export async function GET(request, { params }) {
     }
 
     const { id } = params;
-    
-    const { data: analysis, error } = await supabase
-      .from('analyses')
-      .select('*')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
 
-    if (error || !analysis) {
-      return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
+    // If it's a temporary ID (starts with "analysis-"), extract from metadata
+    if (id.startsWith('analysis-')) {
+      const timestamp = id.replace('analysis-', '');
+      
+      // Try to find by SKU pattern or created_at
+      const { data, error } = await supabase
+        .from('analyses')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      // Find the matching analysis by checking metadata or SKU
+      const analysis = data?.find(a => 
+        a.sku?.includes(timestamp.slice(-6)) || 
+        a.metadata?.id === id
+      );
+
+      if (analysis) {
+        return NextResponse.json({ 
+          success: true, 
+          analysis: {
+            ...analysis.metadata,
+            ...analysis,
+            id: analysis.id
+          }
+        });
+      }
+    } else {
+      // Direct database ID lookup
+      const { data, error } = await supabase
+        .from('analyses')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        return NextResponse.json({ 
+          success: true, 
+          analysis: {
+            ...data.metadata,
+            ...data,
+            id: data.id
+          }
+        });
+      }
     }
 
-    // Return the metadata which has all the details
     return NextResponse.json({ 
-      analysis: analysis.metadata || analysis 
-    });
+      error: 'Analysis not found' 
+    }, { status: 404 });
 
   } catch (error) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    console.error('Error fetching analysis:', error);
+    return NextResponse.json({ 
+      error: 'Failed to fetch analysis' 
+    }, { status: 500 });
   }
 }
