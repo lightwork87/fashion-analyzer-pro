@@ -1,14 +1,11 @@
 // app/api/analyses/[id]/route.js
-// API TO FETCH SINGLE ANALYSIS
+// API TO FETCH SINGLE ANALYSIS - UPDATED WITH SINGLETON
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/app/lib/supabase-client';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = getSupabaseClient();
 
 export async function GET(request, { params }) {
   try {

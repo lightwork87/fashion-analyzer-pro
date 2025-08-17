@@ -1,14 +1,11 @@
 // app/api/analyze-ai/route.js
-// COMPLETE WORKING VERSION WITH AI ANALYSIS
+// COMPLETE UPDATED VERSION WITH SINGLETON SUPABASE
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/app/lib/supabase-client';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = getSupabaseClient();
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
