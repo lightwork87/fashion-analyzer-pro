@@ -1,5 +1,5 @@
 // app/dashboard/help/page.js
-// HELP PAGE
+// HELP PAGE - FIXED SYNTAX
 
 'use client';
 
@@ -71,10 +71,7 @@ export default function HelpPage() {
                 <p className="text-gray-600 mb-4">
                   Need help? Reach out to our team
                 </p>
-                
-                  href="mailto:support@lightlisterai.co.uk"
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
+                <a href="mailto:support@lightlisterai.co.uk" className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                   Email Support
                 </a>
               </div>
