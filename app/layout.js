@@ -1,6 +1,4 @@
-// app/layout.js
-// COMPLETE FIXED VERSION - NO ERRORS
-
+// app/layout.js - COMPLETE FILE
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { ClerkProvider } from '@clerk/nextjs';
@@ -8,17 +6,8 @@ import { ClerkProvider } from '@clerk/nextjs';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'LightLister AI - AI-Powered Fashion Listing Tool',
-  description: 'Create professional eBay and Vinted listings with AI analysis',
-  keywords: 'ebay, vinted, fashion, ai, listing, reseller, clothing',
-  authors: [{ name: 'LightLister AI Team' }],
-  openGraph: {
-    title: 'LightLister AI',
-    description: 'AI-Powered Fashion Listing Tool',
-    url: 'https://lightlisterai.co.uk',
-    siteName: 'LightLister AI',
-    type: 'website',
-  },
+  title: 'LightLister AI - AI-Powered eBay & Vinted Listing Creator',
+  description: 'Create professional eBay and Vinted listings in seconds with AI-powered photo analysis',
 };
 
 export default function RootLayout({ children }) {

@@ -1,432 +1,224 @@
-// app/dashboard/page.js
-// COMPLETE UK EBAY/VINTED DASHBOARD WITH REAL AI
-
+// app/dashboard/page.js - COMPLETE FILE
 'use client';
 
+import { useUser, SignIn, SignInButton } from '@clerk/nextjs';
 import { useState, useEffect } from 'react';
-import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  Camera,
-  Images,
-  CreditCard,
-  Package,
-  TrendingUp,
-  PoundSterling,
-  ShoppingBag,
-  Tag,
-  Eye,
-  Heart,
-  AlertCircle,
-  CheckCircle,
+  Package, 
+  Camera, 
+  CreditCard, 
+  Settings, 
+  HelpCircle,
+  BookOpen,
   BarChart3,
-  Settings,
-  LogOut,
-  Plus,
-  Upload,
-  FileText,
-  History,
-  HelpCircle
+  Zap,
+  Package2,
+  ChevronRight
 } from 'lucide-react';
 
-// UK eBay Categories and Item Specifics
-const EBAY_UK_CLOTHING_SPECIFICS = {
-  'Women\'s Clothing': {
-    required: ['Brand', 'Size', 'Colour', 'Condition'],
-    optional: ['Style', 'Material', 'Pattern', 'Occasion', 'Season', 'Fit', 'Size Type', 'Garment Care']
-  },
-  'Men\'s Clothing': {
-    required: ['Brand', 'Size', 'Colour', 'Condition'],
-    optional: ['Style', 'Material', 'Pattern', 'Fit', 'Season', 'Chest Size', 'Garment Care']
-  },
-  'Kids\' Clothing': {
-    required: ['Brand', 'Size', 'Colour', 'Condition', 'Age'],
-    optional: ['Style', 'Material', 'Pattern', 'Season', 'Gender', 'Garment Care']
-  },
-  'Shoes': {
-    required: ['Brand', 'UK Shoe Size', 'Colour', 'Condition'],
-    optional: ['Style', 'Material', 'Width', 'Heel Height', 'Occasion', 'Season']
-  },
-  'Bags & Accessories': {
-    required: ['Brand', 'Colour', 'Condition'],
-    optional: ['Style', 'Material', 'Size', 'Features', 'Closure', 'Pattern']
-  }
-};
-
 export default function DashboardPage() {
-  const { user } = useUser();
+  const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
-  const [credits, setCredits] = useState({ available: 0, total: 0 });
-  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    totalListings: 0,
-    activeListings: 0,
-    soldThisMonth: 0,
-    revenue: 0,
-    avgSalePrice: 0,
-    views: 0
+    creditsTotal: 0,
+    creditsUsed: 0,
+    itemsAnalyzed: 0
   });
-  const [recentAnalyses, setRecentAnalyses] = useState([]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (isLoaded && isSignedIn) {
+      fetchUserStats();
+    }
+  }, [isLoaded, isSignedIn]);
 
-  const fetchDashboardData = async () => {
+  const fetchUserStats = async () => {
     try {
-      // Fetch credits
-      const creditsRes = await fetch('/api/user/credits');
-      if (creditsRes.ok) {
-        const creditsData = await creditsRes.json();
-        setCredits({
-          available: creditsData.available || 0,
-          total: creditsData.total || 0
-        });
-      }
-
-      // Fetch stats
-      const statsRes = await fetch('/api/user/stats');
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setStats(statsData);
-      }
-
-      // Fetch recent analyses
-      const analysesRes = await fetch('/api/analyses/recent');
-      if (analysesRes.ok) {
-        const analysesData = await analysesRes.json();
-        setRecentAnalyses(analysesData.analyses || []);
+      const response = await fetch('/api/user/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
       }
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching stats:', error);
     }
   };
 
-  const quickActions = [
-    {
-      title: 'Single Item Analysis',
-      description: 'Upload photos of one item for AI-powered listing creation',
-      icon: Camera,
-      color: 'blue',
-      href: '/dashboard/analyze-single',
-      primary: true
-    },
-    {
-      title: 'Bulk Analysis',
-      description: 'Process up to 25 items with 24 photos each',
-      icon: Images,
-      color: 'purple',
-      href: '/dashboard/analyze-bulk'
-    }
-  ];
+  // Show loading state
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const navigationItems = [
-    { label: 'Dashboard', href: '/dashboard', current: true },
-    { label: 'Single Analysis', href: '/dashboard/analyze-single' },
-    { label: 'Bulk Analysis', href: '/dashboard/analyze-bulk' },
-    { label: 'My Listings', href: '/dashboard/listings' },
-    { label: 'Analytics', href: '/dashboard/analytics' },
-    { label: 'Settings', href: '/dashboard/settings' }
-  ];
+  // Show sign-in if not authenticated
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-900">Welcome to LightLister AI</h2>
+            <p className="mt-2 text-gray-600">Please sign in to access your dashboard</p>
+          </div>
+          
+          <div className="mt-8">
+            <SignInButton mode="modal">
+              <button className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                Sign In to Continue
+              </button>
+            </SignInButton>
+          </div>
+          
+          <div className="text-center text-sm">
+            <span className="text-gray-600">Don't have an account? </span>
+            <Link href="/sign-up" className="font-medium text-blue-600 hover:text-blue-500">
+              Sign up
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
+  // Main dashboard for signed-in users
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">LightLister AI</h1>
-              <span className="ml-2 text-xs text-gray-500">UK Edition</span>
-            </div>
-            
-            <div className="flex items-center gap-6">
-              {/* Credits Display */}
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-gray-600" />
-                  <span className="text-sm font-medium">
-                    {credits.available} credits
-                  </span>
-                </div>
-                <Link
-                  href="/dashboard/get-credits"
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Get More
-                </Link>
-              </div>
-
-              {/* User Menu */}
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-700">
-                  {user?.emailAddresses?.[0]?.emailAddress}
-                </span>
-                <Link
-                  href="/dashboard/settings"
-                  className="p-2 hover:bg-gray-100 rounded-lg transition"
-                >
-                  <Settings className="w-5 h-5 text-gray-600" />
-                </Link>
-              </div>
+          <div className="flex justify-between items-center py-4">
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                Welcome, {user?.firstName || 'User'}
+              </span>
+              <Link href="/dashboard/settings" className="text-gray-500 hover:text-gray-700">
+                <Settings className="h-5 w-5" />
+              </Link>
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Welcome back, {user?.firstName || 'there'}!
-          </h2>
-          <p className="text-gray-600 mt-1">
-            Create professional eBay UK and Vinted listings with AI
-          </p>
-        </div>
-
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-600">Monthly Revenue</span>
-              <PoundSterling className="w-5 h-5 text-green-600" />
+      {/* Stats Cards */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Credits Available</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {stats.creditsTotal - stats.creditsUsed}
+                </p>
+              </div>
+              <CreditCard className="h-8 w-8 text-blue-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">
-              £{stats.revenue.toFixed(2)}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              This month on eBay UK
-            </p>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-600">Active Listings</span>
-              <Package className="w-5 h-5 text-blue-600" />
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Items Analyzed</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.itemsAnalyzed}</p>
+              </div>
+              <BarChart3 className="h-8 w-8 text-green-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">
-              {stats.activeListings}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              Across all platforms
-            </p>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-600">Items Sold</span>
-              <TrendingUp className="w-5 h-5 text-purple-600" />
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Credits Used</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.creditsUsed}</p>
+              </div>
+              <Zap className="h-8 w-8 text-yellow-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">
-              {stats.soldThisMonth}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              This month
-            </p>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-600">Total Views</span>
-              <Eye className="w-5 h-5 text-orange-600" />
-            </div>
-            <p className="text-2xl font-bold text-gray-900">
-              {stats.views}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              Last 30 days
-            </p>
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Create New Listing
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {quickActions.map((action) => {
-              const Icon = action.icon;
-              return (
-                <Link
-                  key={action.title}
-                  href={action.href}
-                  className={`block p-6 bg-white rounded-lg shadow-sm border-2 hover:shadow-md transition ${
-                    action.primary 
-                      ? 'border-blue-200 hover:border-blue-300' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-start">
-                    <div className={`p-3 rounded-lg ${
-                      action.color === 'blue' ? 'bg-blue-100' : 'bg-purple-100'
-                    }`}>
-                      <Icon className={`w-6 h-6 ${
-                        action.color === 'blue' ? 'text-blue-600' : 'text-purple-600'
-                      }`} />
-                    </div>
-                    <div className="ml-4 flex-1">
-                      <h4 className="text-lg font-semibold text-gray-900">
-                        {action.title}
-                      </h4>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {action.description}
-                      </p>
-                      {action.primary && (
-                        <span className="inline-flex items-center mt-3 text-sm font-medium text-blue-600">
-                          Start analyzing →
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Recent Analyses */}
-        {recentAnalyses.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border">
-            <div className="px-6 py-4 border-b">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Recent Analyses
-                </h3>
-                <Link
-                  href="/dashboard/listings"
-                  className="text-sm text-blue-600 hover:text-blue-700"
-                >
-                  View all
-                </Link>
-              </div>
-            </div>
-            
-            <div className="divide-y">
-              {recentAnalyses.slice(0, 5).map((analysis) => (
-                <div key={analysis.id} className="p-4 hover:bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">
-                        {analysis.ebay_title}
-                      </h4>
-                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                        <span>{analysis.brand}</span>
-                        <span>Size: {analysis.size}</span>
-                        <span>£{analysis.suggested_price}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/dashboard/listings/${analysis.id}/ebay`}
-                        className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                      >
-                        List on eBay
-                      </Link>
-                      <Link
-                        href={`/dashboard/listings/${analysis.id}/vinted`}
-                        className="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
-                      >
-                        List on Vinted
-                      </Link>
-                    </div>
+        <div className="bg-white rounded-lg shadow mb-8">
+          <div className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Link href="/dashboard/analyze-single" 
+                className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center">
+                  <Camera className="h-6 w-6 text-blue-600 mr-3" />
+                  <div>
+                    <p className="font-medium text-gray-900">Analyze Single Item</p>
+                    <p className="text-sm text-gray-600">Upload photos of one item</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Platform Integration Status */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">eBay UK</h3>
-              <ShoppingBag className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Connection Status</span>
-                <span className="flex items-center text-green-600">
-                  <CheckCircle className="w-4 h-4 mr-1" />
-                  Connected
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Active Listings</span>
-                <span className="font-medium">{stats.activeListings}</span>
-              </div>
-              <Link
-                href="/dashboard/ebay-settings"
-                className="block w-full mt-4 px-4 py-2 text-sm text-center border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Manage eBay Settings
+                <ChevronRight className="h-5 w-5 text-gray-400" />
               </Link>
-            </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Vinted</h3>
-              <Heart className="w-5 h-5 text-purple-600" />
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Export Ready</span>
-                <span className="flex items-center text-green-600">
-                  <CheckCircle className="w-4 h-4 mr-1" />
-                  Available
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">CSV Format</span>
-                <span className="font-medium">UK Standard</span>
-              </div>
-              <Link
-                href="/dashboard/vinted-export"
-                className="block w-full mt-4 px-4 py-2 text-sm text-center border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Export to Vinted
+              <Link href="/dashboard/analyze-bulk" 
+                className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center">
+                  <Package2 className="h-6 w-6 text-green-600 mr-3" />
+                  <div>
+                    <p className="font-medium text-gray-900">Bulk Analysis</p>
+                    <p className="text-sm text-gray-600">Analyze up to 25 items</p>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-gray-400" />
               </Link>
             </div>
           </div>
         </div>
 
-        {/* Help Section */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <div className="flex items-start">
-            <HelpCircle className="w-5 h-5 text-blue-600 mt-0.5 mr-3" />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-blue-900">
-                Getting Started Tips
-              </h3>
-              <p className="text-sm text-blue-800 mt-1">
-                Upload clear photos with good lighting for best AI results. Include size labels, brand tags, and any flaws. 
-                Our AI will detect brands, sizes, and generate SEO-optimized titles for eBay UK and Vinted.
-              </p>
-              <div className="flex gap-4 mt-3">
-                <Link
-                  href="/dashboard/help"
-                  className="text-sm font-medium text-blue-700 hover:text-blue-800"
-                >
-                  View Help Guide →
-                </Link>
-                <Link
-                  href="/dashboard/tutorial"
-                  className="text-sm font-medium text-blue-700 hover:text-blue-800"
-                >
-                  Watch Tutorial →
-                </Link>
-              </div>
-            </div>
-          </div>
+        {/* Navigation Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Link href="/dashboard/listings" 
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <Package className="h-8 w-8 text-blue-600 mb-3" />
+            <h3 className="font-semibold text-gray-900">My Listings</h3>
+            <p className="text-sm text-gray-600 mt-1">View and manage your listings</p>
+          </Link>
+
+          <Link href="/dashboard/get-credits" 
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <CreditCard className="h-8 w-8 text-green-600 mb-3" />
+            <h3 className="font-semibold text-gray-900">Get Credits</h3>
+            <p className="text-sm text-gray-600 mt-1">Purchase analysis credits</p>
+          </Link>
+
+          <Link href="/dashboard/tutorial" 
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <BookOpen className="h-8 w-8 text-purple-600 mb-3" />
+            <h3 className="font-semibold text-gray-900">Tutorial</h3>
+            <p className="text-sm text-gray-600 mt-1">Learn how to use LightLister</p>
+          </Link>
+
+          <Link href="/dashboard/settings" 
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <Settings className="h-8 w-8 text-gray-600 mb-3" />
+            <h3 className="font-semibold text-gray-900">Settings</h3>
+            <p className="text-sm text-gray-600 mt-1">Manage your account</p>
+          </Link>
+
+          <Link href="/dashboard/help" 
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <HelpCircle className="h-8 w-8 text-yellow-600 mb-3" />
+            <h3 className="font-semibold text-gray-900">Help & Support</h3>
+            <p className="text-sm text-gray-600 mt-1">Get assistance</p>
+          </Link>
+
+          <Link href="/" 
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+            <BarChart3 className="h-8 w-8 text-indigo-600 mb-3" />
+            <h3 className="font-semibold text-gray-900">Back to Home</h3>
+            <p className="text-sm text-gray-600 mt-1">Return to main site</p>
+          </Link>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
