@@ -1,10 +1,10 @@
-// app/components/Header.js - NEW FILE
+// app/components/Header.js - FIXED VERSION
 'use client';
 
 import { SignInButton, SignedIn, SignedOut, UserButton, useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Menu, X, CreditCard } from 'lucide-react';
+import { Menu, X, CreditCard, Sparkles } from 'lucide-react'; // Added Sparkles import!
 
 export default function Header() {
   const { user, isSignedIn } = useUser();

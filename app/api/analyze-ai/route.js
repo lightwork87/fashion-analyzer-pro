@@ -1,6 +1,6 @@
 // Fixed version of /app/api/analyze-ai/route.js
 import { NextResponse } from 'next/server';
-import { currentUser } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@/app/lib/supabase-client';
 
 // UK Fashion brands database

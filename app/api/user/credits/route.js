@@ -1,13 +1,14 @@
-// app/api/user/credits/route.js - NEW FILE
+// app/api/user/credits/route.js - FIXED VERSION
 import { NextResponse } from 'next/server';
-import { currentUser } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server'; // Correct import for App Router!
 import { createClient } from '@/app/lib/supabase-client';
 
 export async function GET() {
   try {
-    const user = await currentUser();
+    // Get the userId from auth() instead of currentUser()
+    const { userId } = await auth();
     
-    if (!user) {
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -17,7 +18,7 @@ export async function GET() {
     const { data: userData, error } = await supabase
       .from('users')
       .select('credits_total, credits_used, bonus_credits')
-      .eq('clerk_id', user.id)
+      .eq('clerk_id', userId)
       .single();
 
     if (error) {
@@ -25,11 +26,11 @@ export async function GET() {
       
       // If user doesn't exist, create them with bonus credits
       if (error.code === 'PGRST116') {
+        // Get user details from Clerk if needed
         const { data: newUser, error: createError } = await supabase
           .from('users')
           .insert({
-            clerk_id: user.id,
-            email: user.emailAddresses[0]?.emailAddress,
+            clerk_id: userId,
             credits_total: 50, // Beta bonus
             credits_used: 0,
             bonus_credits: 50

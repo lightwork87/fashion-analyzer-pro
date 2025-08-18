@@ -1,6 +1,6 @@
 // app/api/user/stats/route.js - NEW FILE
 import { NextResponse } from 'next/server';
-import { currentUser } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@/app/lib/supabase-client';
 
 export async function GET() {
