@@ -1,55 +1,61 @@
-// app/lib/storage.js
-// Supabase storage utility
-
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+// app/lib/storage.js - COMPLETE FILE
+import { createClient } from './supabase-client';
 
 export async function uploadImage(file, userId) {
-  try {
-    // Create unique filename
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(7);
-    const extension = file.name.split('.').pop();
-    const fileName = `${userId}/${timestamp}-${randomString}.${extension}`;
-
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from('listings')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
-
-    if (error) throw error;
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('listings')
-      .getPublicUrl(fileName);
-
-    return publicUrl;
-  } catch (error) {
+  const supabase = createClient();
+  
+  // Generate unique filename
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+  
+  // Upload to Supabase storage
+  const { data, error } = await supabase.storage
+    .from('listings')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+  
+  if (error) {
     console.error('Upload error:', error);
-    throw error;
+    throw new Error('Failed to upload image');
   }
+  
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('listings')
+    .getPublicUrl(fileName);
+  
+  return publicUrl;
 }
 
 export async function deleteImage(url) {
-  try {
-    // Extract path from URL
-    const path = url.split('/storage/v1/object/public/listings/')[1];
-    if (!path) return;
-
-    const { error } = await supabase.storage
-      .from('listings')
-      .remove([path]);
-
-    if (error) throw error;
-  } catch (error) {
+  const supabase = createClient();
+  
+  // Extract file path from URL
+  const urlParts = url.split('/');
+  const filePath = urlParts.slice(-2).join('/'); // Gets userId/filename
+  
+  const { error } = await supabase.storage
+    .from('listings')
+    .remove([filePath]);
+  
+  if (error) {
     console.error('Delete error:', error);
+    throw new Error('Failed to delete image');
+  }
+  
+  return true;
+}
+
+export async function uploadMultipleImages(files, userId) {
+  const uploadPromises = files.map(file => uploadImage(file, userId));
+  
+  try {
+    const urls = await Promise.all(uploadPromises);
+    return urls;
+  } catch (error) {
+    console.error('Multiple upload error:', error);
+    throw new Error('Failed to upload some images');
   }
 }
