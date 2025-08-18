@@ -1,4 +1,4 @@
-// app/lib/supabase-client.js - FIXED VERSION
+// app/lib/supabase-client.js - COMPLETE FILE
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,5 +23,10 @@ export function createClient() {
   return supabaseInstance;
 }
 
-// Default export for convenience
+// Add the getSupabaseClient function for backward compatibility
+export function getSupabaseClient() {
+  return createClient();
+}
+
+// Default export
 export default createClient;

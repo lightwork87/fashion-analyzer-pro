@@ -1,82 +1,112 @@
-// app/api/analyses/[id]/route.js
-// API TO FETCH SINGLE ANALYSIS - UPDATED WITH SINGLETON
-
+// app/api/analyses/[id]/route.js - COMPLETE FILE
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { getSupabaseClient } from '@/app/lib/supabase-client';
-
-const supabase = getSupabaseClient();
+import { createClient } from '@/app/lib/supabase-client';
 
 export async function GET(request, { params }) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { id } = params;
-
-    // If it's a temporary ID (starts with "analysis-"), extract from metadata
-    if (id.startsWith('analysis-')) {
-      const timestamp = id.replace('analysis-', '');
-      
-      // Try to find by SKU pattern or created_at
-      const { data, error } = await supabase
-        .from('analyses')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-
-      // Find the matching analysis by checking metadata or SKU
-      const analysis = data?.find(a => 
-        a.sku?.includes(timestamp.slice(-6)) || 
-        a.metadata?.id === id
-      );
-
-      if (analysis) {
-        return NextResponse.json({ 
-          success: true, 
-          analysis: {
-            ...analysis.metadata,
-            ...analysis,
-            id: analysis.id
-          }
-        });
-      }
-    } else {
-      // Direct database ID lookup
-      const { data, error } = await supabase
-        .from('analyses')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', userId)
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        return NextResponse.json({ 
-          success: true, 
-          analysis: {
-            ...data.metadata,
-            ...data,
-            id: data.id
-          }
-        });
-      }
+    
+    if (!id) {
+      return NextResponse.json({ error: 'Analysis ID required' }, { status: 400 });
     }
 
-    return NextResponse.json({ 
-      error: 'Analysis not found' 
-    }, { status: 404 });
+    const supabase = createClient();
+    
+    // Fetch the analysis
+    const { data: analysis, error } = await supabase
+      .from('analyses')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching analysis:', error);
+      return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      analysis
+    });
 
   } catch (error) {
-    console.error('Error fetching analysis:', error);
-    return NextResponse.json({ 
-      error: 'Failed to fetch analysis' 
-    }, { status: 500 });
+    console.error('Analyses API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch analysis' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request, { params }) {
+  try {
+    const { id } = params;
+    const body = await request.json();
+    
+    if (!id) {
+      return NextResponse.json({ error: 'Analysis ID required' }, { status: 400 });
+    }
+
+    const supabase = createClient();
+    
+    // Update the analysis
+    const { data: updatedAnalysis, error } = await supabase
+      .from('analyses')
+      .update(body)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating analysis:', error);
+      return NextResponse.json({ error: 'Failed to update analysis' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      analysis: updatedAnalysis
+    });
+
+  } catch (error) {
+    console.error('Analyses API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update analysis' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request, { params }) {
+  try {
+    const { id } = params;
+    
+    if (!id) {
+      return NextResponse.json({ error: 'Analysis ID required' }, { status: 400 });
+    }
+
+    const supabase = createClient();
+    
+    // Delete the analysis
+    const { error } = await supabase
+      .from('analyses')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting analysis:', error);
+      return NextResponse.json({ error: 'Failed to delete analysis' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Analysis deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Analyses API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete analysis' },
+      { status: 500 }
+    );
   }
 }
