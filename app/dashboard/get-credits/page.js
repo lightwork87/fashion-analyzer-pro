@@ -1,148 +1,182 @@
-// app/dashboard/get-credits/page.js
-// GET CREDITS PAGE
-
+// app/dashboard/get-credits/page.js - NEW FILE
 'use client';
 
-import Link from 'next/link';
-import { ArrowLeft, CreditCard, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { CreditCard, Check, Zap } from 'lucide-react';
 
 export default function GetCreditsPage() {
-  const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState('starter');
+  const [loading, setLoading] = useState(false);
 
   const plans = [
     {
       id: 'starter',
       name: 'Starter Pack',
-      credits: 50,
-      price: 4.99,
-      perCredit: 0.10,
+      credits: 10,
+      price: 10,
+      perCredit: 1.00,
       popular: false
+    },
+    {
+      id: 'popular',
+      name: 'Popular Pack',
+      credits: 50,
+      price: 40,
+      perCredit: 0.80,
+      popular: true,
+      savings: '20% off'
     },
     {
       id: 'pro',
       name: 'Pro Pack',
-      credits: 200,
-      price: 14.99,
-      perCredit: 0.075,
-      popular: true,
-      savings: '25% off'
+      credits: 100,
+      price: 70,
+      perCredit: 0.70,
+      popular: false,
+      savings: '30% off'
     },
     {
       id: 'business',
       name: 'Business Pack',
       credits: 500,
-      price: 29.99,
-      perCredit: 0.06,
+      price: 300,
+      perCredit: 0.60,
       popular: false,
       savings: '40% off'
     }
   ];
 
-  const handlePurchase = async (planId) => {
-    // TODO: Implement Stripe checkout
-    console.log('Purchase plan:', planId);
-    alert('Payment integration coming soon!');
+  const handlePurchase = async () => {
+    setLoading(true);
+    // TODO: Implement Stripe payment
+    alert('Payment integration coming soon! Contact support for manual top-up.');
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
         <div className="mb-8">
-          <Link
-            href="/dashboard"
-            className="flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4"
-          >
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back to Dashboard
+          <Link href="/dashboard" className="text-blue-600 hover:text-blue-700 text-sm mb-4 inline-block">
+            ← Back to Dashboard
           </Link>
-          
-          <h1 className="text-3xl font-bold text-gray-900">Get More Credits</h1>
-          <p className="text-gray-600 mt-2">
-            Choose a credit pack to continue analyzing items
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Get More Credits</h1>
+          <p className="text-gray-600 mt-1">Choose a credit pack that suits your needs</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
+        {/* How Credits Work */}
+        <div className="bg-blue-50 rounded-lg p-6 mb-8">
+          <h2 className="font-semibold text-gray-900 mb-2 flex items-center">
+            <Zap className="h-5 w-5 mr-2 text-blue-600" />
+            How Credits Work
+          </h2>
+          <ul className="text-sm text-gray-700 space-y-1">
+            <li>• 1 credit = 1 item analysis (unlimited photos per item)</li>
+            <li>• Credits never expire</li>
+            <li>• Bulk analysis uses 1 credit per item</li>
+            <li>• Failed analyses don't consume credits</li>
+          </ul>
+        </div>
+
+        {/* Pricing Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className={`relative bg-white rounded-lg shadow-sm border-2 p-6 cursor-pointer transition ${
-                selectedPlan === plan.id
-                  ? 'border-blue-500 shadow-md'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
+              className={`relative bg-white rounded-lg shadow-lg p-6 cursor-pointer transition-all
+                ${selectedPlan === plan.id ? 'ring-2 ring-blue-600' : 'hover:shadow-xl'}
+                ${plan.popular ? 'transform scale-105' : ''}`}
               onClick={() => setSelectedPlan(plan.id)}
             >
               {plan.popular && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <span className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full">
-                    Most Popular
-                  </span>
+                <div className="absolute top-0 right-0 bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">
+                  MOST POPULAR
                 </div>
               )}
-
+              
               <div className="text-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {plan.name}
-                </h3>
-                <p className="text-3xl font-bold text-gray-900">
-                  £{plan.price}
-                </p>
-                <p className="text-sm text-gray-600 mt-1">
-                  {plan.credits} credits
-                </p>
+                <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
+                <div className="mt-4">
+                  <span className="text-3xl font-bold text-gray-900">£{plan.price}</span>
+                </div>
+                <p className="text-gray-600 mt-1">{plan.credits} credits</p>
                 {plan.savings && (
-                  <p className="text-sm text-green-600 font-medium mt-2">
+                  <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
                     {plan.savings}
-                  </p>
+                  </span>
                 )}
               </div>
-
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center text-sm text-gray-600">
-                  <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                  £{plan.perCredit.toFixed(3)} per analysis
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                  Never expires
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                  Instant delivery
-                </div>
+              
+              <div className="border-t pt-4">
+                <p className="text-sm text-gray-600 text-center">
+                  £{plan.perCredit.toFixed(2)} per credit
+                </p>
               </div>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handlePurchase(plan.id);
-                }}
-                className={`w-full py-2 px-4 rounded-lg font-medium transition ${
-                  selectedPlan === plan.id
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Select Plan
-              </button>
+              
+              {selectedPlan === plan.id && (
+                <div className="absolute top-2 left-2">
+                  <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+                    <Check className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-semibold text-blue-900 mb-2">
-            How credits work
-          </h3>
-          <ul className="space-y-1 text-sm text-blue-800">
-            <li>• 1 credit = 1 item analysis (up to 24 photos)</li>
-            <li>• Credits never expire</li>
-            <li>• Use for both single and bulk analysis</li>
-            <li>• Instant AI-powered listings for eBay & Vinted</li>
-          </ul>
+        {/* Payment Section */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Complete Your Purchase</h3>
+          
+          <div className="mb-6">
+            <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+              <div>
+                <p className="font-medium text-gray-900">
+                  {plans.find(p => p.id === selectedPlan)?.name}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {plans.find(p => p.id === selectedPlan)?.credits} credits
+                </p>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">
+                £{plans.find(p => p.id === selectedPlan)?.price}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handlePurchase}
+            disabled={loading}
+            className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center"
+          >
+            <CreditCard className="h-5 w-5 mr-2" />
+            {loading ? 'Processing...' : 'Purchase Credits'}
+          </button>
+          
+          <p className="text-xs text-gray-500 text-center mt-4">
+            Secure payment powered by Stripe. VAT included where applicable.
+          </p>
+        </div>
+
+        {/* FAQ */}
+        <div className="mt-12">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg p-6">
+              <h3 className="font-medium text-gray-900 mb-2">Do credits expire?</h3>
+              <p className="text-gray-600">No, credits never expire. Use them whenever you need.</p>
+            </div>
+            <div className="bg-white rounded-lg p-6">
+              <h3 className="font-medium text-gray-900 mb-2">Can I get a refund?</h3>
+              <p className="text-gray-600">We offer a 14-day money-back guarantee on unused credits.</p>
+            </div>
+            <div className="bg-white rounded-lg p-6">
+              <h3 className="font-medium text-gray-900 mb-2">Need more credits?</h3>
+              <p className="text-gray-600">Contact us for custom enterprise packages with volume discounts.</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
