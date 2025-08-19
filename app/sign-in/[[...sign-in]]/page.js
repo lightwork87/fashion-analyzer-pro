@@ -1,6 +1,6 @@
-import { SignUp } from '@clerk/nextjs';
+import { SignIn } from '@clerk/nextjs';
 
-export default function SignUpPage() {
+export default function SignInPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="w-full max-w-md">
@@ -10,13 +10,13 @@ export default function SignUpPage() {
               <span className="text-white font-bold text-lg">LL</span>
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Create your LightLister AI account</h1>
-          <p className="text-gray-600 mt-2">Start creating perfect listings in seconds</p>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back to LightLister AI</h1>
+          <p className="text-gray-600 mt-2">Sign in to your account to continue</p>
         </div>
-        <SignUp 
+        <SignIn 
           routing="path"
-          path="/sign-up"
-          signInUrl="/sign-in"
+          path="/sign-in"
+          signUpUrl="/sign-up"
           redirectUrl="/dashboard"
           appearance={{
             elements: {
