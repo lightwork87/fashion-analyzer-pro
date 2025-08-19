@@ -5,8 +5,8 @@ import { ClerkProvider } from '@clerk/nextjs';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'LightLister AI',
-  description: 'AI-powered listing creator',
+  title: 'LightLister AI - AI-Powered eBay & Vinted Listing Creator',
+  description: 'Create perfect eBay and Vinted listings in seconds with AI.',
 };
 
 export default function RootLayout({ children }) {

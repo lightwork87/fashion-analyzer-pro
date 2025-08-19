@@ -1,4 +1,3 @@
-cat > "app/sign-up/[[...sign-up]]/page.js" << 'ENDOFFILE'
 import { SignUp } from '@clerk/nextjs';
 
 export default function SignUpPage() {
@@ -8,4 +7,3 @@ export default function SignUpPage() {
     </div>
   );
 }
-ENDOFFILE
