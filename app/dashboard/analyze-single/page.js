@@ -1,30 +1,55 @@
-// app/dashboard/analyze-single/page.js - COMPLETE ANALYZE SINGLE PAGE
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import { 
+  Camera, 
   Upload, 
   X, 
-  Camera, 
   Loader2, 
-  AlertCircle, 
+  ArrowLeft, 
+  Info,
   CheckCircle,
-  ArrowLeft,
-  Image as ImageIcon
+  AlertCircle,
+  Image as ImageIcon,
+  Plus,
+  Sparkles,
+  Home,
+  CreditCard,
+  Moon,
+  Sun,
+  ChevronRight,
+  Zap,
+  Target,
+  TrendingUp,
+  Package
 } from 'lucide-react';
 
 export default function AnalyzeSinglePage() {
+  const { user } = useUser();
   const router = useRouter();
+  const fileInputRef = useRef(null);
+  
   const [images, setImages] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [error, setError] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState(null);
+  const [darkMode, setDarkMode] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [credits, setCredits] = useState(100); // Mock credits
 
-  const handleDrag = (e) => {
+  // Load dark mode preference
+  useState(() => {
+    const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+    setDarkMode(savedDarkMode);
+    if (savedDarkMode) {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const handleDrag = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === "dragenter" || e.type === "dragover") {
@@ -32,327 +57,449 @@ export default function AnalyzeSinglePage() {
     } else if (e.type === "dragleave") {
       setDragActive(false);
     }
-  };
+  }, []);
 
-  const handleDrop = (e) => {
+  const handleDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFiles(e.dataTransfer.files);
     }
-  };
+  }, []);
 
   const handleFiles = (files) => {
-    const newImages = [];
-    const maxFiles = 24 - images.length;
-    
-    for (let i = 0; i < Math.min(files.length, maxFiles); i++) {
-      const file = files[i];
-      if (file.type.startsWith('image/')) {
-        if (file.size > 10 * 1024 * 1024) { // 10MB limit
-          setError('Some files are too large. Maximum size is 10MB per image.');
-          continue;
-        }
-        newImages.push({
-          file,
-          preview: URL.createObjectURL(file),
-          id: Date.now() + i
-        });
-      }
+    const fileArray = Array.from(files);
+    const validFiles = fileArray.filter(file => 
+      file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024
+    );
+
+    if (validFiles.length !== fileArray.length) {
+      setError('Some files were skipped. Only images under 10MB are allowed.');
+      setTimeout(() => setError(null), 5000);
     }
-    
-    if (newImages.length > 0) {
-      setImages(prev => [...prev, ...newImages]);
-      setError('');
+
+    const newImages = validFiles.slice(0, 24 - images.length).map(file => ({
+      id: Date.now() + Math.random(),
+      file: file,
+      preview: URL.createObjectURL(file),
+      name: file.name,
+      size: file.size
+    }));
+
+    setImages(prev => [...prev, ...newImages]);
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files) {
+      handleFiles(e.target.files);
     }
   };
 
   const removeImage = (id) => {
-    setImages(prev => {
-      const image = prev.find(img => img.id === id);
-      if (image) {
-        URL.revokeObjectURL(image.preview);
-      }
-      return prev.filter(img => img.id !== id);
-    });
+    const image = images.find(img => img.id === id);
+    if (image?.preview) {
+      URL.revokeObjectURL(image.preview);
+    }
+    setImages(images.filter(img => img.id !== id));
   };
 
-  const uploadToSupabase = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
-    
-    if (!response.ok) {
-      throw new Error('Upload failed');
-    }
-    
-    const data = await response.json();
-    return data.url;
+  const reorderImages = (dragIndex, dropIndex) => {
+    const draggedImage = images[dragIndex];
+    const newImages = [...images];
+    newImages.splice(dragIndex, 1);
+    newImages.splice(dropIndex, 0, draggedImage);
+    setImages(newImages);
   };
 
-  const handleAnalyze = async () => {
-    if (images.length === 0) {
-      setError('Please upload at least one image');
-      return;
-    }
-
-    setAnalyzing(true);
-    setError('');
+  const analyzeItem = async () => {
+    if (!images.length) return;
+    
+    setIsAnalyzing(true);
+    setError(null);
     setUploadProgress(0);
-
+    
     try {
-      // Upload images first
+      // Upload images
       const uploadedUrls = [];
+      
       for (let i = 0; i < images.length; i++) {
         setUploadProgress(Math.round((i / images.length) * 50));
-        const url = await uploadToSupabase(images[i].file);
+        
+        // Upload to storage
+        const formData = new FormData();
+        formData.append('file', images[i].file);
+        
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!uploadRes.ok) throw new Error('Upload failed');
+        
+        const { url } = await uploadRes.json();
         uploadedUrls.push(url);
       }
-
-      setUploadProgress(50);
-
+      
+      setUploadProgress(75);
+      
       // Call AI analysis
       const response = await fetch('/api/analyze-ai', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          images: uploadedUrls,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          imageUrls: uploadedUrls,
+          analysisType: 'single'
+        })
       });
-
+      
+      const data = await response.json();
+      
       if (!response.ok) {
-        const data = await response.json();
         throw new Error(data.error || 'Analysis failed');
       }
-
-      const result = await response.json();
-      setUploadProgress(100);
-
-      // Redirect to results page
-      setTimeout(() => {
-        router.push(`/dashboard/results?id=${result.analysisId}`);
-      }, 500);
-
+      
+      if (data.success && data.analysis) {
+        setUploadProgress(100);
+        
+        // Save to session storage
+        sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
+        
+        // Navigate to results
+        router.push('/dashboard/results');
+      }
     } catch (err) {
-      console.error('Analysis error:', err);
-      setError(err.message || 'Failed to analyze images. Please try again.');
-      setAnalyzing(false);
+      setError(err.message || 'Failed to analyze item');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Link 
-            href="/dashboard" 
-            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Dashboard
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Analyze Single Item</h1>
-          <p className="mt-2 text-gray-600">
-            Upload photos of your fashion item for AI analysis and listing generation
-          </p>
-        </div>
-
-        {/* Upload Area */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Upload Photos</h2>
-            <p className="text-sm text-gray-600">
-              Upload up to 24 photos. Include multiple angles, brand tags, size labels, and any flaws for best results.
-            </p>
-          </div>
-
-          {/* Drop Zone */}
-          <div
-            className={`relative border-2 border-dashed rounded-lg p-8 text-center ${
-              dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-            } ${images.length > 0 ? 'mb-6' : ''}`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={(e) => handleFiles(e.target.files)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              disabled={images.length >= 24}
-            />
-            
-            <Camera className="mx-auto h-12 w-12 text-gray-400" />
-            <p className="mt-4 text-sm font-medium text-gray-900">
-              {images.length >= 24 
-                ? 'Maximum photos reached (24)'
-                : 'Drop photos here or click to browse'
-              }
-            </p>
-            <p className="mt-2 text-xs text-gray-500">
-              {24 - images.length} photos remaining • Max 10MB per image
-            </p>
-          </div>
-
-          {/* Image Preview Grid */}
-          {images.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-gray-900">
-                  Uploaded Photos ({images.length})
-                </h3>
-                <button
-                  onClick={() => {
-                    images.forEach(img => URL.revokeObjectURL(img.preview));
-                    setImages([]);
-                  }}
-                  className="text-sm text-red-600 hover:text-red-700"
-                >
-                  Remove all
-                </button>
-              </div>
+    <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+      {/* Header */}
+      <header className={`${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'} border-b sticky top-0 z-50`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <Link 
+                href="/dashboard"
+                className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'} transition`}
+              >
+                <Home className="w-5 h-5" />
+              </Link>
               
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {images.map((image) => (
-                  <div key={image.id} className="relative group">
-                    <img
-                      src={image.preview}
-                      alt="Upload preview"
-                      className="h-24 w-full object-cover rounded-lg"
-                    />
-                    <button
-                      onClick={() => removeImage(image.id)}
-                      className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+              <div className="flex items-center gap-2">
+                <h1 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black'}`}>
+                  Single Item Analysis
+                </h1>
+                <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Up to 24 photos
+                </span>
               </div>
             </div>
-          )}
 
-          {/* Error Message */}
-          {error && (
-            <div className="mt-6 bg-red-50 border border-red-200 rounded-md p-4">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
-                <p className="ml-3 text-sm text-red-800">{error}</p>
+            <div className="flex items-center gap-4">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+                darkMode 
+                  ? 'bg-gray-800 border-gray-700' 
+                  : 'bg-gray-100 border-gray-300'
+              }`}>
+                <CreditCard className="w-4 h-4" />
+                <span className="font-medium">{credits} Credits</span>
               </div>
             </div>
-          )}
+          </div>
+        </div>
+      </header>
 
-          {/* Analysis Progress */}
-          {analyzing && (
-            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-md p-4">
-              <div className="flex items-center">
-                <Loader2 className="h-5 w-5 text-blue-600 animate-spin flex-shrink-0" />
-                <div className="ml-3 flex-1">
-                  <p className="text-sm font-medium text-blue-900">
-                    Analyzing your item...
-                  </p>
-                  <div className="mt-2 bg-blue-200 rounded-full overflow-hidden">
-                    <div 
-                      className="bg-blue-600 h-2 transition-all duration-500"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Breadcrumbs */}
+        <nav className="flex items-center gap-2 text-sm mb-8">
+          <Link href="/dashboard" className={darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'}>
+            Dashboard
+          </Link>
+          <ChevronRight className="w-4 h-4" />
+          <span className={darkMode ? 'text-white' : 'text-black'}>Single Item Analysis</span>
+        </nav>
+
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Upload Area */}
+          <div className="lg:col-span-2">
+            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6`}>
+              <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-black'}`}>
+                Upload Photos
+              </h2>
+
+              {error && (
+                <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600" />
+                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                   </div>
-                  <p className="mt-1 text-xs text-blue-700">
-                    {uploadProgress < 50 
-                      ? 'Uploading images...' 
-                      : 'Processing with AI...'}
+                </div>
+              )}
+
+              {images.length === 0 ? (
+                <div
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
+                    dragActive 
+                      ? 'border-black dark:border-white bg-gray-50 dark:bg-gray-700' 
+                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                  }`}
+                >
+                  <div className="mx-auto w-24 h-24 mb-4 relative">
+                    <Camera className={`w-24 h-24 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                    <Plus className="absolute bottom-0 right-0 w-8 h-8 bg-black text-white rounded-full p-1" />
+                  </div>
+                  
+                  <h3 className={`text-lg font-medium mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>
+                    {dragActive ? 'Drop your images here' : 'Click or drag photos to upload'}
+                  </h3>
+                  
+                  <p className={`text-sm mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    PNG, JPG, HEIC up to 10MB each • Maximum 24 photos
                   </p>
+                  
+                  <button className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition">
+                    Select Photos
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Image Grid */}
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 mb-6">
+                    {images.map((image, index) => (
+                      <div
+                        key={image.id}
+                        draggable
+                        onDragStart={(e) => e.dataTransfer.setData('dragIndex', index)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const dragIndex = parseInt(e.dataTransfer.getData('dragIndex'));
+                          reorderImages(dragIndex, index);
+                        }}
+                        className="relative group cursor-move"
+                      >
+                        <img
+                          src={image.preview}
+                          alt={image.name}
+                          className="w-full aspect-square object-cover rounded-lg"
+                        />
+                        {index === 0 && (
+                          <span className="absolute top-1 left-1 px-2 py-0.5 bg-black text-white text-xs rounded">
+                            Main
+                          </span>
+                        )}
+                        <button
+                          onClick={() => removeImage(image.id)}
+                          disabled={isAnalyzing}
+                          className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    
+                    {images.length < 24 && !isAnalyzing && (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`aspect-square border-2 border-dashed rounded-lg flex items-center justify-center transition ${
+                          darkMode 
+                            ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
+                            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Plus className="w-6 h-6 text-gray-400" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Progress Bar */}
+                  {isAnalyzing && (
+                    <div className="mb-6">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          {uploadProgress < 50 ? 'Uploading photos...' : uploadProgress < 100 ? 'Analyzing with AI...' : 'Complete!'}
+                        </span>
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          {uploadProgress}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-black dark:bg-white h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-between">
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {images.length} photo{images.length !== 1 ? 's' : ''} selected
+                    </p>
+                    
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setImages([])}
+                        disabled={isAnalyzing}
+                        className={`px-4 py-2 rounded-lg border transition disabled:opacity-50 ${
+                          darkMode 
+                            ? 'border-gray-600 hover:bg-gray-700' 
+                            : 'border-gray-300 hover:bg-gray-100'
+                        }`}
+                      >
+                        Clear All
+                      </button>
+                      
+                      <button
+                        onClick={analyzeItem}
+                        disabled={isAnalyzing || images.length === 0}
+                        className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Analyze with AI
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          {/* Right Column - Tips & Info */}
+          <div className="space-y-6">
+            {/* AI Features */}
+            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6`}>
+              <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-black'}`}>
+                <Zap className="w-5 h-5" />
+                AI Analysis Features
+              </h3>
+              
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <Target className="w-5 h-5 text-green-500 mt-0.5" />
+                  <div>
+                    <p className={`font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
+                      Brand Detection
+                    </p>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Identifies brands from logos, labels, and style
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <Package className="w-5 h-5 text-blue-500 mt-0.5" />
+                  <div>
+                    <p className={`font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
+                      Size & Measurements
+                    </p>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Extracts UK sizes from labels and tags
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <TrendingUp className="w-5 h-5 text-purple-500 mt-0.5" />
+                  <div>
+                    <p className={`font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
+                      UK Price Estimation
+                    </p>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Based on eBay UK sold listings (90 days)
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          )}
 
-          {/* Success Message */}
-          {uploadProgress === 100 && !error && (
-            <div className="mt-6 bg-green-50 border border-green-200 rounded-md p-4">
-              <div className="flex items-center">
-                <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                <p className="ml-3 text-sm text-green-800">
-                  Analysis complete! Redirecting to results...
+            {/* Photo Tips */}
+            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6`}>
+              <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-black'}`}>
+                <Camera className="w-5 h-5" />
+                Photo Tips
+              </h3>
+              
+              <ul className={`space-y-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
+                  <span>Include clear photos of brand labels and tags</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
+                  <span>Show size labels and care instructions</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
+                  <span>Capture any flaws or wear from multiple angles</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
+                  <span>Use good lighting and neutral backgrounds</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
+                  <span>First photo will be your main listing image</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Credit Usage */}
+            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6`}>
+              <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-black'}`}>
+                <Info className="w-5 h-5" />
+                Credit Usage
+              </h3>
+              
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-3`}>
+                Single item analysis uses <span className="font-semibold">1 credit</span> regardless of photo count.
+              </p>
+              
+              <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
+                  Your balance: {credits} credits
                 </p>
+                <Link 
+                  href="/dashboard/credits"
+                  className="text-sm text-blue-500 hover:text-blue-600 mt-1 inline-block"
+                >
+                  Get more credits →
+                </Link>
               </div>
             </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="mt-8 flex justify-between">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Cancel
-            </Link>
-            
-            <button
-              onClick={handleAnalyze}
-              disabled={images.length === 0 || analyzing}
-              className={`inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
-                images.length === 0 || analyzing
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700'
-              }`}
-            >
-              {analyzing ? (
-                <>
-                  <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Camera className="-ml-1 mr-2 h-5 w-5" />
-                  Analyze Item (1 Credit)
-                </>
-              )}
-            </button>
           </div>
         </div>
-
-        {/* Tips Section */}
-        <div className="mt-8 bg-blue-50 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-3">
-            📸 Photo Tips for Best Results
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
-            <div>
-              <h4 className="font-medium mb-2">What to Include:</h4>
-              <ul className="space-y-1">
-                <li>• Front and back views</li>
-                <li>• Brand labels and tags</li>
-                <li>• Size labels</li>
-                <li>• Close-ups of unique features</li>
-                <li>• Any flaws or wear areas</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-medium mb-2">Best Practices:</h4>
-              <ul className="space-y-1">
-                <li>• Use good lighting</li>
-                <li>• Plain background preferred</li>
-                <li>• Ensure labels are readable</li>
-                <li>• Include measurements if possible</li>
-                <li>• Show actual condition clearly</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
