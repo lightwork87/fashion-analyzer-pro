@@ -1,153 +1,192 @@
 'use client';
 
-import Link from 'next/link';
+import { useState } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { useCredits } from '../../contexts/CreditsContext';
-import CreditsDisplay from '../../components/CreditsDisplay';
-import ThemeToggle from '../../components/ThemeToggle';
 
 export default function PricingPage() {
+  const { user } = useUser();
   const { credits, updateCredits } = useCredits();
+  const [isMember, setIsMember] = useState(false); // Would check actual membership status
 
   const handlePurchase = (pack) => {
-    // This would integrate with Stripe
+    if (!isMember && pack.requiresMembership) {
+      alert('You need to be a member to purchase credit packs. Subscribe to LightLister Pro first!');
+      return;
+    }
+    
+    // Stripe integration would go here
     alert(`Purchasing ${pack.name} - Stripe integration coming soon!`);
+    
     // For demo, add credits
     if (pack.credits) {
       updateCredits(credits + pack.credits);
     }
   };
 
+  const handleSubscribe = () => {
+    // Stripe subscription would go here
+    alert('Subscribing to LightLister Pro - Stripe integration coming soon!');
+    setIsMember(true);
+  };
+
   const pricingPlans = [
+    {
+      name: 'Free Trial',
+      credits: 5,
+      price: 'Free',
+      description: 'Get started with 5 free credits',
+      badge: 'New Users',
+      popular: false,
+      requiresMembership: false,
+      oneTime: true
+    },
+    {
+      name: 'LightLister Pro Monthly',
+      credits: null,
+      price: '£45.00',
+      period: 'month',
+      description: 'Unlimited analyses + member benefits',
+      badge: 'Subscription',
+      popular: true,
+      requiresMembership: false,
+      features: [
+        'Unlimited analyses per month',
+        'Access to credit packs',
+        'Priority support',
+        'Advanced features',
+        'Bulk processing'
+      ]
+    },
     {
       name: 'Starter Pack',
       credits: 10,
       price: '£3.00',
       description: 'Perfect for trying out the service',
       badge: 'Members Only',
-      popular: false
+      popular: false,
+      requiresMembership: true
     },
     {
       name: 'Growth Pack',
       credits: 50,
       price: '£15.00',
       description: 'Great for regular sellers',
-      badge: null,
-      popular: true
+      badge: 'Members Only',
+      popular: false,
+      requiresMembership: true
     },
     {
       name: 'Pro Pack',
       credits: 150,
       price: '£45.00',
       description: 'Best value for power users',
-      badge: null,
-      popular: false
-    },
-    {
-      name: 'LightLister Pro Monthly',
-      credits: null,
-      price: '£45.00/month',
-      description: 'Unlimited analyses per month',
-      badge: 'Subscription',
-      popular: false
+      badge: 'Members Only',
+      popular: false,
+      requiresMembership: true
     }
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Navigation */}
-      <nav className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80">
-                <div className="w-8 h-8 bg-black dark:bg-white rounded-lg flex items-center justify-center">
-                  <span className="text-white dark:text-black font-bold text-sm">LL</span>
-                </div>
-                <h1 className="text-xl font-bold dark:text-white">LightLister AI</h1>
-              </Link>
-            </div>
-            <div className="flex items-center gap-4">
-              <CreditsDisplay />
-              <ThemeToggle />
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link href="/dashboard" className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6">
-          ← Back to Dashboard
-        </Link>
-
+    <div className="p-8">
+      <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">Choose Your Plan</h1>
           <p className="text-xl text-gray-600 dark:text-gray-300">
-            Get more credits to create perfect listings faster
-          </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            New users get 5 free credits to start!
+            Subscribe to unlock credit packs and unlimited features
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {pricingPlans.map((plan) => (
+        {/* Membership Status */}
+        {!isMember && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-8 text-center">
+            <p className="text-yellow-800 dark:text-yellow-300">
+              ⚠️ You need a LightLister Pro membership to purchase credit packs
+            </p>
+          </div>
+        )}
+
+        {/* Subscription Plan - Featured */}
+        <div className="mb-8">
+          <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg shadow-xl p-1">
+            <div className="bg-white dark:bg-gray-900 rounded-lg p-8">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    LightLister Pro Monthly
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-300 mb-4">
+                    Unlimited analyses + member benefits
+                  </p>
+                  <div className="space-y-2 mb-6">
+                    {['Unlimited analyses per month', 'Access to credit packs', 'Priority support', 'Advanced features', 'Bulk processing'].map((feature) => (
+                      <div key={feature} className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-gray-700 dark:text-gray-300">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">£45.00</div>
+                  <div className="text-gray-600 dark:text-gray-400">per month</div>
+                  <button
+                    onClick={handleSubscribe}
+                    className="mt-4 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition font-medium"
+                  >
+                    {isMember ? 'Current Plan' : 'Subscribe Now'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Credit Packs */}
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Credit Packs</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {pricingPlans.filter(plan => plan.requiresMembership !== false && plan.credits).map((plan) => (
             <div
               key={plan.name}
-              className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden ${
-                plan.popular ? 'ring-2 ring-blue-500' : ''
+              className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 ${
+                !isMember ? 'opacity-60' : ''
               }`}
             >
-              {plan.popular && (
-                <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 text-sm font-semibold">
-                  Popular
-                </div>
-              )}
-              {plan.badge && !plan.popular && (
-                <div className="absolute top-0 right-0 bg-purple-500 text-white px-3 py-1 text-sm font-semibold">
+              {plan.badge && (
+                <div className="inline-block px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-sm font-semibold rounded-full mb-4">
                   {plan.badge}
                 </div>
               )}
               
-              <div className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  {plan.name}
-                </h3>
-                <div className="mb-4">
-                  <span className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {plan.price.split('/')[0]}
-                  </span>
-                  {plan.price.includes('/') && (
-                    <span className="text-gray-600 dark:text-gray-400">
-                      /{plan.price.split('/')[1]}
-                    </span>
-                  )}
-                </div>
-                <p className="text-gray-600 dark:text-gray-300 mb-6">
-                  {plan.description}
-                </p>
-                {plan.credits && (
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                    {plan.credits} credits
-                  </p>
-                )}
-                <button
-                  onClick={() => handlePurchase(plan)}
-                  className={`w-full py-2 px-4 rounded-lg font-medium transition ${
-                    plan.popular
-                      ? 'bg-blue-500 text-white hover:bg-blue-600'
-                      : 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
-                  }`}
-                >
-                  {plan.credits ? 'Buy Now' : 'Subscribe'}
-                </button>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                {plan.name}
+              </h3>
+              <div className="mb-4">
+                <span className="text-3xl font-bold text-gray-900 dark:text-white">
+                  {plan.price}
+                </span>
               </div>
+              <p className="text-gray-600 dark:text-gray-300 mb-4">
+                {plan.description}
+              </p>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                {plan.credits} credits
+              </p>
+              <button
+                onClick={() => handlePurchase(plan)}
+                disabled={!isMember}
+                className={`w-full py-2 px-4 rounded-lg font-medium transition ${
+                  isMember
+                    ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
+                    : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {isMember ? 'Buy Now' : 'Members Only'}
+              </button>
             </div>
           ))}
-        </div>
-
-        <div className="mt-12 text-center text-sm text-gray-600 dark:text-gray-400">
-          <p>💳 Secure payment via Stripe</p>
-          <p className="mt-2">All prices include VAT</p>
         </div>
       </div>
     </div>

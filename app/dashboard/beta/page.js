@@ -2,152 +2,182 @@
 
 import { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
-import Link from 'next/link';
-import CreditsDisplay from '../../components/CreditsDisplay';
-import ThemeToggle from '../../components/ThemeToggle';
 
 export default function BetaPage() {
   const { user } = useUser();
-  const [feedbackType, setFeedbackType] = useState('bug');
-  const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    email: user?.emailAddresses?.[0]?.emailAddress || '',
+    ebayUsername: '',
+    monthlyVolume: '',
+    interests: [],
+    experience: '',
+    feedback: ''
+  });
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Create mailto link
+    // Create mailto link with form data
     const email = 'lightlisterai@outlook.com';
-    const emailSubject = `[Beta ${feedbackType === 'bug' ? 'Bug Report' : 'Feature Request'}] ${subject}`;
+    const emailSubject = `Beta Program Application - ${formData.name}`;
     const emailBody = `
-User: ${user?.emailAddresses?.[0]?.emailAddress || 'Unknown'}
-Type: ${feedbackType === 'bug' ? 'Bug Report' : 'Feature Request'}
+Beta Program Application
 
-Subject: ${subject}
+Name: ${formData.name}
+Email: ${formData.email}
+eBay Username: ${formData.ebayUsername}
+Monthly Listing Volume: ${formData.monthlyVolume}
+Areas of Interest: ${formData.interests.join(', ')}
+Experience Level: ${formData.experience}
 
-Description:
-${description}
+Additional Feedback:
+${formData.feedback}
 
 ---
-Sent from LightLister AI Beta Program
+Submitted from LightLister AI Beta Program
     `.trim();
 
     // Open email client
     window.location.href = `mailto:${email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
     
     setSubmitted(true);
-    setTimeout(() => {
-      setSubject('');
-      setDescription('');
-      setSubmitted(false);
-    }, 3000);
+  };
+
+  const handleInterestChange = (interest) => {
+    setFormData(prev => ({
+      ...prev,
+      interests: prev.interests.includes(interest)
+        ? prev.interests.filter(i => i !== interest)
+        : [...prev.interests, interest]
+    }));
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Navigation */}
-      <nav className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80">
-                <div className="w-8 h-8 bg-black dark:bg-white rounded-lg flex items-center justify-center">
-                  <span className="text-white dark:text-black font-bold text-sm">LL</span>
-                </div>
-                <h1 className="text-xl font-bold dark:text-white">LightLister AI</h1>
-              </Link>
-            </div>
-            <div className="flex items-center gap-4">
-              <CreditsDisplay />
-              <ThemeToggle />
-            </div>
-          </div>
+    <div className="p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Beta Program Application</h1>
+
+        {/* Beta Features */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+          <h2 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-3">Beta Program Benefits</h2>
+          <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-400">
+            <li>✅ Early access to new features</li>
+            <li>✅ Direct communication with development team</li>
+            <li>✅ 50% discount on credit purchases during beta</li>
+            <li>✅ Priority support</li>
+            <li>✅ Influence product development</li>
+          </ul>
         </div>
-      </nav>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link href="/dashboard" className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6">
-          ← Back to Dashboard
-        </Link>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Beta Program</h1>
-            <p className="text-gray-600 dark:text-gray-300">
-              Thank you for being an early adopter! Your feedback helps us build a better product.
-            </p>
-          </div>
-
-          {/* Beta Features */}
-          <div className="mb-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <h2 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-3">Current Beta Features</h2>
-            <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-400">
-              <li>✅ AI-powered listing generation</li>
-              <li>✅ Single item analysis</li>
-              <li>✅ 5 free trial credits for new users</li>
-              <li>🚧 Batch processing (Coming soon)</li>
-              <li>🚧 eBay/Vinted API integration (Coming soon)</li>
-              <li>🚧 Advanced pricing suggestions (Coming soon)</li>
-            </ul>
-          </div>
-
-          {/* Feedback Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Feedback Type
-              </label>
-              <div className="flex gap-4">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    value="bug"
-                    checked={feedbackType === 'bug'}
-                    onChange={(e) => setFeedbackType(e.target.value)}
-                    className="mr-2"
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Bug Report</span>
+        {/* Application Form */}
+        {!submitted ? (
+          <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Full Name *
                 </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    value="feature"
-                    checked={feedbackType === 'feature'}
-                    onChange={(e) => setFeedbackType(e.target.value)}
-                    className="mr-2"
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Feature Request</span>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Email *
                 </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  eBay Username
+                </label>
+                <input
+                  type="text"
+                  value={formData.ebayUsername}
+                  onChange={(e) => setFormData({...formData, ebayUsername: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Monthly Listing Volume
+                </label>
+                <select
+                  value={formData.monthlyVolume}
+                  onChange={(e) => setFormData({...formData, monthlyVolume: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select...</option>
+                  <option value="1-10">1-10 items</option>
+                  <option value="11-50">11-50 items</option>
+                  <option value="51-100">51-100 items</option>
+                  <option value="100+">100+ items</option>
+                </select>
               </div>
             </div>
 
             <div>
-              <label htmlFor="subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Subject
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Areas of Interest (Check all that apply)
               </label>
-              <input
-                type="text"
-                id="subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder={feedbackType === 'bug' ? 'Brief description of the issue' : 'Brief description of your idea'}
-              />
+              <div className="space-y-2">
+                {['AI Accuracy', 'Batch Processing', 'Pricing Suggestions', 'eBay Integration', 'Vinted Integration', 'Mobile App'].map((interest) => (
+                  <label key={interest} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.interests.includes(interest)}
+                      onChange={() => handleInterestChange(interest)}
+                      className="mr-2"
+                    />
+                    <span className="text-gray-700 dark:text-gray-300">{interest}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Description
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Experience Level
+              </label>
+              <select
+                value={formData.experience}
+                onChange={(e) => setFormData({...formData, experience: e.target.value})}
+                required
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">Select...</option>
+                <option value="beginner">Beginner (< 1 year)</option>
+                <option value="intermediate">Intermediate (1-3 years)</option>
+                <option value="advanced">Advanced (3+ years)</option>
+                <option value="professional">Professional Seller</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                What features would you like to see? (Optional)
               </label>
               <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
-                rows={6}
+                value={formData.feedback}
+                onChange={(e) => setFormData({...formData, feedback: e.target.value})}
+                rows={4}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder={feedbackType === 'bug' ? 'Please describe the issue in detail. Include steps to reproduce if possible.' : 'Please describe your feature idea and how it would help you.'}
+                placeholder="Tell us about features you'd like to see or improvements you'd suggest..."
               />
             </div>
 
@@ -155,27 +185,21 @@ Sent from LightLister AI Beta Program
               type="submit"
               className="w-full py-3 px-4 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition font-medium"
             >
-              Send Feedback via Email
+              Submit Application
             </button>
-
-            {submitted && (
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                <p className="text-green-800 dark:text-green-300 text-sm">
-                  Thank you! Your email client should open with your feedback ready to send.
-                </p>
-              </div>
-            )}
           </form>
-
-          <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              You can also email us directly at{' '}
-              <a href="mailto:lightlisterai@outlook.com" className="text-blue-600 dark:text-blue-400 hover:underline">
-                lightlisterai@outlook.com
-              </a>
+        ) : (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-8 text-center">
+            <span className="text-4xl mb-4 block">✅</span>
+            <h2 className="text-2xl font-bold text-green-900 dark:text-green-300 mb-2">Application Submitted!</h2>
+            <p className="text-green-800 dark:text-green-400">
+              Your email client should open with your application. Please send the email to complete your application.
+            </p>
+            <p className="text-sm text-green-700 dark:text-green-500 mt-4">
+              We'll review your application and get back to you within 48 hours.
             </p>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
