@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 
 export async function GET() {
-  await auth().signOut();
-  return Response.redirect(new URL('/', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'));
+  // In Clerk, signout is handled client-side
+  // This route just redirects to the homepage
+  redirect('/');
 }
