@@ -16,12 +16,18 @@ export default function AnalyzeSingle() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Check file size (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Image too large. Maximum size is 10MB.');
+        return;
+      }
       setImage(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result);
       };
       reader.readAsDataURL(file);
+      setError(null);
     }
   };
 
@@ -56,7 +62,29 @@ export default function AnalyzeSingle() {
       }
 
       setResults(data.analysis);
-      useCredit(); // Deduct credit after successful analysis
+      
+      // Only deduct credit if not in test mode
+      if (!data.analysis.testMode) {
+        useCredit();
+      }
+
+      // Save to history
+      const historyItem = {
+        title: data.analysis.title || data.analysis.TITLE,
+        description: data.analysis.description || data.analysis.DESCRIPTION,
+        price: data.analysis.SUGGESTED_PRICE_GBP || data.analysis.suggestedPrice,
+        category: data.analysis.category || data.analysis.CATEGORY,
+        condition: data.analysis.condition || data.analysis.CONDITION,
+        tags: data.analysis.tags || data.analysis.TAGS || [],
+        brand: data.analysis.brand || data.analysis.BRAND,
+        timestamp: new Date().toISOString()
+      };
+
+      const existingHistory = JSON.parse(localStorage.getItem('analysisHistory') || '[]');
+      existingHistory.unshift(historyItem); // Add to beginning
+      if (existingHistory.length > 50) existingHistory.pop(); // Keep max 50 items
+      localStorage.setItem('analysisHistory', JSON.stringify(existingHistory));
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -66,7 +94,13 @@ export default function AnalyzeSingle() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    // You could add a toast notification here
+    // Show a temporary success message
+    const button = event.target;
+    const originalText = button.innerText;
+    button.innerText = '✅';
+    setTimeout(() => {
+      button.innerText = originalText;
+    }, 1000);
   };
 
   return (
@@ -82,17 +116,24 @@ export default function AnalyzeSingle() {
             <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
               {preview ? (
                 <div className="space-y-4">
-                  <img src={preview} alt="Preview" className="max-w-full h-64 object-contain mx-auto rounded" />
-                  <button
-                    onClick={() => {
-                      setImage(null);
-                      setPreview(null);
-                      setResults(null);
-                    }}
-                    className="text-red-500 hover:text-red-600"
-                  >
-                    Remove Image
-                  </button>
+                  <img 
+                    src={preview} 
+                    alt="Preview" 
+                    className="max-w-full h-64 object-contain mx-auto rounded" 
+                  />
+                  <div className="flex justify-center gap-4">
+                    <button
+                      onClick={() => {
+                        setImage(null);
+                        setPreview(null);
+                        setResults(null);
+                        setError(null);
+                      }}
+                      className="text-red-500 hover:text-red-600 font-medium"
+                    >
+                      Remove Image
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -100,8 +141,10 @@ export default function AnalyzeSingle() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                   <div>
-                    <label htmlFor="file-upload" className="cursor-pointer text-blue-600 hover:text-blue-500">
-                      <span>Upload a file</span>
+                    <label htmlFor="file-upload" className="cursor-pointer">
+                      <span className="text-blue-600 hover:text-blue-500 font-medium">
+                        Upload a file
+                      </span>
                       <input
                         id="file-upload"
                         name="file-upload"
@@ -111,7 +154,9 @@ export default function AnalyzeSingle() {
                         onChange={handleImageChange}
                       />
                     </label>
-                    <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF up to 10MB</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      PNG, JPG, GIF up to 10MB
+                    </p>
                   </div>
                 </div>
               )}
@@ -144,6 +189,10 @@ export default function AnalyzeSingle() {
                 `Analyze (1 Credit)`
               )}
             </button>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-2">
+              You have {credits} credits remaining
+            </p>
           </div>
 
           {/* Results Section */}
@@ -152,6 +201,12 @@ export default function AnalyzeSingle() {
             
             {results ? (
               <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                {results.testMode && (
+                  <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 rounded text-sm">
+                    ⚠️ Test Mode: Add API keys for real AI analysis
+                  </div>
+                )}
+
                 {/* Title */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -165,7 +220,7 @@ export default function AnalyzeSingle() {
                       className="flex-1 p-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
                     />
                     <button
-                      onClick={() => copyToClipboard(results.TITLE || results.title || '')}
+                      onClick={(e) => copyToClipboard(results.TITLE || results.title || '')}
                       className="px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
                     >
                       📋
@@ -183,10 +238,10 @@ export default function AnalyzeSingle() {
                       value={results.DESCRIPTION || results.description || ''}
                       readOnly
                       rows={4}
-                      className="flex-1 p-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                      className="flex-1 p-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white resize-none"
                     />
                     <button
-                      onClick={() => copyToClipboard(results.DESCRIPTION || results.description || '')}
+                      onClick={(e) => copyToClipboard(results.DESCRIPTION || results.description || '')}
                       className="px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 h-fit"
                     >
                       📋
@@ -199,12 +254,20 @@ export default function AnalyzeSingle() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Suggested Price (GBP)
                   </label>
-                  <input
-                    type="text"
-                    value={`£${results.SUGGESTED_PRICE_GBP || results.suggestedPrice || '0.00'}`}
-                    readOnly
-                    className="w-full p-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={`£${results.SUGGESTED_PRICE_GBP || results.suggestedPrice || '0.00'}`}
+                      readOnly
+                      className="flex-1 p-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                    />
+                    <button
+                      onClick={(e) => copyToClipboard(results.SUGGESTED_PRICE_GBP || results.suggestedPrice || '0.00')}
+                      className="px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                    >
+                      📋
+                    </button>
+                  </div>
                 </div>
 
                 {/* Category */}
@@ -225,12 +288,16 @@ export default function AnalyzeSingle() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Condition
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={results.CONDITION || results.condition || 'Good'}
-                    readOnly
                     className="w-full p-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
-                  />
+                    readOnly
+                  >
+                    <option>New</option>
+                    <option>Like New</option>
+                    <option>Good</option>
+                    <option>Fair</option>
+                  </select>
                 </div>
 
                 {/* Brand */}
@@ -242,6 +309,21 @@ export default function AnalyzeSingle() {
                     <input
                       type="text"
                       value={results.BRAND || results.brand}
+                      readOnly
+                      className="w-full p-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                )}
+
+                {/* Size */}
+                {(results.SIZE || results.size) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Size
+                    </label>
+                    <input
+                      type="text"
+                      value={results.SIZE || results.size}
                       readOnly
                       className="w-full p-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
                     />
@@ -266,7 +348,7 @@ export default function AnalyzeSingle() {
                 </div>
 
                 {/* Colors Detected */}
-                {results.visionData?.colors && (
+                {results.visionData?.colors && results.visionData.colors.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Detected Colors
@@ -284,12 +366,30 @@ export default function AnalyzeSingle() {
                   </div>
                 )}
 
+                {/* Style Notes */}
+                {(results.STYLE_NOTES || results.styleNotes) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Style Notes
+                    </label>
+                    <p className="p-2 bg-gray-50 dark:bg-gray-700 rounded text-sm dark:text-gray-300">
+                      {results.STYLE_NOTES || results.styleNotes}
+                    </p>
+                  </div>
+                )}
+
                 {/* Action Buttons */}
-                <div className="flex gap-3 mt-6">
-                  <button className="flex-1 py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700">
+                <div className="flex gap-3 mt-6 pt-4 border-t dark:border-gray-700">
+                  <button 
+                    className="flex-1 py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    disabled={results.testMode}
+                  >
                     List on eBay
                   </button>
-                  <button className="flex-1 py-2 px-4 bg-purple-600 text-white rounded hover:bg-purple-700">
+                  <button 
+                    className="flex-1 py-2 px-4 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                    disabled={results.testMode}
+                  >
                     List on Vinted
                   </button>
                 </div>
@@ -300,6 +400,9 @@ export default function AnalyzeSingle() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 <p>Upload and analyze an image to see results</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                  AI will detect brand, style, condition and suggest pricing
+                </p>
               </div>
             )}
           </div>
