@@ -161,7 +161,7 @@ Submitted from LightLister AI Beta Program
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="">Select...</option>
-                <option value="beginner">Beginner (< 1 year)</option>
+                <option value="beginner">Beginner (Less than 1 year)</option>
                 <option value="intermediate">Intermediate (1-3 years)</option>
                 <option value="advanced">Advanced (3+ years)</option>
                 <option value="professional">Professional Seller</option>
