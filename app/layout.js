@@ -10,13 +10,10 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  // TEMPORARY: Hardcode your actual Clerk publishable key here
-  // Replace this with your ACTUAL key from Clerk Dashboard
-  const publishableKey = 'pk_live_Y2xlcmsubGlnaHRsaXN0ZXJhaS5jby51ayQ'; // <-- PUT YOUR REAL KEY HERE
-  
   return (
     <ClerkProvider
-      publishableKey={publishableKey}
+      domain={null}  // Force default Clerk domain
+      isSatellite={false}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       afterSignInUrl="/dashboard"
