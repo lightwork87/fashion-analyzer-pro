@@ -10,16 +10,17 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  // Explicitly pass the publishable key
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  // TEMPORARY: Hardcode your actual Clerk publishable key here
+  // Replace this with your ACTUAL key from Clerk Dashboard
+  const publishableKey = 'pk_live_Y2xlcmsubGlnaHRsaXN0ZXJhaS5jby51ayQ'; // <-- PUT YOUR REAL KEY HERE
   
-  if (!publishableKey) {
-    throw new Error('Missing Clerk Publishable Key');
-  }
-
   return (
     <ClerkProvider
       publishableKey={publishableKey}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      afterSignInUrl="/dashboard"
+      afterSignUpUrl="/dashboard"
       appearance={{
         elements: {
           formButtonPrimary: 'bg-black hover:bg-gray-800 text-white',
