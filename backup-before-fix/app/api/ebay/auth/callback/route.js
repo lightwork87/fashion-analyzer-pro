@@ -1,0 +1,116 @@
+import { NextResponse } from 'next/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { supabase } from '../../../../lib/supabase';
+import { EBAY_ENDPOINTS } from '../../../../lib/ebay';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request) {
+  console.log('eBay callback triggered');
+  
+  try {
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    const error = searchParams.get('error');
+    
+    console.log('Callback params:', { code: !!code, state: !!state, error });
+    
+    if (error) {
+      console.error('eBay OAuth error:', error);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=${error}`);
+    }
+    
+    if (!code || !state) {
+      console.error('Missing code or state');
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=missing_params`);
+    }
+    
+    // Get current user
+    const user = await currentUser();
+    if (!user) {
+      console.error('No authenticated user');
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=not_authenticated`);
+    }
+    
+    const userId = user.id;
+    console.log('User ID:', userId);
+    
+    // Decode state if needed
+    let stateUserId = userId;
+    try {
+      const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+      stateUserId = stateData.userId || userId;
+    } catch (e) {
+      console.log('Could not decode state, using current user ID');
+    }
+    
+    // Exchange code for access token
+    const tokenUrl = 'https://api.ebay.com/identity/v1/oauth2/token';
+    const auth = Buffer.from(`${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}`).toString('base64');
+    
+    console.log('Exchanging code for token...');
+    
+    const tokenResponse = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${auth}`
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: `${process.env.NEXT_PUBLIC_BASE_URL}/api/ebay/auth/callback`
+      })
+    });
+    
+    const tokenData = await tokenResponse.json();
+    console.log('Token response status:', tokenResponse.status);
+    
+    if (!tokenResponse.ok) {
+      console.error('Token exchange failed:', tokenData);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=token_exchange_failed`);
+    }
+    
+    console.log('Token received, saving to database...');
+    
+    // First, get the user from Clerk ID
+    const { data: dbUser, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('clerk_id', userId)
+      .single();
+    
+    if (userError || !dbUser) {
+      console.error('User not found in database:', userError);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=user_not_found`);
+    }
+    
+    // Store tokens using user.id (UUID) instead of clerk_id
+    const { error: dbError } = await supabase
+      .from('ebay_tokens')
+      .upsert({
+        user_id: dbUser.id, // Use the UUID from users table
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      });
+    
+    if (dbError) {
+      console.error('Database error:', dbError);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=database_error`);
+    }
+    
+    console.log('Success! Redirecting to dashboard...');
+    
+    // Success! Redirect to dashboard
+    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_connected=true`);
+    
+  } catch (error) {
+    console.error('eBay callback error:', error);
+    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?ebay_error=callback_failed`);
+  }
+}

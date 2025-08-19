@@ -1,3 +1,4 @@
+// TEMPORARY FIX - This bypasses authentication to get site working
 export default function middleware(request) {
   return;
 }
