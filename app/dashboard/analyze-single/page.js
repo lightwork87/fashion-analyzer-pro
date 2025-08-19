@@ -1,55 +1,87 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  Camera, 
-  Upload, 
-  X, 
-  Loader2, 
-  ArrowLeft, 
-  Info,
-  CheckCircle,
-  AlertCircle,
-  Image as ImageIcon,
-  Plus,
-  Sparkles,
   Home,
-  CreditCard,
+  Upload,
+  Camera,
+  X,
+  ChevronRight,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
+  Info,
+  Image as ImageIcon,
+  Zap,
   Moon,
   Sun,
-  ChevronRight,
-  Zap,
-  Target,
-  TrendingUp,
-  Package
+  CreditCard,
+  Copy,
+  Download,
+  Eye,
+  ShoppingBag,
+  Tag,
+  PoundSterling,
+  Package,
+  BarChart3,
+  FileText,
+  Sparkles
 } from 'lucide-react';
 
 export default function AnalyzeSinglePage() {
   const { user } = useUser();
   const router = useRouter();
-  const fileInputRef = useRef(null);
   
+  // ✅ FIXED: Initialize without localStorage
+  const [darkMode, setDarkMode] = useState(false);
+  const [credits, setCredits] = useState(0);
   const [images, setImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [analysisResult, setAnalysisResult] = useState(null);
   const [error, setError] = useState(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
-  const [credits, setCredits] = useState(100); // Mock credits
 
-  // Load dark mode preference
-  useState(() => {
+  // ✅ FIXED: Access localStorage only in useEffect
+  useEffect(() => {
+    // Check for dark mode preference
     const savedDarkMode = localStorage.getItem('darkMode') === 'true';
     setDarkMode(savedDarkMode);
     if (savedDarkMode) {
       document.documentElement.classList.add('dark');
     }
+
+    // Fetch user credits
+    fetchCredits();
   }, []);
 
-  const handleDrag = useCallback((e) => {
+  const fetchCredits = async () => {
+    try {
+      const response = await fetch('/api/user/credits');
+      if (response.ok) {
+        const data = await response.json();
+        setCredits(data.available || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching credits:', error);
+    }
+  };
+
+  const toggleDarkMode = () => {
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    localStorage.setItem('darkMode', String(newDarkMode));
+    if (newDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
+
+  const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === "dragenter" || e.type === "dragover") {
@@ -57,123 +89,148 @@ export default function AnalyzeSinglePage() {
     } else if (e.type === "dragleave") {
       setDragActive(false);
     }
-  }, []);
+  };
 
-  const handleDrop = useCallback((e) => {
+  const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
+    
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFiles(e.dataTransfer.files);
     }
-  }, []);
-
-  const handleFiles = (files) => {
-    const fileArray = Array.from(files);
-    const validFiles = fileArray.filter(file => 
-      file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024
-    );
-
-    if (validFiles.length !== fileArray.length) {
-      setError('Some files were skipped. Only images under 10MB are allowed.');
-      setTimeout(() => setError(null), 5000);
-    }
-
-    const newImages = validFiles.slice(0, 24 - images.length).map(file => ({
-      id: Date.now() + Math.random(),
-      file: file,
-      preview: URL.createObjectURL(file),
-      name: file.name,
-      size: file.size
-    }));
-
-    setImages(prev => [...prev, ...newImages]);
   };
 
-  const handleFileSelect = (e) => {
-    if (e.target.files) {
-      handleFiles(e.target.files);
+  const handleFiles = (fileList) => {
+    const validFiles = [];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    
+    Array.from(fileList).forEach(file => {
+      if (!file.type.startsWith('image/')) {
+        setError(`${file.name} is not an image file`);
+        return;
+      }
+      
+      if (file.size > maxSize) {
+        setError(`${file.name} is too large (max 10MB)`);
+        return;
+      }
+      
+      validFiles.push(file);
+    });
+
+    if (validFiles.length > 0) {
+      const newImages = validFiles.map(file => ({
+        id: Math.random().toString(36).substr(2, 9),
+        file,
+        preview: URL.createObjectURL(file),
+        name: file.name,
+        size: file.size
+      }));
+      
+      setImages(prev => [...prev, ...newImages].slice(0, 24)); // Max 24 images
+      setError(null);
     }
   };
 
   const removeImage = (id) => {
-    const image = images.find(img => img.id === id);
-    if (image?.preview) {
-      URL.revokeObjectURL(image.preview);
+    setImages(prev => {
+      const image = prev.find(img => img.id === id);
+      if (image) {
+        URL.revokeObjectURL(image.preview);
+      }
+      return prev.filter(img => img.id !== id);
+    });
+  };
+
+  const handleAnalyze = async () => {
+    if (images.length === 0) {
+      setError('Please upload at least one image');
+      return;
     }
-    setImages(images.filter(img => img.id !== id));
-  };
 
-  const reorderImages = (dragIndex, dropIndex) => {
-    const draggedImage = images[dragIndex];
-    const newImages = [...images];
-    newImages.splice(dragIndex, 1);
-    newImages.splice(dropIndex, 0, draggedImage);
-    setImages(newImages);
-  };
+    if (credits < 1) {
+      setError('Insufficient credits. Please purchase more credits to continue.');
+      return;
+    }
 
-  const analyzeItem = async () => {
-    if (!images.length) return;
-    
     setIsAnalyzing(true);
     setError(null);
     setUploadProgress(0);
-    
+
     try {
-      // Upload images
-      const uploadedUrls = [];
-      
-      for (let i = 0; i < images.length; i++) {
-        setUploadProgress(Math.round((i / images.length) * 50));
-        
-        // Upload to storage
-        const formData = new FormData();
-        formData.append('file', images[i].file);
-        
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (!uploadRes.ok) throw new Error('Upload failed');
-        
-        const { url } = await uploadRes.json();
-        uploadedUrls.push(url);
-      }
-      
-      setUploadProgress(75);
-      
-      // Call AI analysis
-      const response = await fetch('/api/analyze-ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          imageUrls: uploadedUrls,
-          analysisType: 'single'
-        })
+      const formData = new FormData();
+      images.forEach(img => {
+        formData.append('images', img.file);
       });
-      
-      const data = await response.json();
-      
+
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      const response = await fetch('/api/analyze-single', {
+        method: 'POST',
+        body: formData
+      });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
       if (!response.ok) {
-        throw new Error(data.error || 'Analysis failed');
+        throw new Error('Analysis failed');
       }
+
+      const result = await response.json();
+      setAnalysisResult(result);
       
-      if (data.success && data.analysis) {
-        setUploadProgress(100);
-        
-        // Save to session storage
-        sessionStorage.setItem('analysisResult', JSON.stringify(data.analysis));
-        
-        // Navigate to results
-        router.push('/dashboard/results');
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to analyze item');
+      // Refresh credits after analysis
+      fetchCredits();
+      
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setError('Failed to analyze images. Please try again.');
     } finally {
       setIsAnalyzing(false);
+      setUploadProgress(0);
     }
+  };
+
+  const copyToClipboard = (text, field) => {
+    navigator.clipboard.writeText(text);
+    // You could add a toast notification here
+  };
+
+  const downloadResults = () => {
+    if (!analysisResult) return;
+    
+    const data = {
+      ebayTitle: analysisResult.ebayTitle,
+      vintedTitle: analysisResult.vintedTitle,
+      description: analysisResult.description,
+      suggestedPrice: analysisResult.suggestedPrice,
+      brand: analysisResult.brand,
+      size: analysisResult.size,
+      color: analysisResult.color,
+      condition: analysisResult.condition,
+      material: analysisResult.material,
+      category: analysisResult.category,
+      keywords: analysisResult.keywords
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `listing-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -191,16 +248,21 @@ export default function AnalyzeSinglePage() {
               </Link>
               
               <div className="flex items-center gap-2">
+                <Camera className="w-5 h-5 text-blue-600" />
                 <h1 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black'}`}>
                   Single Item Analysis
                 </h1>
-                <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Up to 24 photos
-                </span>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
+              <button
+                onClick={toggleDarkMode}
+                className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}
+              >
+                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
                 darkMode 
                   ? 'bg-gray-800 border-gray-700' 
@@ -214,6 +276,7 @@ export default function AnalyzeSinglePage() {
         </div>
       </header>
 
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Breadcrumbs */}
         <nav className="flex items-center gap-2 text-sm mb-8">
@@ -224,279 +287,333 @@ export default function AnalyzeSinglePage() {
           <span className={darkMode ? 'text-white' : 'text-black'}>Single Item Analysis</span>
         </nav>
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Upload Area */}
-          <div className="lg:col-span-2">
-            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6`}>
-              <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-black'}`}>
-                Upload Photos
-              </h2>
+        {/* Info Banner */}
+        <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-blue-50 border-blue-200'} p-4 mb-8`}>
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <h3 className={`font-semibold mb-1 ${darkMode ? 'text-white' : 'text-blue-900'}`}>
+                AI-Powered Listing Creation
+              </h3>
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-blue-800'}`}>
+                Upload up to 24 photos of a single item. Our AI will analyze them to create optimized titles, 
+                descriptions, and pricing suggestions for eBay UK and Vinted.
+              </p>
+            </div>
+          </div>
+        </div>
 
-              {error && (
-                <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600" />
-                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                  </div>
-                </div>
-              )}
-
-              {images.length === 0 ? (
-                <div
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
-                    dragActive 
-                      ? 'border-black dark:border-white bg-gray-50 dark:bg-gray-700' 
-                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
-                  }`}
-                >
-                  <div className="mx-auto w-24 h-24 mb-4 relative">
-                    <Camera className={`w-24 h-24 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
-                    <Plus className="absolute bottom-0 right-0 w-8 h-8 bg-black text-white rounded-full p-1" />
-                  </div>
-                  
-                  <h3 className={`text-lg font-medium mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>
-                    {dragActive ? 'Drop your images here' : 'Click or drag photos to upload'}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Upload Section */}
+          <div>
+            <div className={`rounded-lg border-2 border-dashed ${
+              dragActive 
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                : darkMode 
+                  ? 'border-gray-700 bg-gray-800' 
+                  : 'border-gray-300 bg-white'
+            } transition-all`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <div className="p-8">
+                <div className="text-center">
+                  <Upload className={`mx-auto w-12 h-12 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
+                  <h3 className={`mt-4 text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Drop images here or click to upload
                   </h3>
-                  
-                  <p className={`text-sm mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    PNG, JPG, HEIC up to 10MB each • Maximum 24 photos
+                  <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Support for JPG, PNG, WEBP (max 10MB each, up to 24 images)
                   </p>
                   
-                  <button className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition">
-                    Select Photos
-                  </button>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={(e) => handleFiles(e.target.files)}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  
+                  <label
+                    htmlFor="file-upload"
+                    className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Choose Files
+                  </label>
                 </div>
-              ) : (
-                <>
-                  {/* Image Grid */}
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 mb-6">
-                    {images.map((image, index) => (
-                      <div
-                        key={image.id}
-                        draggable
-                        onDragStart={(e) => e.dataTransfer.setData('dragIndex', index)}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const dragIndex = parseInt(e.dataTransfer.getData('dragIndex'));
-                          reorderImages(dragIndex, index);
-                        }}
-                        className="relative group cursor-move"
-                      >
+
+                {/* Image Preview Grid */}
+                {images.length > 0 && (
+                  <div className="mt-6 grid grid-cols-3 gap-2">
+                    {images.map(image => (
+                      <div key={image.id} className="relative group">
                         <img
                           src={image.preview}
                           alt={image.name}
-                          className="w-full aspect-square object-cover rounded-lg"
+                          className="w-full h-24 object-cover rounded-lg"
                         />
-                        {index === 0 && (
-                          <span className="absolute top-1 left-1 px-2 py-0.5 bg-black text-white text-xs rounded">
-                            Main
-                          </span>
-                        )}
                         <button
                           onClick={() => removeImage(image.id)}
-                          disabled={isAnalyzing}
-                          className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
+                          className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition"
                         >
                           <X className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
-                    
-                    {images.length < 24 && !isAnalyzing && (
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`aspect-square border-2 border-dashed rounded-lg flex items-center justify-center transition ${
-                          darkMode 
-                            ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
-                            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Plus className="w-6 h-6 text-gray-400" />
-                      </button>
-                    )}
                   </div>
+                )}
 
-                  {/* Progress Bar */}
-                  {isAnalyzing && (
-                    <div className="mb-6">
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                          {uploadProgress < 50 ? 'Uploading photos...' : uploadProgress < 100 ? 'Analyzing with AI...' : 'Complete!'}
-                        </span>
-                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                          {uploadProgress}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                        <div 
-                          className="bg-black dark:bg-white h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      </div>
+                {/* Upload Progress */}
+                {isAnalyzing && uploadProgress > 0 && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span>Uploading...</span>
+                      <span>{uploadProgress}%</span>
                     </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Error Message */}
+                {error && (
+                  <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                    <span className="text-sm text-red-800 dark:text-red-200">{error}</span>
+                  </div>
+                )}
+
+                {/* Analyze Button */}
+                <button
+                  onClick={handleAnalyze}
+                  disabled={images.length === 0 || isAnalyzing}
+                  className={`mt-6 w-full px-4 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
+                    images.length === 0 || isAnalyzing
+                      ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                      : 'bg-black dark:bg-white text-white dark:text-black hover:opacity-80'
+                  }`}
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Analyzing {images.length} {images.length === 1 ? 'image' : 'images'}...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      Analyze {images.length > 0 && `${images.length} ${images.length === 1 ? 'Image' : 'Images'}`}
+                    </>
                   )}
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center justify-between">
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {images.length} photo{images.length !== 1 ? 's' : ''} selected
-                    </p>
-                    
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setImages([])}
-                        disabled={isAnalyzing}
-                        className={`px-4 py-2 rounded-lg border transition disabled:opacity-50 ${
-                          darkMode 
-                            ? 'border-gray-600 hover:bg-gray-700' 
-                            : 'border-gray-300 hover:bg-gray-100'
-                        }`}
-                      >
-                        Clear All
-                      </button>
-                      
-                      <button
-                        onClick={analyzeItem}
-                        disabled={isAnalyzing || images.length === 0}
-                        className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
-                      >
-                        {isAnalyzing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Analyzing...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4" />
-                            Analyze with AI
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </div>
-          </div>
-
-          {/* Right Column - Tips & Info */}
-          <div className="space-y-6">
-            {/* AI Features */}
-            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6`}>
-              <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-black'}`}>
-                <Zap className="w-5 h-5" />
-                AI Analysis Features
-              </h3>
-              
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <Target className="w-5 h-5 text-green-500 mt-0.5" />
-                  <div>
-                    <p className={`font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
-                      Brand Detection
-                    </p>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Identifies brands from logos, labels, and style
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <Package className="w-5 h-5 text-blue-500 mt-0.5" />
-                  <div>
-                    <p className={`font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
-                      Size & Measurements
-                    </p>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Extracts UK sizes from labels and tags
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <TrendingUp className="w-5 h-5 text-purple-500 mt-0.5" />
-                  <div>
-                    <p className={`font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
-                      UK Price Estimation
-                    </p>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Based on eBay UK sold listings (90 days)
-                    </p>
-                  </div>
-                </div>
+                </button>
               </div>
             </div>
 
-            {/* Photo Tips */}
-            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6`}>
-              <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-black'}`}>
-                <Camera className="w-5 h-5" />
-                Photo Tips
-              </h3>
-              
+            {/* Tips */}
+            <div className={`mt-6 p-4 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+              <h4 className={`font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Photography Tips
+              </h4>
               <ul className={`space-y-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>Include clear photos of brand labels and tags</span>
+                  <span>Use natural lighting or bright, even light</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>Show size labels and care instructions</span>
+                  <span>Include photos of labels, tags, and brand marks</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>Capture any flaws or wear from multiple angles</span>
+                  <span>Show any flaws or wear clearly</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>Use good lighting and neutral backgrounds</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>First photo will be your main listing image</span>
+                  <span>Multiple angles improve AI accuracy</span>
                 </li>
               </ul>
             </div>
+          </div>
 
-            {/* Credit Usage */}
-            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6`}>
-              <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-black'}`}>
-                <Info className="w-5 h-5" />
-                Credit Usage
-              </h3>
-              
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-3`}>
-                Single item analysis uses <span className="font-semibold">1 credit</span> regardless of photo count.
-              </p>
-              
-              <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-black'}`}>
-                  Your balance: {credits} credits
-                </p>
-                <Link 
-                  href="/dashboard/credits"
-                  className="text-sm text-blue-500 hover:text-blue-600 mt-1 inline-block"
-                >
-                  Get more credits →
-                </Link>
+          {/* Results Section */}
+          <div>
+            {analysisResult ? (
+              <div className={`space-y-6`}>
+                {/* eBay Title */}
+                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className={`font-semibold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <ShoppingBag className="w-5 h-5" />
+                      eBay UK Title
+                    </h3>
+                    <button
+                      onClick={() => copyToClipboard(analysisResult.ebayTitle, 'ebay')}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className={`text-lg ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    {analysisResult.ebayTitle}
+                  </p>
+                  <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    {analysisResult.ebayTitle.length}/80 characters
+                  </p>
+                </div>
+
+                {/* Vinted Title */}
+                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className={`font-semibold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <Tag className="w-5 h-5" />
+                      Vinted Title
+                    </h3>
+                    <button
+                      onClick={() => copyToClipboard(analysisResult.vintedTitle, 'vinted')}
+                      className="text-purple-600 hover:text-purple-700"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className={`text-lg ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    {analysisResult.vintedTitle}
+                  </p>
+                </div>
+
+                {/* Price Suggestion */}
+                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                  <h3 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    <PoundSterling className="w-5 h-5" />
+                    Suggested Pricing
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>eBay UK</p>
+                      <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        £{analysisResult.suggestedPrice}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Vinted</p>
+                      <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        £{(analysisResult.suggestedPrice * 0.9).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Item Details */}
+                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                  <h3 className={`font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Item Details
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Brand</p>
+                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {analysisResult.brand || 'Unbranded'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Size</p>
+                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {analysisResult.size || 'One Size'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Color</p>
+                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {analysisResult.color || 'Multicolor'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Condition</p>
+                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {analysisResult.condition || 'Used - Good'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Material</p>
+                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {analysisResult.material || 'Not specified'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Category</p>
+                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {analysisResult.category || 'Fashion'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      Description
+                    </h3>
+                    <button
+                      onClick={() => copyToClipboard(analysisResult.description, 'description')}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className={`whitespace-pre-wrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {analysisResult.description}
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-4">
+                  <button
+                    onClick={downloadResults}
+                    className={`flex-1 px-4 py-3 rounded-lg border font-medium transition flex items-center justify-center gap-2 ${
+                      darkMode 
+                        ? 'border-gray-700 hover:bg-gray-800' 
+                        : 'border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Results
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setAnalysisResult(null);
+                      setImages([]);
+                    }}
+                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition flex items-center justify-center gap-2"
+                  >
+                    <Camera className="w-4 h-4" />
+                    Analyze New Item
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              // Placeholder when no results
+              <div className={`h-full flex items-center justify-center rounded-lg border-2 border-dashed ${
+                darkMode ? 'border-gray-700' : 'border-gray-300'
+              }`}>
+                <div className="text-center p-8">
+                  <BarChart3 className={`mx-auto w-12 h-12 ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} />
+                  <h3 className={`mt-4 text-lg font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Analysis Results
+                  </h3>
+                  <p className={`mt-2 text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                    Upload images and click analyze to see AI-generated listing details here
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>

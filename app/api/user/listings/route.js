@@ -1,28 +1,40 @@
-// app/api/user/listings/route.js - NEW FILE
+// app/api/user/listings/route.js - COMPLETE FIXED FILE
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@/app/lib/supabase-client';
+import { currentUser } from '@clerk/nextjs/server';
+import { createClient } from '@supabase/supabase-js';
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export async function GET() {
   try {
     const user = await currentUser();
     
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ 
+        listings: [],
+        message: 'Not authenticated'
+      });
     }
 
-    const supabase = createClient();
-    
-    // Get all user listings
+    // Get user listings from database
     const { data: listings, error } = await supabase
-      .from('analyses')
+      .from('listings')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching listings:', error);
-      throw error;
+      return NextResponse.json({ 
+        listings: [],
+        error: 'Failed to fetch listings'
+      });
     }
 
     return NextResponse.json({
@@ -31,9 +43,9 @@ export async function GET() {
 
   } catch (error) {
     console.error('Listings API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch listings' },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      listings: [],
+      error: 'Failed to fetch listings'
+    });
   }
 }

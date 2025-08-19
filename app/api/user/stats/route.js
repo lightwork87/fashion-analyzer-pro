@@ -1,75 +1,69 @@
-// app/api/user/stats/route.js - NEW FILE
+// app/api/user/stats/route.js - COMPLETE FIXED FILE
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@/app/lib/supabase-client';
+import { currentUser } from '@clerk/nextjs/server';
+import { createClient } from '@supabase/supabase-js';
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export async function GET() {
   try {
     const user = await currentUser();
     
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({
+        totalListings: 0,
+        activeListings: 0,
+        soldThisMonth: 0,
+        revenue: 0,
+        avgSalePrice: 0,
+        views: 0
+      });
     }
 
-    const supabase = createClient();
-    
-    // Get user data
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('credits_total, credits_used, bonus_credits')
-      .eq('clerk_id', user.id)
+    // Get user stats from database
+    const { data: statsData, error } = await supabase
+      .from('user_stats')
+      .select('*')
+      .eq('clerk_user_id', user.id)
       .single();
 
-    if (userError) {
-      // If user doesn't exist, create them with bonus credits
-      if (userError.code === 'PGRST116') {
-        const { data: newUser, error: createError } = await supabase
-          .from('users')
-          .insert({
-            clerk_id: user.id,
-            email: user.emailAddresses[0]?.emailAddress,
-            credits_total: 50, // Beta bonus
-            credits_used: 0,
-            bonus_credits: 50
-          })
-          .select()
-          .single();
-
-        if (createError) {
-          throw createError;
-        }
-
-        return NextResponse.json({
-          creditsAvailable: 50,
-          creditsTotal: 50,
-          creditsUsed: 0,
-          itemsAnalyzed: 0
-        });
-      }
-      
-      throw userError;
+    if (error || !statsData) {
+      // Return default stats if not found
+      return NextResponse.json({
+        totalListings: 0,
+        activeListings: 0,
+        soldThisMonth: 0,
+        revenue: 0,
+        avgSalePrice: 0,
+        views: 0
+      });
     }
 
-    // Count analyses
-    const { count: analysisCount } = await supabase
-      .from('analyses')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
-
-    const creditsAvailable = (userData.credits_total + userData.bonus_credits) - userData.credits_used;
-
     return NextResponse.json({
-      creditsAvailable,
-      creditsTotal: userData.credits_total,
-      creditsUsed: userData.credits_used,
-      itemsAnalyzed: analysisCount || 0
+      totalListings: statsData.total_listings || 0,
+      activeListings: statsData.active_listings || 0,
+      soldThisMonth: statsData.sold_this_month || 0,
+      revenue: statsData.revenue || 0,
+      avgSalePrice: statsData.avg_sale_price || 0,
+      views: statsData.views || 0
     });
 
   } catch (error) {
     console.error('Stats API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch stats' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      totalListings: 0,
+      activeListings: 0,
+      soldThisMonth: 0,
+      revenue: 0,
+      avgSalePrice: 0,
+      views: 0,
+      error: 'Failed to fetch stats'
+    });
   }
 }
