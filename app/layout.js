@@ -11,20 +11,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <ClerkProvider
-      domain={null}  // Force default Clerk domain
-      isSatellite={false}
-      signInUrl="/sign-in"
-      signUpUrl="/sign-up"
-      afterSignInUrl="/dashboard"
-      afterSignUpUrl="/dashboard"
-      appearance={{
-        elements: {
-          formButtonPrimary: 'bg-black hover:bg-gray-800 text-white',
-          card: 'shadow-lg',
-        },
-      }}
-    >
+    <ClerkProvider>
       <html lang="en">
         <body className={inter.className}>{children}</body>
       </html>
