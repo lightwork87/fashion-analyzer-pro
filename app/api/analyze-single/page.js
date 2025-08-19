@@ -1,622 +1,337 @@
-'use client';
+// app/api/analyze-single/route.js - COMPLETE FIXED FILE FOR VERCEL
+import { NextResponse } from 'next/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { createClient } from '@supabase/supabase-js';
 
-import { useState, useEffect } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { 
-  Home,
-  Upload,
-  Camera,
-  X,
-  ChevronRight,
-  Loader2,
-  AlertCircle,
-  CheckCircle,
-  Info,
-  Image as ImageIcon,
-  Zap,
-  Moon,
-  Sun,
-  CreditCard,
-  Copy,
-  Download,
-  Eye,
-  ShoppingBag,
-  Tag,
-  PoundSterling,
-  Package,
-  BarChart3,
-  FileText,
-  Sparkles
-} from 'lucide-react';
+// ✅ FIXED: Force dynamic rendering for Vercel
+export const dynamic = 'force-dynamic';
 
-export default function AnalyzeSinglePage() {
-  const { user } = useUser();
-  const router = useRouter();
-  
-  // ✅ FIXED: Initialize without localStorage
-  const [darkMode, setDarkMode] = useState(false);
-  const [credits, setCredits] = useState(0);
-  const [images, setImages] = useState([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [dragActive, setDragActive] = useState(false);
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
-  // ✅ FIXED: Access localStorage only in useEffect
-  useEffect(() => {
-    // Check for dark mode preference
-    const savedDarkMode = localStorage.getItem('darkMode') === 'true';
-    setDarkMode(savedDarkMode);
-    if (savedDarkMode) {
-      document.documentElement.classList.add('dark');
-    }
+// Helper function to convert image to base64
+async function imageToBase64(file) {
+  try {
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    return buffer.toString('base64');
+  } catch (error) {
+    console.error('Error converting image to base64:', error);
+    throw error;
+  }
+}
 
-    // Fetch user credits
-    fetchCredits();
-  }, []);
-
-  const fetchCredits = async () => {
-    try {
-      const response = await fetch('/api/user/credits');
-      if (response.ok) {
-        const data = await response.json();
-        setCredits(data.available || 0);
-      }
-    } catch (error) {
-      console.error('Error fetching credits:', error);
-    }
-  };
-
-  const toggleDarkMode = () => {
-    const newDarkMode = !darkMode;
-    setDarkMode(newDarkMode);
-    localStorage.setItem('darkMode', String(newDarkMode));
-    if (newDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
-
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFiles(e.dataTransfer.files);
-    }
-  };
-
-  const handleFiles = (fileList) => {
-    const validFiles = [];
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    
-    Array.from(fileList).forEach(file => {
-      if (!file.type.startsWith('image/')) {
-        setError(`${file.name} is not an image file`);
-        return;
-      }
-      
-      if (file.size > maxSize) {
-        setError(`${file.name} is too large (max 10MB)`);
-        return;
-      }
-      
-      validFiles.push(file);
-    });
-
-    if (validFiles.length > 0) {
-      const newImages = validFiles.map(file => ({
-        id: Math.random().toString(36).substr(2, 9),
-        file,
-        preview: URL.createObjectURL(file),
-        name: file.name,
-        size: file.size
-      }));
-      
-      setImages(prev => [...prev, ...newImages].slice(0, 24)); // Max 24 images
-      setError(null);
-    }
-  };
-
-  const removeImage = (id) => {
-    setImages(prev => {
-      const image = prev.find(img => img.id === id);
-      if (image) {
-        URL.revokeObjectURL(image.preview);
-      }
-      return prev.filter(img => img.id !== id);
-    });
-  };
-
-  const handleAnalyze = async () => {
-    if (images.length === 0) {
-      setError('Please upload at least one image');
-      return;
-    }
-
-    if (credits < 1) {
-      setError('Insufficient credits. Please purchase more credits to continue.');
-      return;
-    }
-
-    setIsAnalyzing(true);
-    setError(null);
-    setUploadProgress(0);
-
-    try {
-      const formData = new FormData();
-      images.forEach(img => {
-        formData.append('images', img.file);
-      });
-
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 200);
-
-      const response = await fetch('/api/analyze-single', {
+// Helper function to analyze with Google Vision API
+async function analyzeWithGoogleVision(base64Image) {
+  try {
+    const response = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_CLOUD_VISION_API_KEY}`,
+      {
         method: 'POST',
-        body: formData
-      });
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (!response.ok) {
-        throw new Error('Analysis failed');
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requests: [{
+            image: {
+              content: base64Image
+            },
+            features: [
+              { type: 'TEXT_DETECTION', maxResults: 10 },
+              { type: 'LABEL_DETECTION', maxResults: 10 },
+              { type: 'LOGO_DETECTION', maxResults: 5 },
+              { type: 'OBJECT_LOCALIZATION', maxResults: 10 }
+            ]
+          }]
+        })
       }
+    );
 
-      const result = await response.json();
-      setAnalysisResult(result);
-      
-      // Refresh credits after analysis
-      fetchCredits();
-      
-    } catch (error) {
-      console.error('Analysis error:', error);
-      setError('Failed to analyze images. Please try again.');
-    } finally {
-      setIsAnalyzing(false);
-      setUploadProgress(0);
+    if (!response.ok) {
+      throw new Error('Google Vision API request failed');
     }
-  };
 
-  const copyToClipboard = (text, field) => {
-    navigator.clipboard.writeText(text);
-    // You could add a toast notification here
-  };
+    const data = await response.json();
+    return data.responses[0];
+  } catch (error) {
+    console.error('Google Vision API error:', error);
+    return null;
+  }
+}
 
-  const downloadResults = () => {
-    if (!analysisResult) return;
-    
-    const data = {
-      ebayTitle: analysisResult.ebayTitle,
-      vintedTitle: analysisResult.vintedTitle,
-      description: analysisResult.description,
-      suggestedPrice: analysisResult.suggestedPrice,
-      brand: analysisResult.brand,
-      size: analysisResult.size,
-      color: analysisResult.color,
-      condition: analysisResult.condition,
-      material: analysisResult.material,
-      category: analysisResult.category,
-      keywords: analysisResult.keywords
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `listing-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+// Helper function to analyze with Claude AI
+async function analyzeWithClaude(images, visionData) {
+  try {
+    const imageContents = await Promise.all(
+      images.map(async (image) => {
+        const base64 = await imageToBase64(image);
+        return {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: image.type || "image/jpeg",
+            data: base64
+          }
+        };
+      })
+    );
 
-  return (
-    <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-      {/* Header */}
-      <header className={`${darkMode ? 'bg-black border-gray-800' : 'bg-white border-gray-200'} border-b sticky top-0 z-50`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link 
-                href="/dashboard"
-                className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'} transition`}
-              >
-                <Home className="w-5 h-5" />
-              </Link>
+    const visionContext = visionData ? `
+      Google Vision detected:
+      - Text/Labels: ${visionData.textAnnotations?.map(t => t.description).join(', ') || 'none'}
+      - Logos: ${visionData.logoAnnotations?.map(l => l.description).join(', ') || 'none'}
+      - Objects: ${visionData.localizedObjectAnnotations?.map(o => o.name).join(', ') || 'none'}
+    ` : '';
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-sonnet-20240229',
+        max_tokens: 1500,
+        messages: [{
+          role: 'user',
+          content: [
+            ...imageContents,
+            {
+              type: 'text',
+              text: `You are an expert fashion analyst specializing in UK resale markets (eBay UK and Vinted).
               
-              <div className="flex items-center gap-2">
-                <Camera className="w-5 h-5 text-blue-600" />
-                <h1 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-black'}`}>
-                  Single Item Analysis
-                </h1>
-              </div>
-            </div>
+              ${visionContext}
+              
+              Analyze these clothing images and provide:
+              
+              1. eBay UK Title (EXACTLY 80 characters, UK spelling):
+              - Format: [Brand] [Item Type] [Gender/Age] Size [Size] [Color] [Material] [Key Feature]
+              - Use "Ladies" not "Women's", "Gents" not "Men's"
+              - Include "BNWT" if new with tags
+              
+              2. Vinted Title (casual, under 50 chars):
+              - Friendly and appealing to younger buyers
+              
+              3. Description (professional, mention all visible details):
+              - Start with item overview
+              - List measurements if visible
+              - Describe condition accurately
+              - Note any flaws
+              - End with positive selling point
+              
+              4. Suggested Price in GBP (based on UK market):
+              - Research typical UK resale prices
+              - Consider brand, condition, and demand
+              
+              5. Extract these details:
+              - Brand (check labels carefully)
+              - Size (UK sizing)
+              - Color/Colour (UK spelling)
+              - Condition (New with tags/Excellent/Good/Fair)
+              - Material (from care labels)
+              - Category (be specific)
+              - Style keywords (trendy terms)
+              
+              Return as JSON with keys: ebayTitle, vintedTitle, description, suggestedPrice, brand, size, color, condition, material, category, keywords`
+            }
+          ]
+        }]
+      })
+    });
 
-            <div className="flex items-center gap-4">
-              <button
-                onClick={toggleDarkMode}
-                className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}
-              >
-                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Claude API error:', errorText);
+      throw new Error('Claude API request failed');
+    }
 
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
-                darkMode 
-                  ? 'bg-gray-800 border-gray-700' 
-                  : 'bg-gray-100 border-gray-300'
-              }`}>
-                <CreditCard className="w-4 h-4" />
-                <span className="font-medium">{credits} Credits</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    const data = await response.json();
+    const content = data.content[0].text;
+    
+    // Try to parse JSON from Claude's response
+    try {
+      // Extract JSON if wrapped in markdown code blocks
+      const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[1] || jsonMatch[0]);
+      }
+      return JSON.parse(content);
+    } catch (parseError) {
+      console.error('Error parsing Claude response:', parseError);
+      // Return a structured fallback
+      return {
+        ebayTitle: 'Fashion Item - Please Review and Edit Title',
+        vintedTitle: 'Lovely Fashion Item',
+        description: content,
+        suggestedPrice: 19.99,
+        brand: 'Unknown',
+        size: 'One Size',
+        color: 'Multicolor',
+        condition: 'Good',
+        material: 'Mixed',
+        category: 'Fashion',
+        keywords: ['fashion', 'clothing', 'style']
+      };
+    }
+  } catch (error) {
+    console.error('Claude analysis error:', error);
+    throw error;
+  }
+}
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Breadcrumbs */}
-        <nav className="flex items-center gap-2 text-sm mb-8">
-          <Link href="/dashboard" className={darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'}>
-            Dashboard
-          </Link>
-          <ChevronRight className="w-4 h-4" />
-          <span className={darkMode ? 'text-white' : 'text-black'}>Single Item Analysis</span>
-        </nav>
+export async function POST(request) {
+  try {
+    // Check authentication
+    const user = await currentUser();
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please sign in' },
+        { status: 401 }
+      );
+    }
 
-        {/* Info Banner */}
-        <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-blue-50 border-blue-200'} p-4 mb-8`}>
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h3 className={`font-semibold mb-1 ${darkMode ? 'text-white' : 'text-blue-900'}`}>
-                AI-Powered Listing Creation
-              </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-blue-800'}`}>
-                Upload up to 24 photos of a single item. Our AI will analyze them to create optimized titles, 
-                descriptions, and pricing suggestions for eBay UK and Vinted.
-              </p>
-            </div>
-          </div>
-        </div>
+    // Check user credits
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('credits_total, credits_used, bonus_credits')
+      .eq('clerk_user_id', user.id)
+      .single();
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Upload Section */}
-          <div>
-            <div className={`rounded-lg border-2 border-dashed ${
-              dragActive 
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                : darkMode 
-                  ? 'border-gray-700 bg-gray-800' 
-                  : 'border-gray-300 bg-white'
-            } transition-all`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-            >
-              <div className="p-8">
-                <div className="text-center">
-                  <Upload className={`mx-auto w-12 h-12 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
-                  <h3 className={`mt-4 text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Drop images here or click to upload
-                  </h3>
-                  <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Support for JPG, PNG, WEBP (max 10MB each, up to 24 images)
-                  </p>
-                  
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={(e) => handleFiles(e.target.files)}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  
-                  <label
-                    htmlFor="file-upload"
-                    className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Choose Files
-                  </label>
-                </div>
+    if (userError || !userData) {
+      // Create user if doesn't exist
+      await supabase.from('users').insert([{
+        clerk_user_id: user.id,
+        email: user.emailAddresses[0]?.emailAddress,
+        credits_total: 0,
+        credits_used: 0,
+        bonus_credits: 50
+      }]);
+    }
 
-                {/* Image Preview Grid */}
-                {images.length > 0 && (
-                  <div className="mt-6 grid grid-cols-3 gap-2">
-                    {images.map(image => (
-                      <div key={image.id} className="relative group">
-                        <img
-                          src={image.preview}
-                          alt={image.name}
-                          className="w-full h-24 object-cover rounded-lg"
-                        />
-                        <button
-                          onClick={() => removeImage(image.id)}
-                          className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+    const availableCredits = userData 
+      ? (userData.credits_total + userData.bonus_credits) - userData.credits_used
+      : 50;
 
-                {/* Upload Progress */}
-                {isAnalyzing && uploadProgress > 0 && (
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between text-sm mb-1">
-                      <span>Uploading...</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
+    if (availableCredits < 1) {
+      return NextResponse.json(
+        { error: 'Insufficient credits. Please purchase more credits to continue.' },
+        { status: 402 }
+      );
+    }
 
-                {/* Error Message */}
-                {error && (
-                  <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
-                    <span className="text-sm text-red-800 dark:text-red-200">{error}</span>
-                  </div>
-                )}
+    // Parse form data
+    const formData = await request.formData();
+    const images = formData.getAll('images');
 
-                {/* Analyze Button */}
-                <button
-                  onClick={handleAnalyze}
-                  disabled={images.length === 0 || isAnalyzing}
-                  className={`mt-6 w-full px-4 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
-                    images.length === 0 || isAnalyzing
-                      ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                      : 'bg-black dark:bg-white text-white dark:text-black hover:opacity-80'
-                  }`}
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Analyzing {images.length} {images.length === 1 ? 'image' : 'images'}...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5" />
-                      Analyze {images.length > 0 && `${images.length} ${images.length === 1 ? 'Image' : 'Images'}`}
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
+    if (!images || images.length === 0) {
+      return NextResponse.json(
+        { error: 'No images provided' },
+        { status: 400 }
+      );
+    }
 
-            {/* Tips */}
-            <div className={`mt-6 p-4 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-              <h4 className={`font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Photography Tips
-              </h4>
-              <ul className={`space-y-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                <li className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>Use natural lighting or bright, even light</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>Include photos of labels, tags, and brand marks</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>Show any flaws or wear clearly</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                  <span>Multiple angles improve AI accuracy</span>
-                </li>
-              </ul>
-            </div>
-          </div>
+    // Validate images
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    for (const image of images) {
+      if (!image.type.startsWith('image/')) {
+        return NextResponse.json(
+          { error: `Invalid file type: ${image.name}` },
+          { status: 400 }
+        );
+      }
+      if (image.size > maxSize) {
+        return NextResponse.json(
+          { error: `File too large: ${image.name} (max 10MB)` },
+          { status: 400 }
+        );
+      }
+    }
 
-          {/* Results Section */}
-          <div>
-            {analysisResult ? (
-              <div className={`space-y-6`}>
-                {/* eBay Title */}
-                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className={`font-semibold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      <ShoppingBag className="w-5 h-5" />
-                      eBay UK Title
-                    </h3>
-                    <button
-                      onClick={() => copyToClipboard(analysisResult.ebayTitle, 'ebay')}
-                      className="text-blue-600 hover:text-blue-700"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <p className={`text-lg ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                    {analysisResult.ebayTitle}
-                  </p>
-                  <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    {analysisResult.ebayTitle.length}/80 characters
-                  </p>
-                </div>
+    // Analyze with Google Vision (optional - only if API key exists)
+    let visionData = null;
+    if (process.env.GOOGLE_CLOUD_VISION_API_KEY) {
+      try {
+        const firstImageBase64 = await imageToBase64(images[0]);
+        visionData = await analyzeWithGoogleVision(firstImageBase64);
+      } catch (error) {
+        console.error('Google Vision analysis failed:', error);
+        // Continue without Vision data
+      }
+    }
 
-                {/* Vinted Title */}
-                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className={`font-semibold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      <Tag className="w-5 h-5" />
-                      Vinted Title
-                    </h3>
-                    <button
-                      onClick={() => copyToClipboard(analysisResult.vintedTitle, 'vinted')}
-                      className="text-purple-600 hover:text-purple-700"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <p className={`text-lg ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                    {analysisResult.vintedTitle}
-                  </p>
-                </div>
+    // Analyze with Claude
+    const analysisResult = await analyzeWithClaude(images, visionData);
 
-                {/* Price Suggestion */}
-                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                  <h3 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    <PoundSterling className="w-5 h-5" />
-                    Suggested Pricing
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>eBay UK</p>
-                      <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        £{analysisResult.suggestedPrice}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Vinted</p>
-                      <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        £{(analysisResult.suggestedPrice * 0.9).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+    // Save analysis to database
+    const { error: saveError } = await supabase
+      .from('analyses')
+      .insert([{
+        user_id: user.id,
+        ebay_title: analysisResult.ebayTitle,
+        vinted_title: analysisResult.vintedTitle,
+        description: analysisResult.description,
+        suggested_price: analysisResult.suggestedPrice,
+        brand: analysisResult.brand,
+        size: analysisResult.size,
+        color: analysisResult.color,
+        condition: analysisResult.condition,
+        material: analysisResult.material,
+        category: analysisResult.category,
+        keywords: analysisResult.keywords,
+        image_count: images.length,
+        created_at: new Date().toISOString()
+      }]);
 
-                {/* Item Details */}
-                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                  <h3 className={`font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Item Details
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Brand</p>
-                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {analysisResult.brand || 'Unbranded'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Size</p>
-                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {analysisResult.size || 'One Size'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Color</p>
-                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {analysisResult.color || 'Multicolor'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Condition</p>
-                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {analysisResult.condition || 'Used - Good'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Material</p>
-                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {analysisResult.material || 'Not specified'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Category</p>
-                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {analysisResult.category || 'Fashion'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+    if (saveError) {
+      console.error('Error saving analysis:', saveError);
+    }
 
-                {/* Description */}
-                <div className={`p-6 rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      Description
-                    </h3>
-                    <button
-                      onClick={() => copyToClipboard(analysisResult.description, 'description')}
-                      className="text-blue-600 hover:text-blue-700"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <p className={`whitespace-pre-wrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    {analysisResult.description}
-                  </p>
-                </div>
+    // Update user credits
+    await supabase
+      .from('users')
+      .update({ 
+        credits_used: (userData?.credits_used || 0) + 1 
+      })
+      .eq('clerk_user_id', user.id);
 
-                {/* Action Buttons */}
-                <div className="flex gap-4">
-                  <button
-                    onClick={downloadResults}
-                    className={`flex-1 px-4 py-3 rounded-lg border font-medium transition flex items-center justify-center gap-2 ${
-                      darkMode 
-                        ? 'border-gray-700 hover:bg-gray-800' 
-                        : 'border-gray-300 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Download className="w-4 h-4" />
-                    Download Results
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      setAnalysisResult(null);
-                      setImages([]);
-                    }}
-                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition flex items-center justify-center gap-2"
-                  >
-                    <Camera className="w-4 h-4" />
-                    Analyze New Item
-                  </button>
-                </div>
-              </div>
-            ) : (
-              // Placeholder when no results
-              <div className={`h-full flex items-center justify-center rounded-lg border-2 border-dashed ${
-                darkMode ? 'border-gray-700' : 'border-gray-300'
-              }`}>
-                <div className="text-center p-8">
-                  <BarChart3 className={`mx-auto w-12 h-12 ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} />
-                  <h3 className={`mt-4 text-lg font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Analysis Results
-                  </h3>
-                  <p className={`mt-2 text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                    Upload images and click analyze to see AI-generated listing details here
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+    // Return successful response
+    return NextResponse.json({
+      success: true,
+      ...analysisResult,
+      creditsRemaining: availableCredits - 1
+    });
+
+  } catch (error) {
+    console.error('API route error:', error);
+    
+    // Check for specific error types
+    if (error.message?.includes('Claude API')) {
+      return NextResponse.json(
+        { error: 'AI analysis service temporarily unavailable. Please try again.' },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to analyze images. Please try again.' },
+      { status: 500 }
+    );
+  }
+}
+
+// OPTIONS method for CORS
+export async function OPTIONS(request) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
 }
