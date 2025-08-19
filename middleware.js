@@ -1,8 +1,27 @@
-// TEMPORARY FIX - This bypasses authentication to get site working
-export default function middleware(request) {
-  return;
-}
+import { authMiddleware } from '@clerk/nextjs';
+
+export default authMiddleware({
+  // Public routes that don't require authentication
+  publicRoutes: [
+    '/',
+    '/sign-in(.*)',
+    '/sign-up(.*)',
+    '/pricing',
+    '/features',
+    '/demo',
+    '/privacy',
+    '/terms',
+    '/contact',
+    '/api/webhooks(.*)',
+  ],
+  // Routes that require authentication
+  ignoredRoutes: [
+    '/api/webhooks(.*)',
+    '/_next(.*)',
+    '/favicon.ico',
+  ],
+});
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
 };
