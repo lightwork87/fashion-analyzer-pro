@@ -1,7 +1,6 @@
 import { authMiddleware } from '@clerk/nextjs';
 
 export default authMiddleware({
-  // Public routes that don't require authentication
   publicRoutes: [
     '/',
     '/sign-in(.*)',
@@ -14,12 +13,19 @@ export default authMiddleware({
     '/contact',
     '/api/webhooks(.*)',
   ],
-  // Routes that require authentication
   ignoredRoutes: [
+    '/((?!api|trpc))(_next.*|.+\.[\w]+$)',
     '/api/webhooks(.*)',
-    '/_next(.*)',
-    '/favicon.ico',
   ],
+  afterAuth(auth, req) {
+    // Handle users who aren't authenticated
+    if (!auth.userId && !auth.isPublicRoute) {
+      const signInUrl = new URL('/sign-in', req.url);
+      signInUrl.searchParams.set('redirect_url', req.url);
+      return Response.redirect(signInUrl);
+    }
+  },
+  debug: false, // Set to true to see debug logs
 });
 
 export const config = {
