@@ -1,3 +1,5 @@
+'use client';
+
 import { SignIn } from '@clerk/nextjs';
 
 export default function SignInPage() {
@@ -13,27 +15,13 @@ export default function SignInPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome back to LightLister AI</h1>
           <p className="text-gray-600 dark:text-gray-300 mt-2">Sign in to your account to continue</p>
         </div>
-        <style jsx global>{`
-          .cl-formFieldInput {
-            color: #000 !important;
-          }
-          .cl-formFieldLabel {
-            color: #374151 !important;
-          }
-          .dark .cl-formFieldInput {
-            color: #000 !important;
-            background: #fff !important;
-          }
-          .dark .cl-formFieldLabel {
-            color: #9CA3AF !important;
-          }
-        `}</style>
         <SignIn 
           appearance={{
             elements: {
               rootBox: "mx-auto",
               card: "shadow-xl border-0",
-              formFieldInput: "text-black",
+              formFieldInput: "!text-black !bg-white",
+              formFieldLabel: "!text-gray-700",
               formButtonPrimary: "bg-black hover:bg-gray-800",
               footerActionLink: "text-black hover:text-gray-700"
             }

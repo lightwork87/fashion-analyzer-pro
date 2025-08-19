@@ -5,6 +5,10 @@ import CreditsDisplay from '../../components/CreditsDisplay';
 import ThemeToggle from '../../components/ThemeToggle';
 
 export default function SupportPage() {
+  const handleEmailClick = () => {
+    window.location.href = 'mailto:lightlisterai@outlook.com?subject=Support Request';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Navigation */}
@@ -37,15 +41,15 @@ export default function SupportPage() {
 
           {/* Quick Actions */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            
-              href="mailto:lightlisterai@outlook.com?subject=Support Request"
-              className="block p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
+            <button
+              onClick={handleEmailClick}
+              className="block p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition text-left"
             >
               <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">📧 Email Support</h3>
               <p className="text-sm text-blue-800 dark:text-blue-400">
                 Get help via email at lightlisterai@outlook.com
               </p>
-            </a>
+            </button>
 
             <Link href="/dashboard/beta" className="block p-6 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition">
               <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-2">🐛 Report an Issue</h3>
