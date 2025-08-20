@@ -1,16 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
-// IMPORTANT: Configure body size limit for large images
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
-};
-
-// For App Router, we need this instead:
+// For App Router, use these exports instead of config
 export const runtime = 'nodejs';
 export const maxDuration = 30; // 30 seconds timeout
 
