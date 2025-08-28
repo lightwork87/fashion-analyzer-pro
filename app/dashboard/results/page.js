@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -28,7 +28,7 @@ import {
   Sparkles
 } from 'lucide-react';
 
-export default function ResultsPage() {
+function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [analysis, setAnalysis] = useState(null);
@@ -512,5 +512,24 @@ export default function ResultsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center space-x-2">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="text-gray-600">Loading results...</span>
+      </div>
+    </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ResultsContent />
+    </Suspense>
   );
 }
