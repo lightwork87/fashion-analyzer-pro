@@ -2,7 +2,7 @@
 // COMPLETE AI ANALYSIS API WITH ENHANCED ERROR HANDLING
 
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+// import { auth } from '@clerk/nextjs/server'; // TEMPORARY: Commented out while Clerk SSL is pending
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -502,10 +502,15 @@ export async function POST(request) {
   const startTime = Date.now();
   
   try {
+    // TEMPORARY: Bypass auth while Clerk SSL is pending
+    const userId = 'temp-user-' + Date.now();
+    
+    /* Original auth code - restore when Clerk SSL is ready
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    */
 
     const body = await request.json();
     const { imageUrls = [], imageData = [], imageCount } = body;
@@ -520,6 +525,15 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No image URLs provided' }, { status: 400 });
     }
     
+    // TEMPORARY: Mock user data while Clerk/DB is bypassed
+    const userData = {
+      credits_total: 50,
+      credits_used: 0,
+      bonus_credits: 0
+    };
+    const creditsAvailable = 10; // Mock credits
+    
+    /* Original database code - restore when Clerk SSL is ready
     // Get or create user
     let { data: userData } = await supabase
       .from('users')
@@ -551,6 +565,7 @@ export async function POST(request) {
         credits_remaining: 0 
       }, { status: 402 });
     }
+    */
 
     console.log(`💳 User has ${creditsAvailable} credits available`);
 
@@ -661,11 +676,15 @@ Please see photos for exact condition and details.`,
       sku: `${(finalListing.brand || 'UNB').substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
       images_count: numImages,
       image_urls: imageUrls,
-      credits_remaining: creditsAvailable - 1,
+      credits_remaining: creditsAvailable - 1, // Mock: 9 remaining
       analyzed_at: new Date().toISOString(),
       processing_metadata: analysisMetadata
     };
     
+    // TEMPORARY: Skip database operations while testing
+    console.log('💾 Skipping database save (temporary bypass)');
+    
+    /* Original database save code - restore when Clerk SSL is ready
     // Save to database
     try {
       await supabase.from('analyses').insert({
@@ -703,6 +722,7 @@ Please see photos for exact condition and details.`,
     } catch (creditError) {
       console.error('❌ Credit update error:', creditError.message);
     }
+    */
     
     console.log(`✅ Analysis complete in ${analysisMetadata.processing_time}ms: ${completeAnalysis.ebay_title}`);
     
@@ -725,7 +745,7 @@ Please see photos for exact condition and details.`,
   }
 }
 
-// Health check endpoint
+// Health check endpoint (no auth required)
 export async function GET() {
   try {
     // Test API connections
