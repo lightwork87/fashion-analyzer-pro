@@ -1,13 +1,14 @@
-// middleware.js - THIS IS THE FIX
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
-  '/api/analyze-combined',  // ✅ ADD THIS - Allow API without auth
-  '/api/analyze',           // ✅ ADD THIS
-  '/api/research-pricing',  // ✅ ADD THIS
+  '/api/analyze-combined',
+  '/api/analyze',
+  '/api/analyze-image',
+  '/api/research-pricing',
+  '/api/bulk-analyze',
   '/api/webhooks(.*)',
 ]);
 

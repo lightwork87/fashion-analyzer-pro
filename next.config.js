@@ -1,18 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '10mb',
-    },
-  },
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-    ],
+    domains: ['images.clerk.dev', 'img.clerk.com'],
   },
+  env: {
+    NEXT_PUBLIC_CLERK_DOMAIN: 'https://lightlisterai.co.uk',
+  }
 }
 
 module.exports = nextConfig
