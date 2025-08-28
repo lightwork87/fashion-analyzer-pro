@@ -11,11 +11,15 @@ export default function AnalyzeSinglePage() {
   const router = useRouter();
   const fileInputRef = useRef(null);
   
-  // Redirect if not authenticated
+  // TEMPORARY: Skip auth checks while Clerk SSL is pending
+  const effectiveUserId = userId || 'temp-user-' + Date.now();
+  
+  /* Commented out until Clerk SSL is ready
   if (isLoaded && !userId) {
     router.push('/sign-in');
     return null;
   }
+  */
   
   const [images, setImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -126,17 +130,18 @@ export default function AnalyzeSinglePage() {
   const analyzeItem = async () => {
     if (!images.length) return;
     
-    // Check authentication
+    /* TEMPORARY: Skip auth check while Clerk SSL is pending
     if (!userId) {
       setError('Please sign in to analyze items');
       return;
     }
+    */
     
     setIsAnalyzing(true);
     setError(null);
     setUploadProgress(0);
     
-    console.log('🔑 User ID:', userId);
+    console.log('🔑 Using User ID:', effectiveUserId);
     console.log('📸 Processing images:', images.length);
     
     try {
@@ -154,8 +159,8 @@ export default function AnalyzeSinglePage() {
       for (let i = 0; i < images.length; i++) {
         setUploadProgress(Math.round((i / images.length) * 50));
         
-        console.log(`📤 Uploading image ${i + 1}: ${images[i].name} for user: ${userId}`);
-        const url = await uploadImage(images[i].file, userId);
+        console.log(`📤 Uploading image ${i + 1}: ${images[i].name} for user: ${effectiveUserId}`);
+        const url = await uploadImage(images[i].file, effectiveUserId);
         uploadedUrls.push(url);
         console.log(`✅ Uploaded ${i + 1}/${images.length}: ${images[i].name}`);
       }
@@ -234,7 +239,7 @@ export default function AnalyzeSinglePage() {
     };
   }, [images]);
 
-  // Show loading while authentication loads
+  /* TEMPORARY: Remove loading check while Clerk SSL is pending
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -245,6 +250,7 @@ export default function AnalyzeSinglePage() {
       </div>
     );
   }
+  */
 
   // Calculate total compressed size
   const totalSize = images.reduce((sum, img) => sum + img.compressedSize, 0);
