@@ -1,0 +1,29 @@
+x<!DOCTYPE html>
+<html>
+<head>
+    <title>Clerk Test</title>
+</head>
+<body>
+    <h1>Testing Clerk Production</h1>
+    <div id="status">Checking...</div>
+    
+    <script>
+        // Replace this line with your actual key
+        const publishableKey =NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsuZXhhbXBsZS5jby51ayQ
+
+        
+        fetch(`https://clerk.lightlisterai.co.uk/v1/client?_clerk_js_version=5.35.3`, {
+            headers: {
+                'Authorization': `Bearer ${publishableKey}`
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('status').innerHTML = 'Clerk responding: ' + JSON.stringify(data);
+        })
+        .catch(err => {
+            document.getElementById('status').innerHTML = 'Error: ' + err.message;
+        });
+    </script>
+</body>
+</html>
