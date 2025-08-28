@@ -13,49 +13,66 @@ const supabase = createClient(
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-// Fetch image from URL and convert to base64 with retry logic
+// Fetch image from URL and convert to base64 (handles both Supabase and blob URLs)
 async function fetchImageAsBase64(imageUrl, retries = 3) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      console.log(`📥 Fetching image (attempt ${attempt}/${retries}):`, imageUrl);
+  try {
+    console.log(`📥 Processing image URL:`, imageUrl.substring(0, 50) + '...');
+    
+    // Handle blob URLs (fallback storage)
+    if (imageUrl.startsWith('blob:')) {
+      console.log('📄 Processing blob URL...');
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-      
-      const response = await fetch(imageUrl, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'LightLister-AI/1.0'
-        }
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType?.startsWith('image/')) {
-        throw new Error(`Invalid content type: ${contentType}`);
-      }
-      
-      const buffer = await response.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      
-      console.log(`✅ Image fetched successfully: ${Math.round(base64.length / 1024)}KB, Type: ${contentType}`);
-      return { base64, contentType };
-      
-    } catch (error) {
-      console.error(`❌ Attempt ${attempt} failed:`, error.message);
-      
-      if (attempt === retries) {
-        throw new Error(`Failed to fetch image after ${retries} attempts: ${error.message}`);
-      }
-      
-      // Wait before retry (exponential backoff)
-      await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      // For blob URLs, we need to fetch from the client side
+      // Since this is server-side, we'll need the image data passed differently
+      throw new Error('Blob URLs must be processed client-side. Please use Supabase storage.');
     }
+    
+    // Handle regular URLs (Supabase, etc.)
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(`📥 Fetching image (attempt ${attempt}/${retries})`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        
+        const response = await fetch(imageUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'LightLister-AI/1.0'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType?.startsWith('image/')) {
+          throw new Error(`Invalid content type: ${contentType}`);
+        }
+        
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+        
+        console.log(`✅ Image fetched: ${Math.round(base64.length / 1024)}KB`);
+        return { base64, contentType };
+        
+      } catch (error) {
+        console.error(`❌ Attempt ${attempt} failed:`, error.message);
+        
+        if (attempt === retries) {
+          throw error;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Image fetch failed:', error.message);
+    throw new Error(`Image processing failed: ${error.message}`);
   }
 }
 
@@ -491,10 +508,13 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { imageUrls = [], imageCount } = body;
-    const numImages = imageUrls.length || imageCount || 1;
+    const { imageUrls = [], imageData = [], imageCount } = body;
+    const numImages = imageUrls.length + imageData.length || imageCount || 1;
     
-    console.log(`📸 Processing ${numImages} images for user ${userId}`);
+    console.log(`📸 Processing ${numImages} images for user ${userId}:`, {
+      urls: imageUrls.length,
+      base64: imageData.length
+    });
     
     if (!imageUrls.length) {
       return NextResponse.json({ error: 'No image URLs provided' }, { status: 400 });
@@ -543,14 +563,29 @@ export async function POST(request) {
     };
     
     try {
-      // Step 1: Fetch first image
-      analysisMetadata.pipeline_steps.push('fetch_image');
-      const imageResult = await fetchImageAsBase64(imageUrls[0]);
+      let imageBase64, contentType;
       
-      if (imageResult) {
+      // Get image data (prefer URLs, fallback to base64)
+      if (imageUrls.length > 0) {
+        analysisMetadata.pipeline_steps.push('fetch_url');
+        const imageResult = await fetchImageAsBase64(imageUrls[0]);
+        imageBase64 = imageResult.base64;
+        contentType = imageResult.contentType;
+      } else if (imageData.length > 0) {
+        analysisMetadata.pipeline_steps.push('use_base64');
+        const base64Data = imageData[0].base64;
+        // Remove data URL prefix if present
+        imageBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+        contentType = 'image/jpeg';
+        console.log('📄 Using provided base64 data');
+      } else {
+        throw new Error('No image data provided');
+      }
+      
+      if (imageBase64) {
         // Step 2: Google Vision Analysis  
         analysisMetadata.pipeline_steps.push('vision_api');
-        const visionData = await analyzeWithGoogleVision(imageResult.base64, imageResult.contentType);
+        const visionData = await analyzeWithGoogleVision(imageBase64, contentType);
         
         if (visionData) {
           // Step 3: Extract fashion details

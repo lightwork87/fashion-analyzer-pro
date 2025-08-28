@@ -125,35 +125,68 @@ export default function AnalyzeSinglePage() {
     setUploadProgress(0);
     
     try {
-      // Calculate total size before upload
+      // Calculate total size
       const totalSize = images.reduce((sum, img) => sum + img.compressedSize, 0);
-      console.log(`📤 Uploading ${images.length} images, total size: ${Math.round(totalSize/1024)}KB`);
+      console.log(`📤 Processing ${images.length} images, total: ${Math.round(totalSize/1024)}KB`);
       
-      if (totalSize > 4000000) { // 4MB safety margin
-        throw new Error(`Images too large (${Math.round(totalSize/1024)}KB). Please use fewer photos or reduce quality.`);
+      if (totalSize > 4000000) {
+        throw new Error(`Images too large (${Math.round(totalSize/1024)}KB). Max 4MB total.`);
       }
       
-      // Upload images to storage
-      const uploadedUrls = [];
+      // Upload images and get URLs
+      const imageData = [];
       
       for (let i = 0; i < images.length; i++) {
         setUploadProgress(Math.round((i / images.length) * 50));
-        const url = await uploadImage(images[i].file, userId);
-        uploadedUrls.push(url);
-        console.log(`✅ Uploaded ${i + 1}/${images.length}: ${images[i].name}`);
+        
+        try {
+          const url = await uploadImage(images[i].file, userId);
+          
+          // If it's a blob URL, convert to base64 for the API
+          if (url.startsWith('blob:')) {
+            const base64 = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(images[i].file);
+            });
+            imageData.push({
+              url: url,
+              base64: base64,
+              type: 'blob'
+            });
+          } else {
+            imageData.push({
+              url: url,
+              type: 'url'
+            });
+          }
+          
+          console.log(`✅ Processed ${i + 1}/${images.length}: ${images[i].name}`);
+        } catch (uploadError) {
+          console.error(`❌ Failed to process ${images[i].name}:`, uploadError);
+          throw new Error(`Failed to process ${images[i].name}: ${uploadError.message}`);
+        }
       }
       
       setUploadProgress(75);
-      console.log(`🔗 All images uploaded, calling AI analysis...`);
+      console.log(`🤖 Calling AI analysis with ${imageData.length} images...`);
+      
+      // Prepare data for API
+      const analysisData = {
+        imageCount: images.length,
+        imageUrls: imageData.filter(img => img.type === 'url').map(img => img.url),
+        imageData: imageData.filter(img => img.type === 'blob').map(img => ({
+          base64: img.base64,
+          filename: `blob-image-${Date.now()}.jpg`
+        }))
+      };
       
       // Call AI analysis
       const response = await fetch('/api/analyze-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          imageUrls: uploadedUrls,
-          imageCount: images.length 
-        })
+        body: JSON.stringify(analysisData)
       });
       
       const data = await response.json();
@@ -166,7 +199,7 @@ export default function AnalyzeSinglePage() {
         setUploadProgress(100);
         console.log('✅ Analysis complete:', data.analysis.ebay_title);
         
-        // Extract only essential data for results page
+        // Store results and navigate
         const essentialData = {
           id: data.analysis.id,
           ebay_title: data.analysis.ebay_title,
@@ -181,34 +214,28 @@ export default function AnalyzeSinglePage() {
           category: data.analysis.category,
           description: data.analysis.description,
           sku: data.analysis.sku,
-          material: data.analysis.material,
-          style: data.analysis.style,
-          gender: data.analysis.gender,
-          keywords: data.analysis.keywords,
+          material: data.analysis.material || 'See Label',
+          style: data.analysis.style || 'Casual',
+          gender: data.analysis.gender || 'Unisex',
+          keywords: data.analysis.keywords || ['fashion'],
           credits_remaining: data.analysis.credits_remaining,
           images_count: images.length,
           analyzed_at: new Date().toISOString()
         };
         
-        // Store in sessionStorage with smaller data
         try {
-          const dataString = JSON.stringify(essentialData);
-          if (dataString.length > 1000000) { // 1MB limit for sessionStorage
-            throw new Error('Data too large for storage');
-          }
-          sessionStorage.setItem('analysisResult', dataString);
+          sessionStorage.setItem('analysisResult', JSON.stringify(essentialData));
           router.push('/dashboard/results');
         } catch (storageError) {
-          console.error('Storage error:', storageError);
-          // If storage fails, pass ID in URL instead
+          console.warn('SessionStorage failed, using URL fallback');
           router.push(`/dashboard/results?id=${data.analysis.id}`);
         }
       } else {
-        throw new Error('No analysis data returned');
+        throw new Error('No analysis data returned from server');
       }
     } catch (err) {
       console.error('❌ Analysis error:', err);
-      setError(err.message || 'Failed to analyze item');
+      setError(err.message || 'Analysis failed. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
