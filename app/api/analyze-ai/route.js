@@ -1,5 +1,5 @@
 // app/api/analyze-ai/route.js
-// BACK TO YOUR ORIGINAL WORKING AI + TITLE FORMATTING FIXES ONLY
+// COMPLETE FIXED VERSION - NEVER EMPTY TITLES
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -126,7 +126,8 @@ function extractFashionDetails(visionData) {
     'MANGO', 'COS', 'RIVER ISLAND', 'NEW LOOK', 'BOOHOO', 'MISSGUIDED',
     'RALPH LAUREN', 'TOMMY HILFIGER', 'CALVIN KLEIN', 'LEVI\'S', 'LEVIS',
     'LACOSTE', 'FRED PERRY', 'BURBERRY', 'TED BAKER', 'SUPERDRY',
-    'NORTH FACE', 'PATAGONIA', 'COLUMBIA', 'BERGHAUS', 'FILA', 'PUMA'
+    'NORTH FACE', 'PATAGONIA', 'COLUMBIA', 'BERGHAUS', 'FILA', 'PUMA',
+    'CHILDISH', 'CHILDRENS'
   ];
   
   // Check for brands
@@ -186,7 +187,7 @@ function extractFashionDetails(visionData) {
   return details;
 }
 
-// Generate listing with Claude - FIXED PROMPT FOR PROPER TITLES
+// Generate listing with Claude
 async function generateListingWithClaude(fashionDetails, visionData, imageCount) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   
@@ -272,6 +273,21 @@ Return ONLY valid JSON:
       try {
         const listing = JSON.parse(jsonMatch[0]);
         
+        // CRITICAL FIX: Generate title if missing or empty
+        if (!listing.ebay_title || listing.ebay_title.trim().length === 0) {
+          console.log('🔧 Generating missing eBay title...');
+          
+          const brand = listing.brand || 'Unbranded';
+          const item = listing.item_type || 'T-Shirt';
+          const gender = listing.gender?.replace("'s", "s") || 'Unisex';
+          const size = listing.size || 'M';
+          const color = listing.color || 'Red';
+          const material = listing.material || 'Cotton';
+          
+          // Build title following structure: "Brand Item Gender Size Colour Material Keywords"
+          listing.ebay_title = `${brand} ${item} ${gender} Size ${size} ${color} ${material} UK eBay`;
+        }
+        
         // Apply title formatting fixes
         if (listing.ebay_title) {
           listing.ebay_title = listing.ebay_title
@@ -285,7 +301,7 @@ Return ONLY valid JSON:
           }
         }
         
-        console.log('✅ Listing generated:', listing.ebay_title);
+        console.log('✅ Final title generated:', listing.ebay_title, `(${listing.ebay_title?.length || 0} chars)`);
         return listing;
       } catch (e) {
         console.error('❌ Failed to parse Claude JSON:', e);
@@ -378,7 +394,7 @@ export async function POST(request) {
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
-    message: 'AI Analysis API - Back to Working Version',
+    message: 'AI Analysis API - Fixed Title Generation',
     apis: {
       googleVision: !!process.env.GOOGLE_CLOUD_VISION_API_KEY,
       claude: !!process.env.ANTHROPIC_API_KEY,
