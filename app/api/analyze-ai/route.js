@@ -357,7 +357,7 @@ function getColorName(r, g, b) {
   return null;
 }
 
-// Generate listing with Claude AI - Enhanced prompting
+// Generate listing with Claude AI - Enhanced with specific eBay UK requirements
 async function generateListingWithClaude(fashionDetails, visionData, imageCount) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   
@@ -367,7 +367,7 @@ async function generateListingWithClaude(fashionDetails, visionData, imageCount)
   }
   
   try {
-    console.log('🤖 Calling Claude API for listing generation...');
+    console.log('🤖 Calling Claude API for eBay UK listing generation...');
     
     const labels = visionData?.labelAnnotations?.slice(0, 10).map(l => 
       `${l.description} (${Math.round(l.score * 100)}%)`
@@ -377,7 +377,7 @@ async function generateListingWithClaude(fashionDetails, visionData, imageCount)
       `${o.name} (${Math.round(o.score * 100)}%)`
     ).join(', ') || 'none detected';
     
-    const prompt = `You are an expert UK eBay fashion seller specializing in creating perfect listings for resellers. Analyze this fashion item and create a professional listing.
+    const prompt = `You are an expert UK eBay seller creating professional listings. Analyze this fashion item and create a perfect eBay UK listing following STRICT formatting rules.
 
 DETECTED INFORMATION FROM AI ANALYSIS:
 - Text from clothing labels/tags: "${fashionDetails.allText.substring(0, 500)}"
@@ -391,15 +391,26 @@ DETECTED INFORMATION FROM AI ANALYSIS:
 - Analysis confidence: ${Math.round(fashionDetails.confidence * 100)}%
 - Number of photos: ${imageCount}
 
-REQUIREMENTS FOR UK EBAY LISTING:
-1. Create eBay UK title (MAX 80 characters) in format: [Brand] [Gender] [Item Type] [Key Feature] Size [Size]
-2. If NO brand clearly detected, use "Unbranded" 
-3. Use UK spelling (colour not color, grey not gray)
-4. Price in GBP (£) for UK market - research current eBay sold listings
-5. Use UK sizing (8, 10, 12, 14 etc for women's clothing)
-6. Professional reseller tone - detailed but concise
+CRITICAL TITLE REQUIREMENTS (MUST FOLLOW EXACTLY):
+1. MAX 80 characters - NEVER exceed this limit
+2. Structure: "Brand Item Gender Size Colour Material Keywords" 
+3. BANNED characters: . , - £ (use spaces instead)
+4. Try to hit exactly 80 characters for maximum impact
+5. Use UK spellings (Colour not Color, Grey not Gray)
 
-PRICING GUIDELINES:
+CONDITION ANALYSIS REQUIREMENTS:
+- Examine the item carefully for wear, damage, stains, fading
+- Rate condition 1-10 (10=new with tags, 9=excellent, 8=very good, 7=good, 6=fair, 5=poor)
+- Describe specific flaws if visible
+
+DESCRIPTION REQUIREMENTS:
+1. Start with the EXACT title as first line
+2. Add condition details with specific observations
+3. If measurements/ruler visible, include dimensions
+4. If last image shows bagged item with SKU sticker, mention packaging
+5. Professional reseller tone
+
+PRICING GUIDELINES (UK eBay):
 - High street brands (Zara, H&M, Next): £8-25
 - Premium brands (Ralph Lauren, Tommy): £15-45  
 - Designer/luxury brands: £25-80+
@@ -409,20 +420,32 @@ PRICING GUIDELINES:
 Return ONLY this valid JSON structure:
 {
   "brand": "detected brand name or 'Unbranded'",
-  "item_type": "specific clothing type (e.g. 'Midi Dress', 'Slim Fit Jeans')",
-  "size": "UK size (e.g. '12', 'Medium', 'L')",
+  "item_type": "specific clothing type",
+  "size": "UK size",
   "color": "main colour in British English",
+  "material": "fabric/material detected",
+  "gender": "Mens/Womens/Unisex", 
   "condition_score": 8,
+  "condition_description": "Detailed condition assessment",
   "estimated_value_min": 12,
   "estimated_value_max": 28,
-  "ebay_title": "Perfect 80-character eBay UK title",
-  "description": "Professional bullet-point description focusing on brand, condition, measurements if known, and selling points",
+  "ebay_title": "Perfect 80-character eBay UK title following structure",
+  "description": "Title as first line, then professional description with condition, measurements if visible, packaging details",
   "suggested_price": 18,
-  "category": "Clothes, Shoes & Accessories > Women's Clothing > Dresses",
-  "material": "fabric/material if detected",
-  "style": "clothing style (e.g. Casual, Smart, Vintage)",
-  "gender": "Men's/Women's/Unisex",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+  "category": "Clothes, Shoes & Accessories > Category > Subcategory",
+  "style": "clothing style",
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "measurements": "Include if ruler/measuring visible in images",
+  "sku_detected": "If SKU sticker visible on bagged item in last image",
+  "item_specifics": {
+    "Brand": "brand name",
+    "Size": "UK size", 
+    "Colour": "main colour",
+    "Material": "fabric type",
+    "Condition": "condition description",
+    "Style": "style type",
+    "Gender": "target gender"
+  }
 }`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -653,31 +676,43 @@ export async function POST(request) {
         item_type: "Clothing Item", 
         size: "Please Check Label",
         color: "Multi",
+        material: "See Label",
+        gender: "Unisex",
         condition_score: 7,
+        condition_description: "Good used condition please see photos for details",
         estimated_value_min: 8,
         estimated_value_max: 20,
-        ebay_title: "Unbranded Clothing Item - Please See Photos for Size & Brand Details",
-        description: `Pre-owned clothing item as shown in photos.
+        ebay_title: "Unbranded Clothing Item Unisex Please Check Label Multi See Label",
+        description: `Unbranded Clothing Item Unisex Please Check Label Multi See Label
 
-• Condition: Good used condition  
-• Please check all photos for size labels, brand tags, and item details
-• Measurements and fabric details visible in images
-• From smoke-free home
-• Fast UK postage via Royal Mail
+Good used condition please see photos for details
 
-Please see photos for exact condition and details.`,
+Please check all photos for size labels brand tags and item details
+From smoke free home
+Fast UK postage via Royal Mail
+
+Please see photos for exact condition and details`,
         suggested_price: 12,
         category: "Clothes, Shoes & Accessories",
-        material: "See Label",
         style: "Casual",
-        gender: "Unisex", 
         keywords: ["clothing", "fashion", "preloved", "uk", "ebay"],
+        measurements: "Not visible",
+        sku_detected: "Not found",
         analysis_confidence: 0.1,
         detection_metadata: {
           text_found: false,
           brands_detected: 0,
           sizes_detected: 0,
           items_detected: 0
+        },
+        item_specifics: {
+          Brand: "Unbranded",
+          Size: "Please Check Label",
+          Colour: "Multi", 
+          Material: "See Label",
+          Condition: "Good used condition",
+          Style: "Casual",
+          Gender: "Unisex"
         }
       };
     }
