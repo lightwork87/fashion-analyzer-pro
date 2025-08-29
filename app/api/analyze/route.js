@@ -1,5 +1,5 @@
 // app/api/analyze/route.js
-// VERSION WITH BRAND LEARNING SYSTEM
+// VERSION WITH BRAND AND KEYWORD LEARNING SYSTEMS
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -13,9 +13,133 @@ const supabase = createClient(
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-// ========== BRAND LEARNING SYSTEM ==========
+// ========== KEYWORD LEARNING SYSTEM ==========
 
-// Get brands from database
+// Get best keywords for an item type/brand combo
+async function getLearnedKeywords(itemType, brand, category) {
+  try {
+    // Get keywords that work well for this specific combo
+    const { data: specificKeywords } = await supabase
+      .from('keyword_patterns')
+      .select('keyword, confidence_score')
+      .or(`item_type.eq.${itemType},brand.eq.${brand},category.eq.${category}`)
+      .gte('confidence_score', 0.6)
+      .order('confidence_score', { ascending: false })
+      .limit(20);
+    
+    // Get general high-performing keywords
+    const { data: generalKeywords } = await supabase
+      .from('keyword_patterns')
+      .select('keyword, confidence_score')
+      .is('item_type', null)
+      .gte('confidence_score', 0.7)
+      .order('confidence_score', { ascending: false })
+      .limit(10);
+    
+    const allKeywords = [
+      ...(specificKeywords || []),
+      ...(generalKeywords || [])
+    ];
+    
+    // Remove duplicates and return top keywords
+    const uniqueKeywords = [...new Map(allKeywords.map(k => [k.keyword, k])).values()];
+    
+    console.log(`📚 Found ${uniqueKeywords.length} learned keywords for ${itemType}/${brand}`);
+    return uniqueKeywords.slice(0, 10).map(k => k.keyword);
+    
+  } catch (error) {
+    console.error('Error fetching learned keywords:', error);
+    return [];
+  }
+}
+
+// Learn from keyword corrections
+async function learnFromKeywordCorrection(analysisId, itemType, brand, original, corrected, userId) {
+  try {
+    const removed = original.filter(k => !corrected.includes(k));
+    const added = corrected.filter(k => !original.includes(k));
+    
+    // Record the correction
+    await supabase
+      .from('keyword_corrections')
+      .insert({
+        analysis_id: analysisId,
+        item_type: itemType,
+        brand: brand,
+        original_keywords: original,
+        corrected_keywords: corrected,
+        removed_keywords: removed,
+        added_keywords: added,
+        user_id: userId
+      });
+    
+    // Decrease confidence for removed keywords
+    for (const keyword of removed) {
+      const { data: existing } = await supabase
+        .from('keyword_patterns')
+        .select('*')
+        .eq('keyword', keyword)
+        .eq('item_type', itemType)
+        .single();
+      
+      if (existing) {
+        const newConfidence = Math.max(0, existing.confidence_score - 0.1);
+        await supabase
+          .from('keyword_patterns')
+          .update({ 
+            confidence_score: newConfidence,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+        
+        console.log(`📉 Decreased confidence for "${keyword}" to ${newConfidence}`);
+      }
+    }
+    
+    // Increase confidence for added keywords
+    for (const keyword of added) {
+      const { data: existing } = await supabase
+        .from('keyword_patterns')
+        .select('*')
+        .eq('keyword', keyword)
+        .eq('item_type', itemType)
+        .single();
+      
+      if (existing) {
+        const newConfidence = Math.min(1, existing.confidence_score + 0.15);
+        await supabase
+          .from('keyword_patterns')
+          .update({ 
+            confidence_score: newConfidence,
+            usage_count: existing.usage_count + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+        
+        console.log(`📈 Increased confidence for "${keyword}" to ${newConfidence}`);
+      } else {
+        // New keyword learned from manual edit
+        await supabase
+          .from('keyword_patterns')
+          .insert({
+            keyword: keyword,
+            item_type: itemType,
+            brand: brand,
+            confidence_score: 0.7, // Start with good confidence since human added it
+            source: 'manual_edit'
+          });
+        
+        console.log(`🆕 Learned new keyword from edit: "${keyword}" for ${itemType}`);
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error learning from keyword correction:', error);
+  }
+}
+
+// ========== BRAND LEARNING SYSTEM (from before) ==========
+
 async function getDatabaseBrands() {
   try {
     const { data, error } = await supabase
@@ -35,20 +159,17 @@ async function getDatabaseBrands() {
   }
 }
 
-// Add or update brand in database
 async function learnBrand(brandName, source = 'vision_api', analysisId = null, userId = null) {
   try {
     const normalizedBrand = brandName.toUpperCase().trim();
     
-    // Check if brand exists
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing } = await supabase
       .from('brands')
       .select('id, confidence_score, total_detections')
       .eq('brand_name', normalizedBrand)
       .single();
     
     if (existing) {
-      // Update existing brand
       await supabase
         .from('brands')
         .update({
@@ -57,10 +178,7 @@ async function learnBrand(brandName, source = 'vision_api', analysisId = null, u
           last_detected: new Date().toISOString()
         })
         .eq('id', existing.id);
-      
-      console.log(`📈 Brand confidence increased: ${normalizedBrand} (score: ${existing.confidence_score + 1})`);
     } else {
-      // Add new brand
       await supabase
         .from('brands')
         .insert({
@@ -73,7 +191,6 @@ async function learnBrand(brandName, source = 'vision_api', analysisId = null, u
       console.log(`🆕 New brand learned: ${normalizedBrand}`);
     }
     
-    // Log detection
     await supabase
       .from('brand_detections')
       .insert({
@@ -95,9 +212,7 @@ async function fetchImageAsBase64(imageUrl) {
     console.log('📥 Fetching image from URL...');
     
     const response = await fetch(imageUrl, {
-      headers: { 
-        'User-Agent': 'LightLister-AI/1.0'
-      },
+      headers: { 'User-Agent': 'LightLister-AI/1.0' },
       signal: AbortSignal.timeout(15000)
     });
     
@@ -121,7 +236,7 @@ async function analyzeWithGoogleVision(imageBase64) {
   const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
   
   if (!apiKey || apiKey === 'your_google_cloud_vision_api_key') {
-    console.log('⚠️ Google Vision API key not configured - skipping');
+    console.log('⚠️ Google Vision API key not configured');
     return null;
   }
   
@@ -140,8 +255,7 @@ async function analyzeWithGoogleVision(imageBase64) {
               { type: 'TEXT_DETECTION', maxResults: 50 },
               { type: 'LABEL_DETECTION', maxResults: 30 },
               { type: 'LOGO_DETECTION', maxResults: 10 },
-              { type: 'OBJECT_LOCALIZATION', maxResults: 20 },
-              { type: 'IMAGE_PROPERTIES', maxResults: 5 }
+              { type: 'OBJECT_LOCALIZATION', maxResults: 20 }
             ]
           }]
         })
@@ -163,7 +277,6 @@ async function analyzeWithGoogleVision(imageBase64) {
   }
 }
 
-// Enhanced fashion detail extraction with brand learning
 async function extractFashionDetails(visionData, analysisId, userId) {
   const details = {
     allText: '',
@@ -178,84 +291,51 @@ async function extractFashionDetails(visionData, analysisId, userId) {
   
   if (!visionData) return details;
   
-  // Get all detected text
   if (visionData.textAnnotations?.length > 0) {
     details.allText = visionData.textAnnotations[0].description || '';
-    console.log('📝 Full text found:', details.allText);
   }
   
   const textUpper = details.allText.toUpperCase();
-  const textWords = textUpper.split(/\s+/);
   
   // Get brands from database
   const databaseBrands = await getDatabaseBrands();
-  console.log(`📚 Loaded ${databaseBrands.length} brands from database`);
   
-  // Core brand list (fallback)
   const coreBrands = [
-    'CHILDISH', 'ZARA', 'H&M', 'HM', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK', 
-    'TOPSHOP', 'ASOS', 'MARKS & SPENCER', 'M&S', 'UNIQLO', 'GAP', 
-    'MANGO', 'COS', 'RIVER ISLAND', 'NEW LOOK', 'BOOHOO', 'MISSGUIDED',
-    'RALPH LAUREN', 'TOMMY HILFIGER', 'CALVIN KLEIN', 'LEVI\'S', 'LEVIS',
-    'LACOSTE', 'FRED PERRY', 'BURBERRY', 'TED BAKER', 'SUPERDRY'
+    'CHILDISH', 'ZARA', 'H&M', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK'
   ];
   
-  // Combine database brands with core brands
   const allBrands = [...new Set([...databaseBrands, ...coreBrands])];
   
-  // Check for brands in text
+  // Check for brands
   for (const brand of allBrands) {
     if (textUpper.includes(brand)) {
       details.brands.push(brand);
-      // Learn this brand detection
       await learnBrand(brand, 'text_extraction', analysisId, userId);
     }
   }
   
-  // Check for potential new brands from logos
+  // Logo detection
   if (visionData.logoAnnotations) {
     for (const logo of visionData.logoAnnotations) {
       const logoBrand = logo.description.toUpperCase();
       details.brands.push(logoBrand);
-      
-      // Learn this potential new brand
       await learnBrand(logoBrand, 'logo_detection', analysisId, userId);
-      console.log(`🔍 Potential new brand from logo: ${logoBrand}`);
     }
   }
   
-  // Check for potential brands in capitalized words (heuristic)
-  const capitalizedWords = details.allText.match(/\b[A-Z][A-Za-z]+\b/g) || [];
-  for (const word of capitalizedWords) {
-    // Check if it looks like a brand (not common words)
-    const commonWords = ['Size', 'Small', 'Medium', 'Large', 'Cotton', 'Polyester', 'Made', 'China', 'Vietnam'];
-    if (!commonWords.includes(word) && word.length > 3) {
-      // This could be a brand - mark for review
-      console.log(`❓ Potential brand candidate: ${word}`);
-      // Don't auto-learn these, but log them for manual review
-    }
-  }
-  
-  // Remove duplicates
   details.brands = [...new Set(details.brands)];
   
   // Size detection
   const sizePatterns = [
-    /\b(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL)\b/,
-    /SIZE[:\s]*([XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL])\b/i,
-    /UK[:\s]*(\d{1,2})/i,
-    /SIZE[:\s]*UK[:\s]*(\d{1,2})/i,
-    /EUR?[:\s]*(\d{2,3})/i,
-    /US[:\s]*(\d{1,2})/i,
-    /SIZE[:\s]*(\d{1,2})\b/i
+    /\b(XXS|XS|S|M|L|XL|XXL|XXXL)\b/,
+    /SIZE[:\s]*([XXS|XS|S|M|L|XL|XXL])\b/i,
+    /UK[:\s]*(\d{1,2})/i
   ];
   
   for (const pattern of sizePatterns) {
     const matches = textUpper.matchAll(new RegExp(pattern, 'g'));
     for (const match of matches) {
-      if (match[1]) {
-        details.sizes.push(match[1]);
-      }
+      if (match[1]) details.sizes.push(match[1]);
     }
   }
   
@@ -264,28 +344,20 @@ async function extractFashionDetails(visionData, analysisId, userId) {
   const objects = visionData.localizedObjectAnnotations?.map(o => o.name.toLowerCase()) || [];
   const allDetections = [...labels, ...objects];
   
-  // Check for garment indicators
   const hasLongSleeves = allDetections.some(d => 
     d.includes('long sleeve') || 
-    d.includes('long-sleeve') ||
-    d.includes('sleeve') && !d.includes('short')
+    (d.includes('sleeve') && !d.includes('short'))
   );
   
   const hasRibbedCuffs = textUpper.includes('RIBBED') || textUpper.includes('CUFF');
-  const hasCrewNeck = textUpper.includes('CREW') || allDetections.some(d => d.includes('crew neck'));
   
-  // Determine garment type
-  if (hasLongSleeves && (hasRibbedCuffs || hasCrewNeck)) {
+  if (hasLongSleeves && hasRibbedCuffs) {
     details.itemTypes.push('Sweatshirt', 'Jumper');
     details.garmentHints.push('long sleeve with ribbed details');
   }
   
-  // Color detection
-  const colors = [
-    'Black', 'White', 'Grey', 'Navy', 'Blue', 'Red', 'Green', 
-    'Yellow', 'Orange', 'Purple', 'Pink', 'Brown', 'Beige', 'Cream'
-  ];
-  
+  // Colors
+  const colors = ['Black', 'White', 'Grey', 'Navy', 'Blue', 'Red', 'Green'];
   for (const color of colors) {
     if (allDetections.some(d => d.toLowerCase().includes(color.toLowerCase())) ||
         textUpper.includes(color.toUpperCase())) {
@@ -293,11 +365,8 @@ async function extractFashionDetails(visionData, analysisId, userId) {
     }
   }
   
-  // Material detection
-  const materials = [
-    'Cotton', 'Polyester', 'Jersey', 'Fleece', 'Wool', 'Nylon'
-  ];
-  
+  // Materials
+  const materials = ['Cotton', 'Polyester', 'Jersey', 'Fleece'];
   for (const material of materials) {
     if (textUpper.includes(material.toUpperCase()) ||
         allDetections.some(d => d.toLowerCase().includes(material.toLowerCase()))) {
@@ -305,18 +374,11 @@ async function extractFashionDetails(visionData, analysisId, userId) {
     }
   }
   
-  console.log('🔍 Extracted details with learned brands:', {
-    brands: details.brands,
-    sizes: details.sizes,
-    types: details.itemTypes,
-    colors: details.colors
-  });
-  
   return details;
 }
 
-// Generate listing with Claude
-async function generateListingWithClaude(fashionDetails, visionData, imageCount) {
+// Enhanced Claude prompt with keyword learning
+async function generateListingWithClaude(fashionDetails, visionData, learnedKeywords) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   
   if (!apiKey || apiKey === 'your_anthropic_api_key') {
@@ -325,53 +387,46 @@ async function generateListingWithClaude(fashionDetails, visionData, imageCount)
   }
   
   try {
-    console.log('🤖 Calling Claude API...');
+    console.log('🤖 Calling Claude API with learned keywords...');
     
     const visionContext = visionData ? {
       labels: visionData.labelAnnotations?.map(l => l.description) || [],
-      objects: visionData.localizedObjectAnnotations?.map(o => o.name) || [],
-      logos: visionData.logoAnnotations?.map(l => l.description) || []
+      objects: visionData.localizedObjectAnnotations?.map(o => o.name) || []
     } : null;
     
-    const prompt = `You are an expert UK eBay fashion reseller. Analyze this item and create perfect listings.
-
-CRITICAL GARMENT TYPE DETECTION:
-- Long sleeves with ribbed cuffs/hem = JUMPER or SWEATSHIRT (NOT T-shirt)
-- Short sleeves = T-SHIRT
-- Hood = HOODIE
-- Buttons down front = SHIRT or CARDIGAN
+    const prompt = `You are an expert UK eBay fashion reseller. Create perfect listings using learned keyword patterns.
 
 DETECTED INFORMATION:
-- Text found: "${fashionDetails.allText || 'None'}"
-- Brands: ${fashionDetails.brands.length > 0 ? fashionDetails.brands.join(', ') : 'None'}
-- Sizes: ${fashionDetails.sizes.length > 0 ? fashionDetails.sizes.join(', ') : 'None'}
+- Text: "${fashionDetails.allText || 'None'}"
+- Brands: ${fashionDetails.brands.join(', ') || 'None'}
+- Sizes: ${fashionDetails.sizes.join(', ') || 'None'}
 - Garment hints: ${fashionDetails.garmentHints.join(', ') || 'None'}
 - Colors: ${fashionDetails.colors.join(', ') || 'Not specified'}
 - Materials: ${fashionDetails.materials.join(', ') || 'Not specified'}
 ${visionContext ? `
 - Visual labels: ${visionContext.labels.slice(0, 15).join(', ')}
-- Objects: ${visionContext.objects.join(', ')}
-- Logos: ${visionContext.logos.join(', ')}` : ''}
+- Objects: ${visionContext.objects.join(', ')}` : ''}
 
-CRITICAL TITLE FORMAT (EXACTLY 80 CHARACTERS):
-MUST follow: [Brand] [Gender] [Item] Size [Size] [Colour] [Material] [Keywords]
+PROVEN HIGH-PERFORMING KEYWORDS FOR THIS TYPE:
+${learnedKeywords.length > 0 ? learnedKeywords.join(', ') : 'vintage, vgc, uk, fast post, genuine'}
 
-Examples:
-- "Childish Mens Jumper Size S Red Cotton Jersey Crew Neck Streetwear Long Sleeve UK"
-- "Nike Womens Hoodie Size M Black Polyester Fleece Sports Gym Training Warm Running"
+KEYWORD SELECTION RULES:
+1. Prioritize the proven keywords above if they fit
+2. Add condition keywords: BNWT, VGC, Excellent, Good
+3. Add style keywords: Vintage, Y2K, Retro, Modern, Classic
+4. Add occasion keywords: Casual, Smart, Work, Gym, Festival
+5. Add trending keywords: Streetwear, Oversized, Sustainable
+6. ALWAYS include: UK (we're UK sellers)
 
-RULES:
-1. If long sleeves detected, use JUMPER or SWEATSHIRT (never T-Shirt)
-2. Use FIRST size found if multiple detected
-3. UK spelling always (Colour, Grey, Jumper)
-4. Keywords must be eBay searchable terms
+TITLE FORMAT (EXACTLY 80 CHARACTERS):
+[Brand] [Gender] [Item] Size [Size] [Colour] [Material] [Keyword1] [Keyword2] UK
 
 Return ONLY this JSON:
 {
   "brand": "Exact brand or Unbranded",
-  "item_type": "Jumper/Sweatshirt/T-Shirt/Hoodie etc",
-  "size": "Exact size detected",
-  "color": "Colour with UK spelling",
+  "item_type": "Specific item type",
+  "size": "Exact size",
+  "color": "UK spelling",
   "condition_score": 7,
   "condition_text": "Very Good Condition",
   "estimated_value_min": 10,
@@ -380,12 +435,14 @@ Return ONLY this JSON:
   "vinted_title": "Casual title under 50 chars",
   "description": "Detailed description",
   "suggested_price": 18,
-  "category": "Mens Clothing > Jumpers & Cardigans",
-  "material": "Cotton Jersey or detected",
-  "style": "Streetwear/Casual",
-  "gender": "Mens/Womens/Unisex",
-  "keywords": ["streetwear", "casual", "uk"]
-}`;
+  "category": "Category > Subcategory",
+  "material": "Material",
+  "style": "Style",
+  "gender": "Gender",
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5", "keyword6", "keyword7", "keyword8"]
+}
+
+IMPORTANT: The keywords array should contain 6-8 highly relevant, searchable eBay terms.`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -406,40 +463,29 @@ Return ONLY this JSON:
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Claude API error:', response.status, errorText);
       throw new Error('AI service temporarily unavailable');
     }
 
     const data = await response.json();
     const content = data.content?.[0]?.text || '';
     
-    let listing;
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-      
-      listing = JSON.parse(jsonMatch[0]);
-      console.log('✅ JSON parsed successfully');
-      
-    } catch (parseError) {
-      console.error('❌ JSON parse failed:', parseError.message);
-      throw new Error('Failed to parse AI response');
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON in response');
     }
     
-    // Format title
+    const listing = JSON.parse(jsonMatch[0]);
+    
+    // Format title to exactly 80 chars
     listing.ebay_title = listing.ebay_title
       .replace(/[.,\-£$]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     
-    // Ensure exactly 80 characters
     if (listing.ebay_title.length > 80) {
       listing.ebay_title = listing.ebay_title.substring(0, 80).trim();
     } else if (listing.ebay_title.length < 80) {
-      const padding = ['UK', 'Seller', 'Fast', 'Post'];
+      const padding = ['UK', 'Fast', 'Post'];
       while (listing.ebay_title.length < 80 && padding.length > 0) {
         const word = padding.shift();
         if (listing.ebay_title.length + word.length + 1 <= 80) {
@@ -458,25 +504,44 @@ Return ONLY this JSON:
 
 // ========== MAIN HANDLER ==========
 export async function POST(request) {
-  console.log('\n🚀 === NEW ANALYSIS REQUEST ===');
-  console.log('Timestamp:', new Date().toISOString());
+  console.log('\n🚀 === ANALYSIS WITH KEYWORD LEARNING ===');
   
   try {
-    // 1. Check authentication
+    // 1. Auth check
     let userId = 'temp-user-' + Date.now();
-    
     try {
       const { userId: authUserId } = await auth();
-      if (authUserId) {
-        userId = authUserId;
-      }
+      if (authUserId) userId = authUserId;
     } catch (authError) {
-      console.log('⚠️ Auth bypassed for testing');
+      console.log('⚠️ Auth bypassed');
     }
     
     // 2. Parse request
     const body = await request.json();
-    const { imageUrls = [], imageCount = 1 } = body;
+    const { 
+      imageUrls = [], 
+      imageCount = 1,
+      correctedKeywords = null, // If user is correcting keywords
+      originalAnalysisId = null // ID of analysis being corrected
+    } = body;
+    
+    // Handle keyword correction learning
+    if (correctedKeywords && originalAnalysisId) {
+      const { itemType, brand, original, corrected } = correctedKeywords;
+      await learnFromKeywordCorrection(
+        originalAnalysisId,
+        itemType,
+        brand,
+        original,
+        corrected,
+        userId
+      );
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Keywords learned successfully'
+      });
+    }
     
     if (!imageUrls || imageUrls.length === 0) {
       return NextResponse.json({
@@ -485,26 +550,52 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    console.log(`📸 Processing ${imageUrls.length} images`);
-    
-    // 3. Generate analysis ID
     const analysisId = `analysis-${Date.now()}`;
     
-    // 4. Main AI pipeline
+    // 3. AI Pipeline
     let finalListing = null;
     
     try {
       const imageBase64 = await fetchImageAsBase64(imageUrls[0]);
       const visionData = await analyzeWithGoogleVision(imageBase64);
-      
-      // Extract details with brand learning
       const fashionDetails = await extractFashionDetails(visionData, analysisId, userId);
       
-      finalListing = await generateListingWithClaude(fashionDetails, visionData, imageCount);
+      // Get learned keywords for this item type
+      const itemType = fashionDetails.itemTypes[0] || 'clothing';
+      const brand = fashionDetails.brands[0] || 'unbranded';
+      const learnedKeywords = await getLearnedKeywords(itemType, brand, 'mens clothing');
       
-      // Learn the final brand from Claude's analysis
+      console.log(`🎯 Using learned keywords: ${learnedKeywords.join(', ')}`);
+      
+      finalListing = await generateListingWithClaude(fashionDetails, visionData, learnedKeywords);
+      
+      // Learn brands from final analysis
       if (finalListing.brand && finalListing.brand !== 'Unbranded') {
         await learnBrand(finalListing.brand, 'claude_analysis', analysisId, userId);
+      }
+      
+      // Store initial keywords for learning
+      if (finalListing.keywords && Array.isArray(finalListing.keywords)) {
+        for (const keyword of finalListing.keywords) {
+          const { data: existing } = await supabase
+            .from('keyword_patterns')
+            .select('*')
+            .eq('keyword', keyword)
+            .eq('item_type', finalListing.item_type)
+            .single();
+          
+          if (!existing) {
+            await supabase
+              .from('keyword_patterns')
+              .insert({
+                keyword: keyword,
+                item_type: finalListing.item_type,
+                brand: finalListing.brand,
+                confidence_score: 0.5,
+                source: 'ai_generated'
+              });
+          }
+        }
       }
       
     } catch (pipelineError) {
@@ -512,7 +603,7 @@ export async function POST(request) {
       throw pipelineError;
     }
     
-    // 5. Create complete analysis
+    // 4. Complete analysis
     const completeAnalysis = {
       ...finalListing,
       id: analysisId,
@@ -520,10 +611,11 @@ export async function POST(request) {
       images_count: imageCount,
       image_urls: imageUrls,
       credits_remaining: 49,
-      analyzed_at: new Date().toISOString()
+      analyzed_at: new Date().toISOString(),
+      can_edit_keywords: true // Flag to show keyword edit UI
     };
     
-    // 6. Save to database
+    // 5. Save to database
     if (userId && !userId.startsWith('temp-')) {
       try {
         await supabase.from('analyses').insert({
@@ -533,15 +625,11 @@ export async function POST(request) {
           size: completeAnalysis.size,
           color: completeAnalysis.color,
           condition_score: completeAnalysis.condition_score,
-          estimated_value_min: completeAnalysis.estimated_value_min,
-          estimated_value_max: completeAnalysis.estimated_value_max,
           ebay_title: completeAnalysis.ebay_title,
-          vinted_title: completeAnalysis.vinted_title,
-          description: completeAnalysis.description,
+          keywords: completeAnalysis.keywords,
           suggested_price: completeAnalysis.suggested_price,
           category: completeAnalysis.category,
           sku: completeAnalysis.sku,
-          images_count: completeAnalysis.images_count,
           metadata: completeAnalysis
         });
       } catch (dbError) {
@@ -549,7 +637,8 @@ export async function POST(request) {
       }
     }
     
-    console.log('✅ Analysis complete with brand learning!');
+    console.log('✅ Analysis complete with keyword learning!');
+    console.log('Keywords:', completeAnalysis.keywords);
     
     return NextResponse.json({
       success: true,
@@ -565,23 +654,69 @@ export async function POST(request) {
   }
 }
 
-// GET endpoint for health check
-export async function GET() {
-  // Get brand count from database
-  let brandCount = 0;
+// Endpoint to handle keyword corrections
+export async function PATCH(request) {
   try {
-    const { count } = await supabase
+    const { userId } = await auth();
+    const body = await request.json();
+    
+    const {
+      analysisId,
+      itemType,
+      brand,
+      originalKeywords,
+      correctedKeywords
+    } = body;
+    
+    await learnFromKeywordCorrection(
+      analysisId,
+      itemType,
+      brand,
+      originalKeywords,
+      correctedKeywords,
+      userId || 'anonymous'
+    );
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Keywords updated and learned'
+    });
+    
+  } catch (error) {
+    console.error('Error in keyword correction:', error);
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to update keywords'
+    }, { status: 500 });
+  }
+}
+
+// Health check
+export async function GET() {
+  let brandCount = 0;
+  let keywordCount = 0;
+  
+  try {
+    const { count: brands } = await supabase
       .from('brands')
       .select('*', { count: 'exact', head: true });
-    brandCount = count || 0;
+    brandCount = brands || 0;
+    
+    const { count: keywords } = await supabase
+      .from('keyword_patterns')
+      .select('*', { count: 'exact', head: true });
+    keywordCount = keywords || 0;
   } catch (error) {
-    console.error('Error counting brands:', error);
+    console.error('Error counting:', error);
   }
   
   return NextResponse.json({
     status: 'ok',
-    message: 'LightLister AI v2.2 - With Brand Learning',
-    brandsInDatabase: brandCount,
+    message: 'LightLister AI v3.0 - With Brand & Keyword Learning',
+    learning: {
+      brandsInDatabase: brandCount,
+      keywordsInDatabase: keywordCount
+    },
     apis: {
       googleVision: !!process.env.GOOGLE_CLOUD_VISION_API_KEY,
       claude: !!process.env.ANTHROPIC_API_KEY,
