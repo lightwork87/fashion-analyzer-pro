@@ -1,5 +1,5 @@
 // app/dashboard/page.js
-// COMPLETE UPDATED DASHBOARD PAGE WITH FIXED BATCH PROCESSING LINK
+// COMPLETE DASHBOARD PAGE WITH FIXED TEXT COLORS
 
 'use client';
 
@@ -95,27 +95,27 @@ export default function DashboardPage() {
       description: 'Process up to 25 items with 24 photos each',
       icon: Images,
       color: 'purple',
-      href: '/dashboard/batch-processing/'  // FIXED: Added trailing slash
+      href: '/dashboard/batch-processing/'
     }
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Header - Fixed text colors */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">LightLister AI</h1>
-              <span className="ml-2 text-xs text-gray-500">UK Edition</span>
+              <h1 className="text-xl font-bold text-black">LightLister AI</h1>
+              <span className="ml-2 text-xs text-gray-600">UK Edition</span>
             </div>
             
             <div className="flex items-center gap-6">
-              {/* Credits Display */}
+              {/* Credits Display - Fixed visibility */}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-gray-600" />
-                  <span className="text-sm font-medium">
+                  <CreditCard className="w-4 h-4 text-gray-700" />
+                  <span className="text-sm font-medium text-black">
                     {credits.available} credits
                   </span>
                 </div>
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                   href="/dashboard/settings"
                   className="p-2 hover:bg-gray-100 rounded-lg transition"
                 >
-                  <Settings className="w-5 h-5 text-gray-600" />
+                  <Settings className="w-5 h-5 text-gray-700" />
                 </Link>
               </div>
             </div>
@@ -148,10 +148,10 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-2xl font-bold text-black">
             Welcome back, {user?.firstName || 'there'}!
           </h2>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-700 mt-1">
             Create professional eBay UK and Vinted listings with AI
           </p>
         </div>
@@ -163,7 +163,7 @@ export default function DashboardPage() {
               <span className="text-sm font-medium text-gray-600">Monthly Revenue</span>
               <PoundSterling className="w-5 h-5 text-green-600" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-2xl font-bold text-black">
               £{stats.revenue.toFixed(2)}
             </p>
             <p className="text-sm text-gray-600 mt-1">
@@ -176,7 +176,7 @@ export default function DashboardPage() {
               <span className="text-sm font-medium text-gray-600">Active Listings</span>
               <Package className="w-5 h-5 text-blue-600" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-2xl font-bold text-black">
               {stats.activeListings}
             </p>
             <p className="text-sm text-gray-600 mt-1">
@@ -189,7 +189,7 @@ export default function DashboardPage() {
               <span className="text-sm font-medium text-gray-600">Items Sold</span>
               <TrendingUp className="w-5 h-5 text-purple-600" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-2xl font-bold text-black">
               {stats.soldThisMonth}
             </p>
             <p className="text-sm text-gray-600 mt-1">
@@ -202,7 +202,7 @@ export default function DashboardPage() {
               <span className="text-sm font-medium text-gray-600">Total Views</span>
               <Eye className="w-5 h-5 text-orange-600" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-2xl font-bold text-black">
               {stats.views}
             </p>
             <p className="text-sm text-gray-600 mt-1">
@@ -213,7 +213,7 @@ export default function DashboardPage() {
 
         {/* Quick Actions */}
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          <h3 className="text-lg font-semibold text-black mb-4">
             Create New Listing
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -238,10 +238,10 @@ export default function DashboardPage() {
                       }`} />
                     </div>
                     <div className="ml-4 flex-1">
-                      <h4 className="text-lg font-semibold text-gray-900">
+                      <h4 className="text-lg font-semibold text-black">
                         {action.title}
                       </h4>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-gray-700 mt-1">
                         {action.description}
                       </p>
                       {action.primary && (
@@ -262,7 +262,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow-sm border">
             <div className="px-6 py-4 border-b">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold text-black">
                   Recent Analyses
                 </h3>
                 <Link
@@ -279,7 +279,7 @@ export default function DashboardPage() {
                 <div key={analysis.id} className="p-4 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">
+                      <h4 className="text-sm font-medium text-black">
                         {analysis.ebay_title}
                       </h4>
                       <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
