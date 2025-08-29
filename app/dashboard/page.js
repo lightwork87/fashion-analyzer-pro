@@ -1,5 +1,5 @@
 // app/dashboard/page.js
-// COMPLETE DASHBOARD PAGE WITH FIXED ROUTES
+// COMPLETE UPDATED DASHBOARD PAGE WITH FIXED BATCH PROCESSING LINK
 
 'use client';
 
@@ -95,7 +95,7 @@ export default function DashboardPage() {
       description: 'Process up to 25 items with 24 photos each',
       icon: Images,
       color: 'purple',
-      href: '/dashboard/batch-processing'  // FIXED: Changed from batch-processing
+      href: '/dashboard/batch-processing/'  // FIXED: Added trailing slash
     }
   ];
 
