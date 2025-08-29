@@ -95,7 +95,7 @@ export default function DashboardPage() {
       description: 'Process up to 25 items with 24 photos each',
       icon: Images,
       color: 'purple',
-      href: '/dashboard/batch-processing'  // FIXED: Changed from analyze-bulk
+      href: '/dashboard/batch-processing'  // FIXED: Changed from batch-processing
     }
   ];
 
