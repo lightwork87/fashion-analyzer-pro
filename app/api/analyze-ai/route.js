@@ -521,9 +521,15 @@ export async function POST(request) {
       base64: imageData.length
     });
     
-    if (!imageUrls.length) {
-      return NextResponse.json({ error: 'No image URLs provided' }, { status: 400 });
+    if (!imageUrls.length && !imageData.length) {
+      return NextResponse.json({ error: 'No image data provided' }, { status: 400 });
     }
+    
+    console.log(`📸 Processing ${numImages} images for user ${userId}:`, {
+      urls: imageUrls.length,
+      base64: imageData.length,
+      firstUrl: imageUrls[0] ? imageUrls[0].substring(0, 50) + '...' : 'none'
+    });
     
     // TEMPORARY: Mock user data while Clerk/DB is bypassed
     const userData = {
@@ -582,36 +588,39 @@ export async function POST(request) {
       
       // Get image data (prefer URLs, fallback to base64)
       if (imageUrls.length > 0) {
+        console.log('📥 Step 1: Fetching image from URL...');
         analysisMetadata.pipeline_steps.push('fetch_url');
         const imageResult = await fetchImageAsBase64(imageUrls[0]);
         imageBase64 = imageResult.base64;
         contentType = imageResult.contentType;
+        console.log('✅ Image fetched successfully, base64 length:', imageBase64.length);
       } else if (imageData.length > 0) {
+        console.log('📄 Step 1: Using provided base64 data...');
         analysisMetadata.pipeline_steps.push('use_base64');
         const base64Data = imageData[0].base64;
-        // Remove data URL prefix if present
         imageBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
         contentType = 'image/jpeg';
-        console.log('📄 Using provided base64 data');
+        console.log('✅ Base64 data prepared, length:', imageBase64.length);
       } else {
         throw new Error('No image data provided');
       }
       
       if (imageBase64) {
-        // Step 2: Google Vision Analysis  
+        console.log('🔍 Step 2: Calling Google Vision API...');
         analysisMetadata.pipeline_steps.push('vision_api');
         const visionData = await analyzeWithGoogleVision(imageBase64, contentType);
         
         if (visionData) {
-          // Step 3: Extract fashion details
+          console.log('✅ Vision API successful, extracting fashion details...');
           analysisMetadata.pipeline_steps.push('extract_details');
           const fashionDetails = extractFashionDetails(visionData);
           
-          // Step 4: Generate listing with Claude
+          console.log('🤖 Step 4: Calling Claude for listing generation...');
           analysisMetadata.pipeline_steps.push('claude_generation');
           finalListing = await generateListingWithClaude(fashionDetails, visionData, numImages);
           
           if (finalListing) {
+            console.log('✅ Claude generation successful!');
             analysisMetadata.pipeline_steps.push('success');
             finalListing.analysis_confidence = fashionDetails.confidence;
             finalListing.detection_metadata = {
@@ -620,8 +629,14 @@ export async function POST(request) {
               sizes_detected: fashionDetails.possibleSizes.length,
               items_detected: fashionDetails.itemTypes.length
             };
+          } else {
+            console.log('❌ Claude generation failed');
           }
+        } else {
+          console.log('❌ Vision API failed');
         }
+      } else {
+        console.log('❌ No image data available for analysis');
       }
     } catch (pipelineError) {
       console.error('❌ AI Pipeline error:', pipelineError.message);
