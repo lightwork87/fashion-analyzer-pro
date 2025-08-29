@@ -1,5 +1,5 @@
 // app/dashboard/batch-processing/page.js
-// COMPLETE BATCH PROCESSING PAGE FILE
+// COMPLETE FIXED BATCH PROCESSING PAGE WITH HEADER
 
 'use client';
 
@@ -20,7 +20,8 @@ import {
   Plus,
   Trash2,
   Camera,
-  CreditCard
+  CreditCard,
+  Home
 } from 'lucide-react';
 
 export default function BatchProcessingPage() {
@@ -32,7 +33,7 @@ export default function BatchProcessingPage() {
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [credits, setCredits] = useState(0);
+  const [credits, setCredits] = useState(10);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -152,7 +153,6 @@ export default function BatchProcessingPage() {
         updatedItems[itemIndex].status = 'processing';
         setItems(updatedItems);
         
-        // TODO: Upload images and call analyze API
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         updatedItems[itemIndex].status = 'completed';
@@ -173,7 +173,6 @@ export default function BatchProcessingPage() {
     }
   };
 
-  // Cleanup previews on unmount
   useEffect(() => {
     return () => {
       items.forEach(item => {
@@ -194,19 +193,33 @@ export default function BatchProcessingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Fixed Header */}
       <header className="bg-white border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="p-2 hover:bg-gray-100 rounded-lg">
-                <ArrowLeft className="w-5 h-5" />
+              <Link 
+                href="/dashboard" 
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <Home className="w-5 h-5 text-gray-600" />
               </Link>
-              <h1 className="text-xl font-bold">Batch Processing</h1>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Batch Processing</h1>
+              </div>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
-              <CreditCard className="w-4 h-4 text-gray-600" />
-              <span className="font-medium">{credits} Credits</span>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                <CreditCard className="w-4 h-4 text-gray-600" />
+                <span className="font-medium text-gray-900">{credits} Credits</span>
+              </div>
+              <Link
+                href="/dashboard/get-credits"
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Get More
+              </Link>
             </div>
           </div>
         </div>
@@ -232,7 +245,7 @@ export default function BatchProcessingPage() {
             <div className="bg-white rounded-lg shadow-sm border">
               <div className="p-4 border-b">
                 <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">Items ({items.length}/25)</h2>
+                  <h2 className="font-semibold text-gray-900">Items ({items.length}/25)</h2>
                   <button
                     onClick={addNewItem}
                     disabled={items.length >= 25 || isProcessing}
@@ -245,9 +258,9 @@ export default function BatchProcessingPage() {
               
               <div className="max-h-96 overflow-y-auto">
                 {items.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
+                  <div className="p-8 text-center">
                     <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No items added</p>
+                    <p className="text-gray-500">No items added</p>
                     <button
                       onClick={addNewItem}
                       className="mt-3 text-sm text-blue-600 hover:text-blue-700"
@@ -267,7 +280,7 @@ export default function BatchProcessingPage() {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
-                            <p className="font-medium">{item.name}</p>
+                            <p className="font-medium text-gray-900">{item.name}</p>
                             <p className="text-sm text-gray-500">
                               {item.images.length} photo{item.images.length !== 1 ? 's' : ''}
                             </p>
@@ -310,7 +323,7 @@ export default function BatchProcessingPage() {
               ) : (
                 <>
                   <div className="mb-4">
-                    <h3 className="font-semibold text-lg">
+                    <h3 className="font-semibold text-lg text-gray-900">
                       {items[currentItemIndex].name}
                     </h3>
                     <p className="text-sm text-gray-500">
@@ -365,7 +378,7 @@ export default function BatchProcessingPage() {
           <div className="mt-6 bg-white rounded-lg shadow-sm border p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-semibold">Ready to process?</p>
+                <p className="font-semibold text-gray-900">Ready to process?</p>
                 <p className="text-sm text-gray-500">
                   {items.filter(item => item.images.length > 0).length} items will use {items.filter(item => item.images.length > 0).length} credits
                 </p>
@@ -405,4 +418,5 @@ export default function BatchProcessingPage() {
       </main>
     </div>
   );
-}// Rebuild: Fri 29 Aug 2025 20:10:33 BST
+}
+// Rebuild: Fri Aug 29 2025 20:18:12 GMT+0100 (British Summer Time)
