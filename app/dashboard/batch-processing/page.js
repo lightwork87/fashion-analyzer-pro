@@ -1,9 +1,9 @@
 // app/dashboard/batch-processing/page.js
-// COMPLETE BATCH PROCESSING PAGE
+// COMPLETE BATCH PROCESSING PAGE FILE
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
@@ -32,9 +32,27 @@ export default function BatchProcessingPage() {
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [credits, setCredits] = useState(10); // Will fetch from API
+  const [credits, setCredits] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  // Add new item
+  useEffect(() => {
+    fetchCredits();
+  }, []);
+
+  const fetchCredits = async () => {
+    try {
+      const response = await fetch('/api/user/credits');
+      if (response.ok) {
+        const data = await response.json();
+        setCredits(data.available || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching credits:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const addNewItem = () => {
     if (items.length >= 25) {
       alert('Maximum 25 items per batch');
@@ -52,7 +70,6 @@ export default function BatchProcessingPage() {
     setCurrentItemIndex(items.length);
   };
 
-  // Add images to current item
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -81,24 +98,33 @@ export default function BatchProcessingPage() {
     setItems(updatedItems);
   };
 
-  // Remove image
   const removeImage = (itemIndex, imageId) => {
     const updatedItems = [...items];
     const item = updatedItems[itemIndex];
+    const imageToRemove = item.images.find(img => img.id === imageId);
+    
+    if (imageToRemove?.preview) {
+      URL.revokeObjectURL(imageToRemove.preview);
+    }
+    
     item.images = item.images.filter(img => img.id !== imageId);
     setItems(updatedItems);
   };
 
-  // Remove item
   const removeItem = (itemIndex) => {
+    const itemToRemove = items[itemIndex];
+    itemToRemove.images.forEach(img => {
+      if (img.preview) URL.revokeObjectURL(img.preview);
+    });
+    
     const updatedItems = items.filter((_, index) => index !== itemIndex);
     setItems(updatedItems);
+    
     if (currentItemIndex >= updatedItems.length) {
       setCurrentItemIndex(Math.max(0, updatedItems.length - 1));
     }
   };
 
-  // Process all items
   const processItems = async () => {
     const validItems = items.filter(item => item.images.length > 0);
     
@@ -117,19 +143,16 @@ export default function BatchProcessingPage() {
     setUploadProgress(0);
     
     try {
-      // Process each item
       for (let i = 0; i < validItems.length; i++) {
         const item = validItems[i];
-        setUploadProgress(Math.round((i / validItems.length) * 100));
+        setUploadProgress(Math.round(((i + 1) / validItems.length) * 100));
         
-        // Upload images and analyze
-        // This would call your analyze API for each item
         const updatedItems = [...items];
         const itemIndex = items.findIndex(it => it.id === item.id);
         updatedItems[itemIndex].status = 'processing';
         setItems(updatedItems);
         
-        // Simulate processing (replace with actual API call)
+        // TODO: Upload images and call analyze API
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         updatedItems[itemIndex].status = 'completed';
@@ -138,7 +161,6 @@ export default function BatchProcessingPage() {
       
       setUploadProgress(100);
       
-      // Redirect to results
       setTimeout(() => {
         router.push('/dashboard/listings');
       }, 1000);
@@ -150,6 +172,25 @@ export default function BatchProcessingPage() {
       setIsProcessing(false);
     }
   };
+
+  // Cleanup previews on unmount
+  useEffect(() => {
+    return () => {
+      items.forEach(item => {
+        item.images.forEach(img => {
+          if (img.preview) URL.revokeObjectURL(img.preview);
+        });
+      });
+    };
+  }, [items]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -163,11 +204,9 @@ export default function BatchProcessingPage() {
               </Link>
               <h1 className="text-xl font-bold">Batch Processing</h1>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
-                <CreditCard className="w-4 h-4 text-gray-600" />
-                <span className="font-medium">{credits} Credits</span>
-              </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+              <CreditCard className="w-4 h-4 text-gray-600" />
+              <span className="font-medium">{credits} Credits</span>
             </div>
           </div>
         </div>
@@ -197,7 +236,7 @@ export default function BatchProcessingPage() {
                   <button
                     onClick={addNewItem}
                     disabled={items.length >= 25 || isProcessing}
-                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -246,7 +285,7 @@ export default function BatchProcessingPage() {
                                 removeItem(index);
                               }}
                               disabled={isProcessing}
-                              className="p-1 hover:bg-gray-200 rounded"
+                              className="p-1 hover:bg-gray-200 rounded disabled:opacity-50"
                             >
                               <Trash2 className="w-4 h-4 text-red-500" />
                             </button>
@@ -279,7 +318,6 @@ export default function BatchProcessingPage() {
                     </p>
                   </div>
 
-                  {/* Images Grid */}
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 mb-4">
                     {items[currentItemIndex].images.map((image) => (
                       <div key={image.id} className="relative group">
@@ -291,17 +329,16 @@ export default function BatchProcessingPage() {
                         <button
                           onClick={() => removeImage(currentItemIndex, image.id)}
                           disabled={isProcessing}
-                          className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition"
+                          className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
                         >
                           <X className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
                     
-                    {items[currentItemIndex].images.length < 24 && (
+                    {items[currentItemIndex].images.length < 24 && !isProcessing && (
                       <button
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={isProcessing}
                         className="h-20 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-gray-400 transition"
                       >
                         <Camera className="w-6 h-6 text-gray-400" />
@@ -337,7 +374,7 @@ export default function BatchProcessingPage() {
               <button
                 onClick={processItems}
                 disabled={isProcessing || items.filter(item => item.images.length > 0).length === 0}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isProcessing ? (
                   <>
