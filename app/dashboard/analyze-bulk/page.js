@@ -1,9 +1,9 @@
 // app/dashboard/analyze-bulk/page.js
-// COMPLETE BATCH ANALYSIS PAGE - COPY/PASTE THIS FILE
+// FIXED VERSION - REACT IMPORT CORRECTED
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
@@ -65,8 +65,8 @@ export default function AnalyzeBulkPage() {
     }
   };
 
-  // Cleanup on unmount
-  React.useEffect(() => {
+  // Cleanup on unmount - FIXED: properly imported useEffect
+  useEffect(() => {
     return () => {
       images.forEach(img => {
         if (img.preview) URL.revokeObjectURL(img.preview);
