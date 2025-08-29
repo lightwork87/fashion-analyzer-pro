@@ -1,5 +1,5 @@
 // app/api/analyze/route.js
-// DEBUG VERSION - Log everything and add manual fallbacks
+// FOCUSED FIX: Better color detection for pale/pastel colors
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -19,7 +19,7 @@ const supabase = createClient(
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-// ========== ANALYZE WITH DETAILED LOGGING ==========
+// ========== ANALYZE MULTIPLE IMAGES ==========
 
 async function analyzeAllImages(imageUrls) {
   const allTextData = {
@@ -28,57 +28,80 @@ async function analyzeAllImages(imageUrls) {
     labels: new Set(),
     logos: new Set(),
     objects: new Set(),
-    debugInfo: {
-      allTextFound: [],
-      sizeCandidates: [],
-      colorCandidates: []
-    }
+    colors: new Set()
   };
   
-  console.log(`\n📸 === ANALYZING ${imageUrls.length} IMAGES ===`);
+  console.log(`📸 Analyzing ${imageUrls.length} images...`);
   
-  // Analyze first 3 images
   for (let i = 0; i < Math.min(imageUrls.length, 3); i++) {
-    console.log(`\n🔍 Image ${i + 1}:`);
-    
     try {
       const imageBase64 = await fetchImageAsBase64(imageUrls[i]);
       const visionData = await analyzeWithGoogleVision(imageBase64);
       
       if (visionData) {
-        // Log ALL text found
+        // Get text
         if (visionData.textAnnotations?.[0]) {
-          const text = visionData.textAnnotations[0].description;
-          console.log('📝 FULL TEXT:', text.substring(0, 200));
-          allTextData.fullText += ' ' + text;
-          allTextData.debugInfo.allTextFound.push(text);
+          allTextData.fullText += ' ' + visionData.textAnnotations[0].description;
         }
         
-        // Log ALL text blocks
+        // Get text blocks
         if (visionData.textAnnotations) {
-          const blocks = visionData.textAnnotations.slice(1, 20).map(t => t.description);
-          console.log('📦 TEXT BLOCKS:', blocks);
-          blocks.forEach(block => {
-            allTextData.textBlocks.push(block);
+          visionData.textAnnotations.slice(1).forEach(t => {
+            allTextData.textBlocks.push(t.description);
+          });
+        }
+        
+        // Get labels - including colors
+        if (visionData.labelAnnotations) {
+          visionData.labelAnnotations.forEach(l => {
+            allTextData.labels.add(l.description);
             
-            // Look for size candidates
-            if (block.match(/^[IVXLSM0-9]+$/)) {
-              allTextData.debugInfo.sizeCandidates.push(block);
+            // Check for color-related labels
+            const labelLower = l.description.toLowerCase();
+            const colorWords = [
+              'pink', 'rose', 'blush', 'salmon', 'coral', 'peach',
+              'white', 'cream', 'ivory', 'beige', 'nude',
+              'blue', 'navy', 'denim', 'azure', 'cobalt',
+              'black', 'charcoal', 'grey', 'gray', 'silver',
+              'red', 'burgundy', 'wine', 'maroon', 'crimson',
+              'green', 'olive', 'khaki', 'emerald', 'mint',
+              'purple', 'violet', 'plum', 'lavender', 'lilac',
+              'brown', 'tan', 'camel', 'chocolate', 'taupe',
+              'yellow', 'mustard', 'gold', 'lemon',
+              'orange', 'rust', 'burnt'
+            ];
+            
+            for (const colorWord of colorWords) {
+              if (labelLower.includes(colorWord)) {
+                allTextData.colors.add(colorWord);
+                console.log(`🎨 Color detected in label: ${colorWord}`);
+              }
             }
           });
         }
         
-        // Log labels (for color and garment type)
-        if (visionData.labelAnnotations) {
-          const topLabels = visionData.labelAnnotations.slice(0, 10).map(l => l.description);
-          console.log('🏷️ LABELS:', topLabels);
-          visionData.labelAnnotations.forEach(l => {
-            allTextData.labels.add(l.description);
-            
-            // Look for color candidates
-            if (l.description.toLowerCase().match(/pink|blue|white|red|green|black|grey/)) {
-              allTextData.debugInfo.colorCandidates.push(l.description);
+        // Check image properties for dominant colors
+        if (visionData.imagePropertiesAnnotation?.dominantColors?.colors) {
+          const dominantColors = visionData.imagePropertiesAnnotation.dominantColors.colors;
+          console.log('🎨 Dominant colors from Vision API:', dominantColors.slice(0, 3));
+          
+          // Analyze RGB values to determine actual color
+          for (const colorData of dominantColors.slice(0, 3)) {
+            if (colorData.color) {
+              const { red = 0, green = 0, blue = 0 } = colorData.color;
+              const colorName = rgbToColorName(red, green, blue);
+              if (colorName) {
+                allTextData.colors.add(colorName);
+                console.log(`🎨 Color from RGB (${red},${green},${blue}): ${colorName}`);
+              }
             }
+          }
+        }
+        
+        // Get logos
+        if (visionData.logoAnnotations) {
+          visionData.logoAnnotations.forEach(l => {
+            allTextData.logos.add(l.description);
           });
         }
       }
@@ -86,10 +109,6 @@ async function analyzeAllImages(imageUrls) {
       console.error(`Error on image ${i + 1}:`, error.message);
     }
   }
-  
-  console.log('\n📊 DEBUG INFO:');
-  console.log('Size candidates:', allTextData.debugInfo.sizeCandidates);
-  console.log('Color candidates:', allTextData.debugInfo.colorCandidates);
   
   return {
     fullText: allTextData.fullText,
@@ -99,179 +118,208 @@ async function analyzeAllImages(imageUrls) {
     labels: Array.from(allTextData.labels),
     logos: Array.from(allTextData.logos),
     objects: Array.from(allTextData.objects),
-    debugInfo: allTextData.debugInfo
+    colors: Array.from(allTextData.colors)
   };
 }
 
-// ========== SIZE DETECTOR WITH OSKA FIX ==========
+// ========== RGB TO COLOR NAME CONVERTER ==========
 
-function detectSize(textData, brand) {
-  const { textBlocks, debugInfo } = textData;
+function rgbToColorName(r, g, b) {
+  // Normalize RGB values (0-255)
+  const red = Math.round(r);
+  const green = Math.round(g);
+  const blue = Math.round(b);
   
-  console.log('\n🔍 SIZE DETECTION for', brand);
-  console.log('Size candidates from images:', debugInfo.sizeCandidates);
+  // Calculate color properties
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const diff = max - min;
+  const sum = red + green + blue;
+  const avg = sum / 3;
   
-  // OSKA SPECIFIC - Roman numerals
-  if (brand === 'Oska') {
-    const oskaRomanSizes = {
-      'I': '1',
-      'II': '2', 
-      'III': '3',
-      'IV': '4',
-      'V': '5'
-    };
-    
-    // Check size candidates first
-    for (const candidate of debugInfo.sizeCandidates) {
-      if (oskaRomanSizes[candidate]) {
-        console.log(`✅ OSKA Roman size found: ${candidate} = Size ${oskaRomanSizes[candidate]}`);
-        return oskaRomanSizes[candidate];
-      }
-    }
-    
-    // Check all text blocks
-    for (const block of textBlocks) {
-      const blockTrim = block.trim();
-      if (oskaRomanSizes[blockTrim]) {
-        console.log(`✅ OSKA Roman size found in blocks: ${blockTrim} = Size ${oskaRomanSizes[blockTrim]}`);
-        return oskaRomanSizes[blockTrim];
-      }
-      
-      // Check for "11" being misread as "II"
-      if (block === '11' || block === 'll') {
-        console.log('✅ Found "11" or "ll" - likely OSKA Size 2');
-        return '2';
-      }
-    }
-    
-    // OSKA default
-    console.log('⚠️ OSKA size not detected, defaulting to Size 2');
-    return '2';
+  console.log(`🔍 Analyzing RGB(${red}, ${green}, ${blue}) - Avg: ${avg}, Diff: ${diff}`);
+  
+  // Check for grayscale (including white)
+  if (diff < 30) {
+    if (avg > 230) return 'white';
+    if (avg > 200) return 'light grey';
+    if (avg > 150) return 'grey';
+    if (avg > 80) return 'dark grey';
+    return 'black';
   }
   
-  // Standard sizes
-  const validSizes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'];
-  for (const block of textBlocks) {
-    const blockUpper = block.toUpperCase().trim();
-    if (validSizes.includes(blockUpper)) {
-      console.log(`✅ Standard size found: ${blockUpper}`);
-      return blockUpper;
+  // Check for pale pink (high values with red slightly higher)
+  if (red > 200 && green > 180 && blue > 180 && red > green && red > blue) {
+    if (red - green < 30 && red - blue < 40) {
+      return 'pink'; // Pale pink/blush
     }
   }
   
-  // Numeric sizes - but NOT 24+ (that's too large for UK sizing)
-  for (const block of textBlocks) {
-    if (!isNaN(block)) {
-      const num = parseInt(block);
-      if (num >= 6 && num <= 20 && num % 2 === 0) {
-        console.log(`✅ UK size found: ${num}`);
-        return num.toString();
-      }
-    }
+  // Check for pink/rose tones
+  if (red > green && red > blue) {
+    if (red > 200 && green < 180 && blue < 180) return 'pink';
+    if (red > 180 && green < 150) return 'rose';
+    if (red > 150) return 'coral';
   }
   
-  console.log('❌ No valid size found');
-  return 'One Size';
+  // Check for blue tones
+  if (blue > red && blue > green) {
+    if (blue > 200) return 'light blue';
+    if (blue > 150) return 'blue';
+    if (blue > 100 && green < 100 && red < 100) return 'navy';
+  }
+  
+  // Check for green tones
+  if (green > red && green > blue) {
+    if (green > 200) return 'light green';
+    if (green > 150) return 'green';
+    if (green > 100 && red > 80) return 'olive';
+  }
+  
+  // Check for yellow/beige tones
+  if (red > 200 && green > 200 && blue < 180) {
+    if (blue < 150) return 'yellow';
+    return 'beige';
+  }
+  
+  // Check for brown tones
+  if (red > green && green > blue && red < 180) {
+    return 'brown';
+  }
+  
+  // Default for unclear colors
+  return null;
 }
 
-// ========== COLOR DETECTOR FIX ==========
+// ========== ENHANCED COLOR DETECTOR ==========
 
-function detectColor(labels, debugInfo) {
-  console.log('\n🔍 COLOR DETECTION');
-  console.log('Color candidates:', debugInfo.colorCandidates);
+function detectColor(labels, colors) {
+  console.log('\n🎨 COLOR DETECTION');
+  console.log('Colors found:', colors);
+  console.log('Labels (first 10):', labels.slice(0, 10));
   
-  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
-  
-  // Check debug candidates first
-  if (debugInfo.colorCandidates.length > 0) {
-    const firstColor = debugInfo.colorCandidates[0];
-    console.log(`✅ Using color from candidates: ${firstColor}`);
-    return firstColor.charAt(0).toUpperCase() + firstColor.slice(1);
+  // Priority 1: Check detected colors from RGB analysis
+  if (colors.length > 0) {
+    // Filter out generic colors if we have specific ones
+    const specificColors = colors.filter(c => !['white', 'grey', 'black'].includes(c));
+    if (specificColors.length > 0) {
+      const color = specificColors[0];
+      console.log(`✅ Using specific color: ${color}`);
+      return color.charAt(0).toUpperCase() + color.slice(1);
+    }
+    
+    // Use first color found
+    const color = colors[0];
+    console.log(`✅ Using detected color: ${color}`);
+    return color.charAt(0).toUpperCase() + color.slice(1);
   }
   
-  // Color detection with priority
-  const colorPriority = [
-    { color: 'Pink', keywords: ['pink', 'rose', 'blush', 'salmon', 'coral'] },
-    { color: 'Blue', keywords: ['blue', 'navy', 'denim', 'cobalt', 'azure'] },
-    { color: 'White', keywords: ['white', 'cream', 'ivory', 'off-white'] },
-    { color: 'Black', keywords: ['black', 'charcoal', 'ebony'] },
-    { color: 'Grey', keywords: ['grey', 'gray', 'silver', 'ash'] },
-    { color: 'Red', keywords: ['red', 'crimson', 'burgundy', 'maroon'] },
-    { color: 'Green', keywords: ['green', 'olive', 'khaki', 'emerald'] },
-    { color: 'Brown', keywords: ['brown', 'tan', 'beige', 'camel', 'taupe'] }
+  // Priority 2: Check labels for color words
+  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
+  
+  const colorMap = [
+    { name: 'Pink', keywords: ['pink', 'rose', 'blush', 'salmon'] },
+    { name: 'Red', keywords: ['red', 'crimson', 'burgundy', 'scarlet'] },
+    { name: 'Blue', keywords: ['blue', 'navy', 'denim', 'azure'] },
+    { name: 'Green', keywords: ['green', 'olive', 'khaki', 'emerald'] },
+    { name: 'Purple', keywords: ['purple', 'violet', 'plum', 'lavender'] },
+    { name: 'Yellow', keywords: ['yellow', 'mustard', 'gold'] },
+    { name: 'Orange', keywords: ['orange', 'coral', 'peach'] },
+    { name: 'Brown', keywords: ['brown', 'tan', 'beige', 'camel'] },
+    { name: 'Grey', keywords: ['grey', 'gray', 'charcoal'] },
+    { name: 'Black', keywords: ['black'] },
+    { name: 'White', keywords: ['white', 'cream', 'ivory'] }
   ];
   
-  for (const { color, keywords } of colorPriority) {
+  for (const { name, keywords } of colorMap) {
     if (keywords.some(keyword => labelsText.includes(keyword))) {
-      console.log(`✅ Color detected: ${color}`);
-      return color;
+      console.log(`✅ Color from labels: ${name}`);
+      return name;
     }
   }
   
-  console.log('⚠️ No color detected, defaulting to Neutral');
+  console.log('⚠️ No color detected, using Neutral');
   return 'Neutral';
 }
 
-// ========== GARMENT DETECTOR ==========
-
-function detectGarmentType(labels, brand) {
-  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
-  
-  console.log('\n🔍 GARMENT DETECTION');
-  console.log('Labels:', labels.slice(0, 10));
-  
-  // OSKA specific garments
-  if (brand === 'Oska') {
-    if (labelsText.includes('dress')) return 'Dress';
-    if (labelsText.includes('tunic')) return 'Tunic';
-    if (labelsText.includes('vest') || labelsText.includes('sleeveless')) return 'Top';
-    if (labelsText.includes('trouser') || labelsText.includes('pant')) return 'Trousers';
-    if (labelsText.includes('jacket')) return 'Jacket';
-    if (labelsText.includes('shirt')) return 'Shirt';
-    
-    // OSKA default to Top for sleeveless items
-    console.log('⚠️ OSKA garment defaulting to Top');
-    return 'Top';
-  }
-  
-  // Check for specific garments
-  if (labelsText.includes('vest') || labelsText.includes('tank')) return 'Vest';
-  if (labelsText.includes('dress')) return 'Dress';
-  if (labelsText.includes('jeans')) return 'Jeans';
-  if (labelsText.includes('trouser') || labelsText.includes('pant')) return 'Trousers';
-  if (labelsText.includes('skirt')) return 'Skirt';
-  if (labelsText.includes('hoodie')) return 'Hoodie';
-  if (labelsText.includes('sweatshirt')) return 'Sweatshirt';
-  if (labelsText.includes('jumper') || labelsText.includes('sweater')) return 'Jumper';
-  if (labelsText.includes('t-shirt') || labelsText.includes('tee')) return 'T-Shirt';
-  if (labelsText.includes('shirt')) return 'Shirt';
-  if (labelsText.includes('jacket')) return 'Jacket';
-  if (labelsText.includes('coat')) return 'Coat';
-  
-  // Check sleeves
-  if (labelsText.includes('sleeveless')) return 'Top';
-  if (labelsText.includes('long sleeve')) return 'Jumper';
-  
-  return 'Top';
-}
-
-// ========== BRAND DETECTOR ==========
+// ========== OTHER DETECTORS (keep existing) ==========
 
 function detectBrand(textData) {
   const { textUpper, textBlocks } = textData;
   
-  // Priority brands to check
   const brands = ['OSKA', 'CHILDISH', 'ZARA', 'H&M', 'NIKE', 'ADIDAS'];
   
   for (const brand of brands) {
     if (textUpper.includes(brand) || textBlocks.includes(brand)) {
-      console.log(`✅ Brand detected: ${brand}`);
       if (brand === 'OSKA') return 'Oska';
       return brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase();
     }
   }
   
   return 'Unbranded';
+}
+
+function detectSize(textData, brand) {
+  const { textBlocks } = textData;
+  
+  if (brand === 'Oska') {
+    const oskaRomanSizes = {
+      'I': '1',
+      'II': '2',
+      'III': '3',
+      'IV': '4',
+      'V': '5'
+    };
+    
+    for (const block of textBlocks) {
+      if (oskaRomanSizes[block.trim()]) {
+        return oskaRomanSizes[block.trim()];
+      }
+      // Check for misread II
+      if (block === '11' || block === 'll') {
+        return '2';
+      }
+    }
+    
+    return '2'; // Default for Oska
+  }
+  
+  // Standard sizes
+  const validSizes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'];
+  for (const block of textBlocks) {
+    if (validSizes.includes(block.toUpperCase().trim())) {
+      return block.toUpperCase().trim();
+    }
+  }
+  
+  return 'One Size';
+}
+
+function detectGarmentType(labels, brand) {
+  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
+  
+  if (brand === 'Oska') {
+    if (labelsText.includes('dress')) return 'Dress';
+    if (labelsText.includes('tunic')) return 'Tunic';
+    if (labelsText.includes('vest') || labelsText.includes('sleeveless')) return 'Top';
+    if (labelsText.includes('trouser')) return 'Trousers';
+    return 'Top'; // Default for Oska
+  }
+  
+  // Check garment types
+  if (labelsText.includes('vest') || labelsText.includes('tank')) return 'Vest';
+  if (labelsText.includes('dress')) return 'Dress';
+  if (labelsText.includes('jeans')) return 'Jeans';
+  if (labelsText.includes('trouser')) return 'Trousers';
+  if (labelsText.includes('hoodie')) return 'Hoodie';
+  if (labelsText.includes('sweatshirt')) return 'Sweatshirt';
+  if (labelsText.includes('jumper')) return 'Jumper';
+  if (labelsText.includes('t-shirt')) return 'T-Shirt';
+  if (labelsText.includes('shirt')) return 'Shirt';
+  
+  if (labelsText.includes('sleeveless')) return 'Top';
+  
+  return 'Top';
 }
 
 // ========== HELPER FUNCTIONS ==========
@@ -304,7 +352,8 @@ async function analyzeWithGoogleVision(imageBase64) {
           features: [
             { type: 'TEXT_DETECTION', maxResults: 100 },
             { type: 'LABEL_DETECTION', maxResults: 50 },
-            { type: 'LOGO_DETECTION', maxResults: 10 }
+            { type: 'LOGO_DETECTION', maxResults: 10 },
+            { type: 'IMAGE_PROPERTIES', maxResults: 10 } // Add color detection
           ]
         }]
       })
@@ -320,7 +369,7 @@ async function analyzeWithGoogleVision(imageBase64) {
 // ========== MAIN HANDLER ==========
 
 export async function POST(request) {
-  console.log('\n🚀 === ANALYSIS START (DEBUG) ===');
+  console.log('\n🚀 === ANALYSIS START ===');
   
   try {
     const body = await request.json();
@@ -333,34 +382,26 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    // Analyze images with debug info
     const combinedData = await analyzeAllImages(imageUrls);
     
-    // Detect attributes
     const brand = detectBrand(combinedData);
     const size = detectSize(combinedData, brand);
     const garmentType = detectGarmentType(combinedData.labels, brand);
-    const color = detectColor(combinedData.labels, combinedData.debugInfo);
+    const color = detectColor(combinedData.labels, combinedData.colors);
     
-    // Material - for OSKA, default to Linen if not detected
+    // Material detection
     let material = 'Cotton';
-    if (brand === 'Oska') {
-      material = 'Linen'; // OSKA commonly uses linen
-    }
+    if (brand === 'Oska') material = 'Linen';
     if (combinedData.textUpper.includes('LINEN')) material = 'Linen';
     if (combinedData.textUpper.includes('COTTON')) material = 'Cotton';
-    if (combinedData.textUpper.includes('WOOL')) material = 'Wool';
     
-    // Get brand knowledge
     const keywords = getBrandKeywords(brand, garmentType) || ['VGC', 'UK'];
     const suggestedPrice = getSuggestedPrice(brand, 7) || 25;
     
-    console.log('\n📊 === FINAL RESULTS ===');
+    console.log('\n📊 FINAL:');
     console.log('Brand:', brand);
-    console.log('Garment:', garmentType);
     console.log('Size:', size);
     console.log('Color:', color);
-    console.log('Material:', material);
     
     // Build title
     const gender = brand === 'Oska' ? 'Womens' : 'Womens';
@@ -377,14 +418,12 @@ export async function POST(request) {
     
     let title = titleParts.join(' ');
     
-    // Add keywords
     for (const keyword of keywords.slice(0, 3)) {
       if (title.length + keyword.length + 1 <= 80) {
         title += ' ' + keyword;
       }
     }
     
-    // Always add condition and location
     if (title.length + 7 <= 80) {
       title += ' VGC UK';
     }
@@ -403,12 +442,7 @@ export async function POST(request) {
       keywords: keywords.slice(0, 5),
       ebay_title: title,
       suggested_price: suggestedPrice,
-      condition_score: 7,
-      debug_info: {
-        text_found: combinedData.debugInfo.allTextFound[0]?.substring(0, 100),
-        size_candidates: combinedData.debugInfo.sizeCandidates,
-        color_candidates: combinedData.debugInfo.colorCandidates
-      }
+      condition_score: 7
     };
     
     return NextResponse.json({
