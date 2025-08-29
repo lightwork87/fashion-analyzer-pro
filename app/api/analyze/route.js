@@ -1,5 +1,5 @@
 // app/api/analyze/route.js
-// COMPREHENSIVE LABEL READING FOR ALL CLOTHING TYPES
+// FIXED: Properly process Vision API text and detect garment type
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -13,231 +13,198 @@ const supabase = createClient(
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-// ========== COMPREHENSIVE LABEL PARSER ==========
+// ========== TEXT EXTRACTION FROM VISION ==========
 
-function parseAllLabels(text) {
-  const result = {
-    brand: null,
-    size: null,
-    material: null,
-    madeIn: null,
-    careInstructions: [],
-    allText: text
+function extractTextFromVision(visionData) {
+  // Get ALL text from the image
+  const fullText = visionData?.textAnnotations?.[0]?.description || '';
+  
+  // Also get individual text blocks for better parsing
+  const textBlocks = visionData?.textAnnotations?.slice(1).map(t => t.description) || [];
+  
+  console.log('📝 Full text extracted:', fullText.length, 'characters');
+  console.log('📝 Text blocks:', textBlocks.slice(0, 10));
+  
+  return {
+    fullText,
+    textBlocks,
+    textUpper: fullText.toUpperCase(),
+    lines: fullText.split('\n').filter(l => l.trim())
   };
-  
-  const textUpper = text.toUpperCase();
-  const lines = text.split('\n');
-  
-  console.log('📝 Parsing text with', lines.length, 'lines');
-  
-  // BRAND DETECTION - Check every line
-  const knownBrands = [
-    'CHILDISH', 'ZARA', 'H&M', 'H & M', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK',
-    'TOPSHOP', 'ASOS', 'RIVER ISLAND', 'UNIQLO', 'GAP', 'MANGO', 'COS',
-    'WEEKDAY', 'MONKI', 'ARKET', 'PULL & BEAR', 'PULL&BEAR', 'BERSHKA',
-    'STRADIVARIUS', 'MASSIMO DUTTI', 'RALPH LAUREN', 'TOMMY HILFIGER',
-    'CALVIN KLEIN', 'HUGO BOSS', 'ARMANI', 'VERSACE', 'GUCCI', 'PRADA',
-    'BURBERRY', 'BALENCIAGA', 'OFF-WHITE', 'SUPREME', 'PALACE', 'STONE ISLAND'
-  ];
-  
-  // Check each line for brands
-  for (const line of lines) {
-    const lineUpper = line.toUpperCase();
-    for (const brand of knownBrands) {
-      if (lineUpper.includes(brand)) {
-        result.brand = brand;
-        console.log('✅ Brand found:', brand);
-        break;
-      }
-    }
-    if (result.brand) break;
-  }
-  
-  // SIZE DETECTION - Multiple patterns
-  const sizePatterns = [
-    /SIZE[:\s]*([A-Z]{1,4}|\d{1,2})/,
-    /\b(XXS|XS|S|M|L|XL|XXL|XXXL)\b/,
-    /UK[:\s]*(\d{1,2})/,
-    /EUR[:\s]*(\d{2,3})/,
-    /US[:\s]*(\d{1,2})/,
-    /\b(\d{2})[\/\-](\d{2})\b/, // 32/32 format
-    /CHEST[:\s]*(\d{2,3})/,
-    /WAIST[:\s]*(\d{2,3})/
-  ];
-  
-  for (const pattern of sizePatterns) {
-    const match = textUpper.match(pattern);
-    if (match) {
-      result.size = match[1];
-      console.log('✅ Size found:', result.size);
-      break;
-    }
-  }
-  
-  // MATERIAL DETECTION - From composition and care labels
-  const materialPatterns = [
-    /(\d{1,3})[%\s]*(COTTON|POLYESTER|VISCOSE|ELASTANE|WOOL|NYLON|SILK|LINEN|ACRYLIC|MODAL|RAYON)/g,
-    /COTTON|POLYESTER|JERSEY|FLEECE|DENIM|WOOL|CASHMERE|SILK|LINEN/g
-  ];
-  
-  const materials = [];
-  for (const pattern of materialPatterns) {
-    const matches = textUpper.matchAll(pattern);
-    for (const match of matches) {
-      if (match[2]) {
-        materials.push(`${match[1]}% ${match[2]}`);
-      } else if (match[0]) {
-        materials.push(match[0]);
-      }
-    }
-  }
-  
-  if (materials.length > 0) {
-    result.material = materials[0].charAt(0) + materials[0].slice(1).toLowerCase();
-    console.log('✅ Material found:', result.material);
-  }
-  
-  // CARE INSTRUCTIONS - These help identify material
-  const carePatterns = [
-    /MACHINE WASH/i,
-    /HAND WASH/i,
-    /DRY CLEAN/i,
-    /DO NOT BLEACH/i,
-    /TUMBLE DRY/i,
-    /IRON/i,
-    /\d{2,3}[°C]/
-  ];
-  
-  for (const pattern of carePatterns) {
-    if (pattern.test(text)) {
-      result.careInstructions.push(pattern.source);
-    }
-  }
-  
-  // MADE IN detection
-  const madeInMatch = textUpper.match(/MADE IN ([A-Z\s]+)/);
-  if (madeInMatch) {
-    result.madeIn = madeInMatch[1];
-    console.log('✅ Made in:', result.madeIn);
-  }
-  
-  return result;
 }
 
-// ========== GARMENT TYPE DETECTOR FOR ALL CLOTHING ==========
+// ========== BRAND DETECTOR ==========
 
-function detectGarmentType(labels, objects, parsedText) {
-  const combined = [...labels, ...objects].map(l => l.toLowerCase()).join(' ');
-  const textLower = parsedText.allText.toLowerCase();
+function detectBrand(textData, logos) {
+  const { textUpper, textBlocks } = textData;
   
-  // Comprehensive garment detection
-  const garmentMap = {
-    // Tops - Long Sleeve
-    'Jumper': ['jumper', 'sweater', 'pullover', 'knitwear'],
-    'Sweatshirt': ['sweatshirt', 'sweat shirt', 'crew neck sweat'],
-    'Hoodie': ['hoodie', 'hooded', 'hood'],
-    'Cardigan': ['cardigan', 'cardi'],
-    
-    // Tops - Short Sleeve
-    'T-Shirt': ['t-shirt', 'tee', 'tshirt'],
-    'Polo': ['polo'],
-    'Vest': ['vest', 'tank top'],
-    
-    // Shirts
-    'Shirt': ['shirt', 'blouse'],
-    
-    // Dresses & Skirts
-    'Dress': ['dress'],
-    'Skirt': ['skirt'],
-    
-    // Bottoms
-    'Jeans': ['jeans', 'denim pant', 'denim trouser'],
-    'Trousers': ['trousers', 'pants', 'chinos', 'slacks'],
-    'Shorts': ['shorts'],
-    'Joggers': ['joggers', 'sweatpants', 'track pants'],
-    'Leggings': ['leggings', 'tights'],
-    
-    // Outerwear
-    'Jacket': ['jacket'],
-    'Coat': ['coat', 'overcoat'],
-    'Blazer': ['blazer'],
-    'Parka': ['parka'],
-    'Windbreaker': ['windbreaker', 'windcheater'],
-    
-    // Other
-    'Suit': ['suit'],
-    'Tracksuit': ['tracksuit', 'track suit'],
-    'Romper': ['romper', 'playsuit', 'jumpsuit']
-  };
+  // Known brands - add more as needed
+  const brands = [
+    'CHILDISH', 'ZARA', 'H&M', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK',
+    'TOPSHOP', 'ASOS', 'RIVER ISLAND', 'UNIQLO', 'GAP', 'MANGO'
+  ];
   
-  // Check for each garment type
-  for (const [garment, keywords] of Object.entries(garmentMap)) {
-    for (const keyword of keywords) {
-      if (combined.includes(keyword) || textLower.includes(keyword)) {
-        console.log(`✅ Garment detected as ${garment} (matched: ${keyword})`);
-        return garment;
+  // Check main text
+  for (const brand of brands) {
+    if (textUpper.includes(brand)) {
+      console.log(`✅ Brand found: ${brand}`);
+      return brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase();
+    }
+  }
+  
+  // Check text blocks (individual words detected)
+  for (const block of textBlocks) {
+    const blockUpper = block.toUpperCase();
+    if (brands.includes(blockUpper)) {
+      console.log(`✅ Brand found in block: ${blockUpper}`);
+      return block;
+    }
+  }
+  
+  // Check logos
+  if (logos && logos.length > 0) {
+    console.log(`✅ Brand from logo: ${logos[0]}`);
+    return logos[0];
+  }
+  
+  return 'Unbranded';
+}
+
+// ========== SIZE DETECTOR ==========
+
+function detectSize(textData) {
+  const { textUpper, textBlocks, lines } = textData;
+  
+  // Look for size in various formats
+  const sizePatterns = [
+    /SIZE[:\s]*([XS|S|M|L|XL|XXL])\b/,
+    /\b(XS|S|M|L|XL|XXL)\b(?![A-Z])/,  // Size letter not part of word
+    /SIZE[:\s]*(\d{1,2})/,
+    /UK[:\s]*(\d{1,2})/
+  ];
+  
+  // Check each line for size
+  for (const line of lines) {
+    const lineUpper = line.toUpperCase();
+    for (const pattern of sizePatterns) {
+      const match = lineUpper.match(pattern);
+      if (match && match[1]) {
+        console.log(`✅ Size found: ${match[1]} in line: "${line}"`);
+        return match[1];
       }
     }
   }
   
-  // Check sleeve length as fallback
-  if (combined.includes('long sleeve')) {
+  // Check text blocks for standalone size indicators
+  const validSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+  for (const block of textBlocks) {
+    if (validSizes.includes(block.toUpperCase())) {
+      console.log(`✅ Size found in block: ${block}`);
+      return block.toUpperCase();
+    }
+  }
+  
+  console.log('❌ No size found, defaulting to M');
+  return 'M';
+}
+
+// ========== GARMENT TYPE DETECTOR ==========
+
+function detectGarmentType(labels, textData) {
+  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
+  const { fullText } = textData;
+  const textLower = fullText.toLowerCase();
+  
+  console.log('🔍 Checking garment type from labels:', labels.slice(0, 5));
+  
+  // CRITICAL RULES:
+  // 1. If we see "long sleeve" or related terms, it's NEVER a T-Shirt
+  const longSleeveIndicators = [
+    'long sleeve', 'long-sleeve', 'longsleeve',
+    'sweater', 'jumper', 'sweatshirt', 'pullover',
+    'crew neck', 'ribbed', 'fleece'
+  ];
+  
+  const hasLongSleeves = longSleeveIndicators.some(indicator => 
+    labelsText.includes(indicator) || textLower.includes(indicator)
+  );
+  
+  if (hasLongSleeves) {
+    console.log('✅ Long sleeves detected - NOT a T-Shirt');
+    
+    // Determine specific type
+    if (labelsText.includes('hood') || textLower.includes('hood')) {
+      return 'Hoodie';
+    }
+    if (labelsText.includes('sweat') || textLower.includes('sweat')) {
+      return 'Sweatshirt';
+    }
+    // Default for long sleeves
     return 'Jumper';
   }
-  if (combined.includes('short sleeve')) {
+  
+  // 2. Only call it T-Shirt if we have evidence of SHORT sleeves
+  const shortSleeveIndicators = ['t-shirt', 'tee', 'short sleeve'];
+  const hasShortSleeves = shortSleeveIndicators.some(indicator => 
+    labelsText.includes(indicator) && !labelsText.includes('long')
+  );
+  
+  if (hasShortSleeves) {
+    console.log('✅ Short sleeves detected - T-Shirt');
     return 'T-Shirt';
   }
   
-  // Default based on what we see
-  if (combined.includes('clothing') || combined.includes('garment')) {
-    return 'Item';
-  }
+  // 3. Check for other garment types
+  if (labelsText.includes('jeans') || labelsText.includes('denim')) return 'Jeans';
+  if (labelsText.includes('trousers') || labelsText.includes('pants')) return 'Trousers';
+  if (labelsText.includes('dress')) return 'Dress';
+  if (labelsText.includes('skirt')) return 'Skirt';
+  if (labelsText.includes('jacket')) return 'Jacket';
+  if (labelsText.includes('coat')) return 'Coat';
   
-  return 'Item';
+  // 4. Default to Jumper if unclear (safer than T-Shirt)
+  console.log('⚠️ Garment unclear, defaulting to Jumper (not T-Shirt)');
+  return 'Jumper';
 }
 
-// ========== GENDER DETECTOR ==========
+// ========== MATERIAL DETECTOR ==========
 
-function detectGender(labels, parsedText) {
-  const combined = labels.join(' ').toLowerCase() + ' ' + parsedText.allText.toLowerCase();
+function detectMaterial(textData) {
+  const { textUpper, lines } = textData;
   
-  // Gender indicators
-  if (combined.includes("women") || combined.includes("ladies") || combined.includes("girl")) {
-    return 'Womens';
-  }
-  if (combined.includes("men") || combined.includes("gents") || combined.includes("boy")) {
-    return 'Mens';
-  }
-  if (combined.includes("unisex")) {
-    return 'Unisex';
+  // Look for percentage compositions
+  const compositionPattern = /(\d{1,3})[%\s]*(COTTON|POLYESTER|VISCOSE|ELASTANE|WOOL|NYLON)/g;
+  const matches = textUpper.matchAll(compositionPattern);
+  
+  for (const match of matches) {
+    console.log(`✅ Material found: ${match[1]}% ${match[2]}`);
+    return match[2].charAt(0) + match[2].slice(1).toLowerCase();
   }
   
-  // Size can indicate gender
-  const size = parsedText.size;
-  if (size && !isNaN(size)) {
-    const numSize = parseInt(size);
-    if (numSize >= 6 && numSize <= 20 && numSize % 2 === 0) {
-      return 'Womens'; // UK women's sizes
+  // Look for material mentions
+  const materials = ['Cotton', 'Polyester', 'Jersey', 'Fleece', 'Wool', 'Denim'];
+  for (const material of materials) {
+    if (textUpper.includes(material.toUpperCase())) {
+      console.log(`✅ Material found: ${material}`);
+      return material;
     }
   }
   
-  return 'Unisex';
+  return 'Cotton'; // Default
 }
 
 // ========== COLOR DETECTOR ==========
 
-function detectColor(labels, objects) {
-  const combined = [...labels, ...objects].map(l => l.toLowerCase()).join(' ');
+function detectColor(labels) {
+  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
   
   const colors = [
-    'Black', 'White', 'Grey', 'Navy', 'Blue', 'Red', 'Green', 
-    'Yellow', 'Orange', 'Purple', 'Pink', 'Brown', 'Beige', 
-    'Cream', 'Burgundy', 'Maroon', 'Khaki', 'Olive', 'Teal',
-    'Charcoal', 'Stone', 'Sand', 'Tan', 'Wine', 'Multi'
+    'Black', 'White', 'Grey', 'Navy', 'Blue', 'Red', 'Green',
+    'Pink', 'Purple', 'Orange', 'Yellow', 'Brown', 'Beige'
   ];
   
   for (const color of colors) {
-    if (combined.includes(color.toLowerCase())) {
+    if (labelsText.includes(color.toLowerCase())) {
       return color;
     }
   }
@@ -247,39 +214,21 @@ function detectColor(labels, objects) {
 
 // ========== KEYWORD GENERATOR ==========
 
-function generateKeywords(garmentType, brand, material, labels) {
+function generateKeywords(garmentType, brand) {
   const keywords = [];
-  const labelsLower = labels.map(l => l.toLowerCase()).join(' ');
-  
-  // Fit keywords
-  if (labelsLower.includes('oversized')) keywords.push('Oversized');
-  if (labelsLower.includes('slim')) keywords.push('Slim', 'Fit');
-  if (labelsLower.includes('relaxed')) keywords.push('Relaxed');
-  if (labelsLower.includes('regular')) keywords.push('Regular', 'Fit');
   
   // Garment-specific keywords
   if (garmentType === 'Jumper' || garmentType === 'Sweatshirt') {
-    if (labelsLower.includes('crew')) keywords.push('Crew', 'Neck');
-    if (labelsLower.includes('v-neck')) keywords.push('V-Neck');
-    if (material?.includes('Fleece')) keywords.push('Warm');
+    keywords.push('Crew', 'Neck', 'Warm');
   }
   
-  if (garmentType === 'Jeans') {
-    if (labelsLower.includes('skinny')) keywords.push('Skinny');
-    if (labelsLower.includes('straight')) keywords.push('Straight');
-    if (labelsLower.includes('bootcut')) keywords.push('Bootcut');
+  // Brand-specific keywords
+  if (brand === 'Childish') {
+    keywords.push('Streetwear');
   }
   
-  // Style keywords
-  if (labelsLower.includes('vintage')) keywords.push('Vintage');
-  if (labelsLower.includes('retro')) keywords.push('Retro');
-  if (brand === 'CHILDISH' || labelsLower.includes('street')) keywords.push('Streetwear');
-  
-  // Condition
-  keywords.push('VGC');
-  
-  // Location
-  keywords.push('UK');
+  // Always add these
+  keywords.push('VGC', 'UK', 'Genuine', 'Fast', 'Post');
   
   return keywords;
 }
@@ -302,6 +251,7 @@ async function analyzeWithGoogleVision(imageBase64) {
   const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
   
   if (!apiKey || apiKey === 'your_google_cloud_vision_api_key') {
+    console.log('⚠️ Vision API not configured');
     return null;
   }
   
@@ -324,8 +274,11 @@ async function analyzeWithGoogleVision(imageBase64) {
     }
   );
 
-  if (!response.ok) return null;
-  
+  if (!response.ok) {
+    console.error('Vision API failed');
+    return null;
+  }
+
   const data = await response.json();
   return data.responses?.[0];
 }
@@ -333,7 +286,7 @@ async function analyzeWithGoogleVision(imageBase64) {
 // ========== MAIN HANDLER ==========
 
 export async function POST(request) {
-  console.log('\n🚀 === COMPREHENSIVE ANALYSIS ===');
+  console.log('\n🚀 === ANALYSIS START ===');
   
   try {
     const body = await request.json();
@@ -346,105 +299,82 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    // Get Vision API data
+    // Analyze with Vision API
     const imageBase64 = await fetchImageAsBase64(imageUrls[0]);
     const visionData = await analyzeWithGoogleVision(imageBase64);
     
-    // Extract all data
-    const rawText = visionData?.textAnnotations?.[0]?.description || '';
-    const labels = visionData?.labelAnnotations?.map(l => l.description) || [];
-    const objects = visionData?.localizedObjectAnnotations?.map(o => o.name) || [];
-    const logos = visionData?.logoAnnotations?.map(l => l.description) || [];
-    
-    console.log('📸 Vision detected:');
-    console.log('- Text length:', rawText.length);
-    console.log('- Labels:', labels.slice(0, 5));
-    console.log('- Logos:', logos);
-    
-    // Parse all label text
-    const parsedText = parseAllLabels(rawText);
-    
-    // Add logo brands if not found in text
-    if (!parsedText.brand && logos.length > 0) {
-      parsedText.brand = logos[0];
+    if (!visionData) {
+      console.error('Vision API returned no data');
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Image analysis failed' 
+      }, { status: 500 });
     }
     
-    // Detect everything
-    const garmentType = detectGarmentType(labels, objects, parsedText);
-    const gender = detectGender(labels, parsedText);
-    const color = detectColor(labels, objects);
-    const keywords = generateKeywords(garmentType, parsedText.brand, parsedText.material, labels);
+    // Extract structured text data
+    const textData = extractTextFromVision(visionData);
+    const labels = visionData.labelAnnotations?.map(l => l.description) || [];
+    const logos = visionData.logoAnnotations?.map(l => l.description) || [];
     
-    // Use parsed data
-    const brand = parsedText.brand || 'Unbranded';
-    const size = parsedText.size || 'One Size';
-    const material = parsedText.material || 'See Label';
+    // Run detection
+    const brand = detectBrand(textData, logos);
+    const size = detectSize(textData);
+    const garmentType = detectGarmentType(labels, textData);
+    const material = detectMaterial(textData);
+    const color = detectColor(labels);
+    const keywords = generateKeywords(garmentType, brand);
     
-    console.log('\n📊 FINAL DETECTION:');
+    console.log('\n📊 DETECTION RESULTS:');
     console.log('Brand:', brand);
-    console.log('Garment:', garmentType);
-    console.log('Gender:', gender);
     console.log('Size:', size);
-    console.log('Color:', color);
+    console.log('Garment:', garmentType);
     console.log('Material:', material);
+    console.log('Color:', color);
     
-    // Build title
+    // Build title - EXACT FORMAT
     const titleParts = [
-      brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase(),
+      brand,
       garmentType,
-      gender,
+      'Unisex', // or detect gender
       'Size',
       size,
-      color
+      color,
+      material
     ];
-    
-    if (material !== 'See Label') {
-      titleParts.push(material.split(' ')[0]); // Just first word of material
-    }
     
     let title = titleParts.join(' ');
     
-    // Add keywords
+    // Add keywords to reach 80 chars
     for (const keyword of keywords) {
       if (title.length + keyword.length + 1 <= 80) {
         title += ' ' + keyword;
       }
+      if (title.length >= 80) break;
     }
     
-    // Pad to 80
-    while (title.length < 80) {
-      const padding = ['Genuine', 'Fast', 'Post'];
-      let added = false;
-      for (const word of padding) {
-        if (!title.includes(word) && title.length + word.length + 1 <= 80) {
-          title += ' ' + word;
-          added = true;
-          break;
-        }
-      }
-      if (!added) break;
-    }
-    
+    // Ensure exactly 80 chars
     if (title.length > 80) {
       title = title.substring(0, 80).trim();
     }
     
+    console.log('Title:', title);
+    console.log('Length:', title.length);
+    
     // Create response
     const analysis = {
-      brand: brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase(),
+      brand: brand,
       item_type: garmentType,
-      gender: gender,
+      gender: 'Unisex',
       size: size,
       color: color,
       material: material,
-      made_in: parsedText.madeIn,
-      keywords: keywords,
+      keywords: keywords.slice(0, 5),
       ebay_title: title,
-      suggested_price: garmentType === 'Jeans' ? 20 : 15,
+      suggested_price: 15,
       condition_score: 7,
-      condition_text: 'Very Good Condition',
-      description: `${brand} ${garmentType.toLowerCase()} in ${color.toLowerCase()}. Size ${size}. ${material} construction. ${parsedText.madeIn ? `Made in ${parsedText.madeIn}.` : ''} In very good condition.`,
-      category: `${gender} Clothing > ${garmentType}s`,
+      condition_text: 'Good',
+      description: `${brand} ${garmentType.toLowerCase()} in ${color.toLowerCase()}. Size ${size}. ${material} construction. In very good condition.`,
+      category: `Unisex Clothing > ${garmentType}s`,
       id: `analysis-${Date.now()}`,
       sku: `${brand.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
       images_count: imageUrls.length,
@@ -458,7 +388,7 @@ export async function POST(request) {
     });
     
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Fatal error:', error);
     return NextResponse.json({
       success: false,
       error: 'Analysis failed'
@@ -469,7 +399,6 @@ export async function POST(request) {
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
-    version: '8.0',
-    message: 'Comprehensive label reading for all clothing types'
+    version: '9.0'
   });
 }
