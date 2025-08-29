@@ -1,5 +1,5 @@
 // app/api/analyze-ai/route.js
-// COMPLETE FIXED VERSION - NEVER EMPTY TITLES
+// COMPLETE VERSION WITH FULL DEBUGGING TO FIND TITLE ISSUE
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -187,7 +187,7 @@ function extractFashionDetails(visionData) {
   return details;
 }
 
-// Generate listing with Claude
+// Generate listing with Claude - WITH FULL DEBUGGING
 async function generateListingWithClaude(fashionDetails, visionData, imageCount) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   
@@ -238,6 +238,8 @@ Return ONLY valid JSON:
   "keywords": ["keyword1", "keyword2", "keyword3"]
 }`;
 
+    console.log('📝 Claude prompt sent:', prompt.substring(0, 300) + '...');
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -268,14 +270,26 @@ Return ONLY valid JSON:
     
     console.log('📝 Claude response received');
     
+    // FULL DEBUGGING - Let's see exactly what Claude returns
+    console.log('🔍 DEBUG - Raw Claude response:', content);
+    
     const jsonMatch = content.match(/\{[\s\S]*\}/);
+    console.log('🔍 DEBUG - JSON match found:', !!jsonMatch);
+    
     if (jsonMatch) {
+      console.log('🔍 DEBUG - Raw JSON string:', jsonMatch[0]);
+      
       try {
         const listing = JSON.parse(jsonMatch[0]);
+        console.log('🔍 DEBUG - Parsed listing object:', listing);
+        console.log('🔍 DEBUG - ebay_title field exists:', 'ebay_title' in listing);
+        console.log('🔍 DEBUG - ebay_title value:', listing.ebay_title);
+        console.log('🔍 DEBUG - ebay_title type:', typeof listing.ebay_title);
+        console.log('🔍 DEBUG - ebay_title length:', listing.ebay_title ? listing.ebay_title.length : 'N/A');
         
         // CRITICAL FIX: Generate title if missing or empty
         if (!listing.ebay_title || listing.ebay_title.trim().length === 0) {
-          console.log('🔧 Generating missing eBay title...');
+          console.log('🔧 TITLE IS MISSING OR EMPTY - Generating fallback title...');
           
           const brand = listing.brand || 'Unbranded';
           const item = listing.item_type || 'T-Shirt';
@@ -286,10 +300,14 @@ Return ONLY valid JSON:
           
           // Build title following structure: "Brand Item Gender Size Colour Material Keywords"
           listing.ebay_title = `${brand} ${item} ${gender} Size ${size} ${color} ${material} UK eBay`;
+          console.log('🔧 Generated fallback title:', listing.ebay_title);
+        } else {
+          console.log('✅ Title exists in Claude response:', listing.ebay_title);
         }
         
         // Apply title formatting fixes
         if (listing.ebay_title) {
+          const originalTitle = listing.ebay_title;
           listing.ebay_title = listing.ebay_title
             .replace(/[.,-£]/g, ' ') // Remove banned characters
             .replace(/\s+/g, ' ') // Remove double spaces
@@ -299,20 +317,31 @@ Return ONLY valid JSON:
           if (listing.ebay_title.length > 80) {
             listing.ebay_title = listing.ebay_title.substring(0, 80).trim();
           }
+          
+          console.log('🔧 Title formatting applied:');
+          console.log('   Original:', originalTitle);
+          console.log('   Formatted:', listing.ebay_title);
+          console.log('   Length:', listing.ebay_title.length);
         }
         
         console.log('✅ Final title generated:', listing.ebay_title, `(${listing.ebay_title?.length || 0} chars)`);
         return listing;
-      } catch (e) {
-        console.error('❌ Failed to parse Claude JSON:', e);
+        
+      } catch (parseError) {
+        console.error('❌ Failed to parse Claude JSON:', parseError);
+        console.log('🔍 DEBUG - Parse error details:', parseError.message);
+        console.log('🔍 DEBUG - Attempting to parse:', jsonMatch[0]);
         return null;
       }
+    } else {
+      console.error('❌ No JSON found in Claude response');
+      console.log('🔍 DEBUG - Full response content:', content);
+      return null;
     }
-    
-    return null;
     
   } catch (error) {
     console.error('❌ Claude API error:', error.message);
+    console.log('🔍 DEBUG - Error details:', error);
     return null;
   }
 }
@@ -341,22 +370,37 @@ export async function POST(request) {
     let finalListing = null;
     
     if (imageUrls && imageUrls.length > 0) {
+      console.log('🔄 Starting AI pipeline...');
+      
       // Fetch and analyze first image
       const imageBase64 = await fetchImageAsBase64(imageUrls[0]);
       
       if (imageBase64) {
+        console.log('✅ Image fetched, calling Vision API...');
         const visionData = await analyzeWithGoogleVision(imageBase64);
         
         if (visionData) {
+          console.log('✅ Vision API complete, extracting fashion details...');
           const fashionDetails = extractFashionDetails(visionData);
+          
+          console.log('✅ Fashion details extracted, calling Claude...');
           finalListing = await generateListingWithClaude(fashionDetails, visionData, numImages);
+          
+          console.log('🔍 DEBUG - Final listing from Claude:', finalListing);
+          console.log('🔍 DEBUG - Final listing title:', finalListing?.ebay_title);
+        } else {
+          console.log('❌ Vision API failed');
         }
+      } else {
+        console.log('❌ Image fetch failed');
       }
+    } else {
+      console.log('❌ No image URLs provided');
     }
     
     // If AI failed, return error instead of fallback
     if (!finalListing) {
-      console.log('❌ AI analysis failed');
+      console.log('❌ AI analysis failed completely');
       return NextResponse.json({
         success: false,
         error: 'AI analysis failed - please try again'
@@ -374,7 +418,9 @@ export async function POST(request) {
       analyzed_at: new Date().toISOString()
     };
     
-    console.log('✅ Analysis complete:', completeAnalysis.ebay_title);
+    console.log('🔍 DEBUG - Complete analysis object:', completeAnalysis);
+    console.log('🔍 DEBUG - Analysis title field:', completeAnalysis.ebay_title);
+    console.log('✅ Analysis complete:', completeAnalysis.ebay_title || 'NO TITLE FOUND');
     
     return NextResponse.json({
       success: true,
@@ -383,6 +429,7 @@ export async function POST(request) {
     
   } catch (error) {
     console.error('❌ Fatal error:', error);
+    console.log('🔍 DEBUG - Fatal error details:', error.stack);
     return NextResponse.json({
       success: false,
       error: error.message
@@ -394,7 +441,7 @@ export async function POST(request) {
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
-    message: 'AI Analysis API - Fixed Title Generation',
+    message: 'AI Analysis API - Debug Version with Full Logging',
     apis: {
       googleVision: !!process.env.GOOGLE_CLOUD_VISION_API_KEY,
       claude: !!process.env.ANTHROPIC_API_KEY,
