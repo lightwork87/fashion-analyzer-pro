@@ -1,5 +1,5 @@
 // app/api/analyze/route.js
-// CONSOLIDATED AND FIXED AI ANALYSIS API
+// ENHANCED VERSION WITH BETTER GARMENT & SIZE DETECTION
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -24,7 +24,7 @@ async function fetchImageAsBase64(imageUrl) {
       headers: { 
         'User-Agent': 'LightLister-AI/1.0'
       },
-      signal: AbortSignal.timeout(15000) // Proper timeout implementation
+      signal: AbortSignal.timeout(15000)
     });
     
     if (!response.ok) {
@@ -43,7 +43,7 @@ async function fetchImageAsBase64(imageUrl) {
   }
 }
 
-// Call Google Vision API
+// Call Google Vision API with enhanced detection
 async function analyzeWithGoogleVision(imageBase64) {
   const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
   
@@ -65,9 +65,10 @@ async function analyzeWithGoogleVision(imageBase64) {
             image: { content: imageBase64 },
             features: [
               { type: 'TEXT_DETECTION', maxResults: 50 },
-              { type: 'LABEL_DETECTION', maxResults: 20 },
+              { type: 'LABEL_DETECTION', maxResults: 30 },
               { type: 'LOGO_DETECTION', maxResults: 10 },
-              { type: 'OBJECT_LOCALIZATION', maxResults: 10 }
+              { type: 'OBJECT_LOCALIZATION', maxResults: 20 },
+              { type: 'IMAGE_PROPERTIES', maxResults: 5 }
             ]
           }]
         })
@@ -84,17 +85,16 @@ async function analyzeWithGoogleVision(imageBase64) {
     const result = data.responses?.[0];
     
     if (result) {
-      // Log what we found
       const detectedText = result.textAnnotations?.[0]?.description || '';
       const labels = result.labelAnnotations?.map(l => l.description) || [];
       const logos = result.logoAnnotations?.map(l => l.description) || [];
       const objects = result.localizedObjectAnnotations?.map(o => o.name) || [];
       
       console.log('✅ Vision API detected:', {
-        textLength: detectedText.length,
-        labels: labels.slice(0, 5),
+        textSnippet: detectedText.substring(0, 100),
+        labels: labels.slice(0, 10),
         logos: logos,
-        objects: objects.slice(0, 5)
+        objects: objects.slice(0, 10)
       });
       
       return result;
@@ -108,7 +108,7 @@ async function analyzeWithGoogleVision(imageBase64) {
   }
 }
 
-// Extract fashion details from vision data
+// Enhanced fashion detail extraction
 function extractFashionDetails(visionData) {
   const details = {
     allText: '',
@@ -117,7 +117,8 @@ function extractFashionDetails(visionData) {
     itemTypes: [],
     colors: [],
     materials: [],
-    features: []
+    features: [],
+    garmentHints: []
   };
   
   if (!visionData) return details;
@@ -125,15 +126,15 @@ function extractFashionDetails(visionData) {
   // Get all detected text
   if (visionData.textAnnotations?.length > 0) {
     details.allText = visionData.textAnnotations[0].description || '';
-    console.log('📝 Text extracted:', details.allText.substring(0, 200));
+    console.log('📝 Full text found:', details.allText);
   }
   
   const textUpper = details.allText.toUpperCase();
   const textWords = textUpper.split(/\s+/);
   
-  // Extended UK brand list
+  // Comprehensive UK brand list (including streetwear brands like Childish)
   const brandList = [
-    'ZARA', 'H&M', 'HM', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK', 
+    'CHILDISH', 'ZARA', 'H&M', 'HM', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK', 
     'TOPSHOP', 'ASOS', 'MARKS & SPENCER', 'M&S', 'MARKS AND SPENCER',
     'UNIQLO', 'GAP', 'MANGO', 'COS', 'RIVER ISLAND', 'NEW LOOK', 
     'BOOHOO', 'MISSGUIDED', 'RALPH LAUREN', 'TOMMY HILFIGER', 
@@ -146,8 +147,8 @@ function extractFashionDetails(visionData) {
     'OFF-WHITE', 'SUPREME', 'PALACE', 'STUSSY', 'OBEY', 'THRASHER',
     'HOLLISTER', 'ABERCROMBIE', 'JACK WILLS', 'JACK & JONES', 'ONLY',
     'WAREHOUSE', 'OASIS', 'KAREN MILLEN', 'COAST', 'PHASE EIGHT',
-    'WHISTLES', 'REISS', 'HOBBS', 'JIGSAW', 'BODEN', 'WHITE STUFF',
-    'FAT FACE', 'JOULES', 'SEASALT', 'CREW CLOTHING', 'HENRI LLOYD'
+    'WEEKDAY', 'MONKI', 'STORIES', '& OTHER STORIES', 'ARKET', 'PULL & BEAR',
+    'BERSHKA', 'STRADIVARIUS', 'MASSIMO DUTTI', 'ALLSAINTS', 'TK MAXX'
   ];
   
   // Check for brands in text
@@ -165,43 +166,109 @@ function extractFashionDetails(visionData) {
   // Remove duplicates
   details.brands = [...new Set(details.brands)];
   
-  // Enhanced size detection
+  // ENHANCED SIZE DETECTION
+  // Look for size indicators more carefully
   const sizePatterns = [
-    /SIZE:?\s*([XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL])\b/i,
+    // Standard sizes
     /\b(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL)\b/,
-    /UK\s*SIZE:?\s*(\d{1,2})/i,
-    /SIZE:?\s*UK\s*(\d{1,2})/i,
-    /SIZE\s*(\d{1,2})/i,
-    /EUR:?\s*(\d{2,3})/i,
-    /US:?\s*(\d{1,2})/i,
-    /\b(\d{2})[/-](\d{2})\b/ // For sizes like 32/32
+    // With SIZE prefix
+    /SIZE[:\s]*([XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL])\b/i,
+    // UK numeric sizes
+    /UK[:\s]*(\d{1,2})/i,
+    /SIZE[:\s]*UK[:\s]*(\d{1,2})/i,
+    // EU sizes
+    /EUR?[:\s]*(\d{2,3})/i,
+    // US sizes
+    /US[:\s]*(\d{1,2})/i,
+    // Chest/waist measurements
+    /(\d{2})["\s]*(CHEST|WAIST)/i,
+    // Just numeric sizes
+    /SIZE[:\s]*(\d{1,2})\b/i
   ];
   
   for (const pattern of sizePatterns) {
     const matches = textUpper.matchAll(new RegExp(pattern, 'g'));
     for (const match of matches) {
-      if (match[1]) details.sizes.push(match[1]);
+      if (match[1]) {
+        details.sizes.push(match[1]);
+      }
     }
   }
   
-  // Get clothing types from Vision API
+  // ENHANCED GARMENT TYPE DETECTION
   const labels = visionData.labelAnnotations?.map(l => l.description.toLowerCase()) || [];
   const objects = visionData.localizedObjectAnnotations?.map(o => o.name.toLowerCase()) || [];
   const allDetections = [...labels, ...objects];
   
-  // Clothing type keywords
-  const clothingTypes = [
-    'shirt', 't-shirt', 'tee', 'polo', 'dress', 'jeans', 'trousers', 
-    'pants', 'jacket', 'coat', 'sweater', 'jumper', 'hoodie', 'sweatshirt',
-    'blazer', 'suit', 'skirt', 'shorts', 'top', 'blouse', 'cardigan', 
-    'vest', 'waistcoat', 'leggings', 'joggers', 'tracksuit', 'windbreaker',
-    'parka', 'anorak', 'fleece', 'pullover', 'tank top', 'camisole',
-    'dungarees', 'overalls', 'romper', 'playsuit', 'bikini', 'swimsuit'
-  ];
+  // Garment type keywords with priority scores
+  const garmentTypes = {
+    // Tops - Long sleeve
+    'jumper': ['jumper', 'sweater', 'pullover', 'knit', 'knitwear'],
+    'sweatshirt': ['sweatshirt', 'sweat', 'hoodie without hood', 'crew neck'],
+    'hoodie': ['hoodie', 'hooded sweatshirt', 'hood'],
+    'cardigan': ['cardigan', 'button sweater', 'open front'],
+    'fleece': ['fleece', 'polar fleece'],
+    
+    // Tops - Short sleeve
+    't-shirt': ['t-shirt', 'tee', 'tshirt', 'short sleeve shirt'],
+    'polo': ['polo', 'polo shirt', 'collar shirt'],
+    'vest': ['vest', 'tank top', 'sleeveless'],
+    
+    // Shirts
+    'shirt': ['shirt', 'button up', 'dress shirt', 'oxford'],
+    
+    // Outerwear
+    'jacket': ['jacket', 'coat', 'blazer'],
+    'coat': ['coat', 'overcoat', 'trench'],
+    'parka': ['parka', 'anorak'],
+    
+    // Bottoms
+    'jeans': ['jeans', 'denim pants', 'denim'],
+    'trousers': ['trousers', 'pants', 'chinos'],
+    'shorts': ['shorts', 'short pants'],
+    'joggers': ['joggers', 'sweatpants', 'track pants'],
+    
+    // Dresses & Skirts
+    'dress': ['dress', 'frock'],
+    'skirt': ['skirt', 'mini skirt', 'midi skirt', 'maxi skirt']
+  };
   
-  for (const type of clothingTypes) {
-    if (allDetections.some(d => d.includes(type))) {
-      details.itemTypes.push(type.charAt(0).toUpperCase() + type.slice(1));
+  // Check for long sleeves vs short sleeves
+  const hasLongSleeves = allDetections.some(d => 
+    d.includes('long sleeve') || 
+    d.includes('long-sleeve') ||
+    d.includes('sleeve') && !d.includes('short')
+  );
+  
+  const hasShortSleeves = allDetections.some(d => 
+    d.includes('short sleeve') || 
+    d.includes('short-sleeve') ||
+    d.includes('t-shirt')
+  );
+  
+  // Check for specific garment features
+  const hasRibbedCuffs = textUpper.includes('RIBBED') || textUpper.includes('CUFF');
+  const hasCrewNeck = textUpper.includes('CREW') || allDetections.some(d => d.includes('crew neck'));
+  const hasHood = textUpper.includes('HOOD') || allDetections.some(d => d.includes('hood'));
+  
+  // Determine garment type based on evidence
+  for (const [garmentType, keywords] of Object.entries(garmentTypes)) {
+    for (const keyword of keywords) {
+      if (allDetections.some(d => d.includes(keyword))) {
+        details.itemTypes.push(garmentType.charAt(0).toUpperCase() + garmentType.slice(1));
+        details.garmentHints.push(keyword);
+      }
+    }
+  }
+  
+  // If we have long sleeves but no specific type detected, it's likely a jumper or sweatshirt
+  if (hasLongSleeves && details.itemTypes.length === 0) {
+    if (hasRibbedCuffs || hasCrewNeck) {
+      details.itemTypes.push('Sweatshirt');
+      details.garmentHints.push('long sleeve with ribbed details');
+    } else {
+      details.itemTypes.push('Jumper');
+      details.garmentHints.push('long sleeve garment');
     }
   }
   
@@ -209,11 +276,13 @@ function extractFashionDetails(visionData) {
   const colors = [
     'Black', 'White', 'Grey', 'Gray', 'Navy', 'Blue', 'Red', 'Green', 
     'Yellow', 'Orange', 'Purple', 'Pink', 'Brown', 'Beige', 'Cream',
-    'Burgundy', 'Maroon', 'Khaki', 'Olive', 'Teal', 'Turquoise'
+    'Burgundy', 'Maroon', 'Khaki', 'Olive', 'Teal', 'Turquoise',
+    'Charcoal', 'Stone', 'Sand', 'Tan', 'Wine', 'Forest', 'Mint'
   ];
   
   for (const color of colors) {
-    if (allDetections.some(d => d.toLowerCase().includes(color.toLowerCase()))) {
+    if (allDetections.some(d => d.toLowerCase().includes(color.toLowerCase())) ||
+        textUpper.includes(color.toUpperCase())) {
       details.colors.push(color);
     }
   }
@@ -222,26 +291,29 @@ function extractFashionDetails(visionData) {
   const materials = [
     'Cotton', 'Polyester', 'Wool', 'Silk', 'Linen', 'Denim', 'Leather',
     'Suede', 'Velvet', 'Fleece', 'Nylon', 'Rayon', 'Viscose', 'Cashmere',
-    'Merino', 'Acrylic', 'Spandex', 'Elastane', 'Lycra', 'Gore-tex'
+    'Merino', 'Acrylic', 'Spandex', 'Elastane', 'Lycra', 'Gore-tex',
+    'Jersey', 'French Terry', 'Terry', 'Bamboo', 'Modal', 'Tencel'
   ];
   
   for (const material of materials) {
-    if (textUpper.includes(material.toUpperCase())) {
+    if (textUpper.includes(material.toUpperCase()) ||
+        allDetections.some(d => d.toLowerCase().includes(material.toLowerCase()))) {
       details.materials.push(material);
     }
   }
   
   console.log('🔍 Extracted fashion details:', {
-    brands: details.brands.length,
-    sizes: details.sizes.length,
-    types: details.itemTypes.length,
-    colors: details.colors.length
+    brands: details.brands,
+    sizes: details.sizes,
+    types: details.itemTypes,
+    colors: details.colors,
+    garmentHints: details.garmentHints
   });
   
   return details;
 }
 
-// Generate listing with Claude - FIXED VERSION
+// Generate listing with Claude - ENHANCED PROMPT
 async function generateListingWithClaude(fashionDetails, visionData, imageCount) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   
@@ -260,65 +332,83 @@ async function generateListingWithClaude(fashionDetails, visionData, imageCount)
       logos: visionData.logoAnnotations?.map(l => l.description) || []
     } : null;
     
-    // Create detailed prompt
-    const prompt = `You are an expert UK eBay and Vinted fashion reseller. Analyze this item and create perfect listings.
+    // Create enhanced prompt with better garment detection
+    const prompt = `You are an expert UK eBay fashion reseller. Analyze this item and create perfect listings.
+
+CRITICAL GARMENT TYPE DETECTION:
+- If item has long sleeves and ribbed cuffs/hem: It's likely a JUMPER or SWEATSHIRT (NOT a T-shirt)
+- If item has long sleeves without ribbing: Could be a SHIRT or JUMPER
+- If item has short sleeves: T-SHIRT or POLO
+- If item has a hood: HOODIE
+- If item has buttons down front: SHIRT or CARDIGAN
+- Crew neck with long sleeves usually = JUMPER or SWEATSHIRT
 
 DETECTED INFORMATION:
 - Text found on labels/tags: "${fashionDetails.allText || 'None detected'}"
 - Brands detected: ${fashionDetails.brands.length > 0 ? fashionDetails.brands.join(', ') : 'None'}
 - Sizes found: ${fashionDetails.sizes.length > 0 ? fashionDetails.sizes.join(', ') : 'None'}
-- Item types: ${fashionDetails.itemTypes.length > 0 ? fashionDetails.itemTypes.join(', ') : 'Clothing item'}
+- Garment indicators: ${fashionDetails.garmentHints.join(', ') || 'None'}
+- Item types suggested: ${fashionDetails.itemTypes.length > 0 ? fashionDetails.itemTypes.join(', ') : 'Unknown'}
 - Colors: ${fashionDetails.colors.length > 0 ? fashionDetails.colors.join(', ') : 'Not specified'}
 - Materials: ${fashionDetails.materials.length > 0 ? fashionDetails.materials.join(', ') : 'Not specified'}
 ${visionContext ? `
-- Visual labels: ${visionContext.labels.slice(0, 10).join(', ')}
+- Visual labels detected: ${visionContext.labels.slice(0, 15).join(', ')}
 - Objects detected: ${visionContext.objects.join(', ')}
 - Logos detected: ${visionContext.logos.join(', ')}` : ''}
 
-CRITICAL REQUIREMENTS:
+CRITICAL TITLE REQUIREMENTS:
 
-1. CREATE AN EBAY UK TITLE (EXACTLY 80 CHARACTERS):
-   - Use format: [Brand] [Gender] [Item] [Feature] Size [Size] [Colour] [Material] [Condition]
-   - Use UK spelling: Colour not Color, Grey not Gray, Jumper not Sweater
-   - If no brand detected, use the most likely brand or "Unbranded"
-   - MUST be exactly 80 characters (pad with descriptive words if needed)
-   - Remove punctuation except &
-   - Example: "Nike Mens Running T Shirt Athletic Performance Size L Black Polyester VGC"
+1. STRICT TITLE FORMAT (EXACTLY 80 CHARACTERS):
+   MUST follow: [Brand] [Gender] [Item] Size [Size] [Colour] [Material] [Keywords]
+   
+   Example formats:
+   - "Childish Mens Jumper Size S Red Cotton Jersey Crew Neck Streetwear Long Sleeve UK"
+   - "Nike Womens Hoodie Size M Black Polyester Fleece Lined Sports Gym Training Warm"
+   - "Zara Ladies Dress Size 12 Blue Viscose Midi Length Summer Casual Work Office"
 
-2. DETERMINE ACCURATE DETAILS:
-   - If brand not detected, make educated guess based on style or use "Unbranded"
-   - If size not clear, use most common size (M for mens, 12 for womens)
-   - Use specific item type (not just "clothing")
-   - Estimate realistic UK resale price in GBP
+2. GARMENT TYPE RULES:
+   - Long sleeves + casual = Usually JUMPER or SWEATSHIRT
+   - Long sleeves + ribbed = JUMPER or SWEATSHIRT
+   - Short sleeves = T-SHIRT
+   - Has hood = HOODIE
+   - Buttons all way = SHIRT or CARDIGAN
+   - NEVER call a jumper/sweatshirt a "T-Shirt"
 
-3. CONDITION SCORING (1-10):
-   - 10: New with tags (BNWT)
-   - 9: New without tags (BNWOT)
-   - 8: Excellent/Like new
-   - 7: Very good condition (VGC)
-   - 6: Good condition
-   - 5: Fair/Acceptable
-   - Below 5: Poor
+3. SIZE DETECTION:
+   - If multiple sizes found, use the FIRST one
+   - If text says "S" use Size S, not Size M
+   - Common UK sizes: 6 8 10 12 14 16 (womens), S M L XL (unisex)
+
+4. KEYWORDS:
+   - Must be searchable eBay terms
+   - Examples: Vintage, Retro, Y2K, Streetwear, Designer, Casual, Smart, Work, Gym
+   - Include condition: BNWT, Excellent, VGC (Very Good Condition), Good
+
+5. UK SPELLING:
+   - Colour not Color
+   - Grey not Gray  
+   - Jumper not Sweater
+   - Trainers not Sneakers
 
 Return ONLY this JSON structure (no other text):
 {
-  "brand": "Detected or estimated brand",
-  "item_type": "Specific item type like T-Shirt, Jeans, Dress",
-  "size": "UK size",
-  "color": "Main colour using UK spelling",
+  "brand": "Exact brand detected or Unbranded",
+  "item_type": "Specific garment type (Jumper/Sweatshirt/T-Shirt/Hoodie etc)",
+  "size": "Exact size detected (S/M/L or numeric)",
+  "color": "Main colour with UK spelling",
   "condition_score": 7,
   "condition_text": "Very Good Condition",
   "estimated_value_min": 10,
   "estimated_value_max": 25,
-  "ebay_title": "EXACTLY 80 character title following the format above",
-  "vinted_title": "Casual title under 50 chars for younger audience",
-  "description": "Professional multi-paragraph description with measurements if visible",
+  "ebay_title": "EXACTLY 80 character title following strict format above",
+  "vinted_title": "Casual title under 50 chars",
+  "description": "Detailed description with measurements if visible",
   "suggested_price": 18,
-  "category": "Specific category like Mens Clothing > Shirts > Casual Shirts",
-  "material": "Primary material",
-  "style": "Style descriptor like Casual, Formal, Vintage",
-  "gender": "Mens/Womens/Unisex/Boys/Girls",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+  "category": "Mens Clothing > Jumpers & Cardigans",
+  "material": "Cotton Jersey or detected material",
+  "style": "Streetwear/Casual/Smart etc",
+  "gender": "Mens/Womens/Unisex",
+  "keywords": ["streetwear", "casual", "crew neck", "long sleeve", "uk seller"]
 }`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -329,9 +419,9 @@ Return ONLY this JSON structure (no other text):
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022', // Using latest model
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 2000,
-        temperature: 0.3, // Lower temperature for consistency
+        temperature: 0.2, // Lower temperature for more consistent results
         messages: [{
           role: 'user',
           content: prompt
@@ -353,7 +443,6 @@ Return ONLY this JSON structure (no other text):
     // Parse JSON from response
     let listing;
     try {
-      // Find JSON in response (handle markdown code blocks)
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('No JSON found in response');
@@ -364,21 +453,20 @@ Return ONLY this JSON structure (no other text):
       
     } catch (parseError) {
       console.error('❌ JSON parse failed:', parseError.message);
-      console.log('Raw content:', content.substring(0, 500));
       throw new Error('Failed to parse AI response');
     }
     
-    // CRITICAL: Validate and fix the eBay title
+    // Validate and fix the eBay title
     if (!listing.ebay_title || listing.ebay_title.trim().length === 0) {
       console.log('⚠️ Title missing - generating fallback');
       
       const brand = listing.brand || fashionDetails.brands[0] || 'Unbranded';
-      const item = listing.item_type || fashionDetails.itemTypes[0] || 'Clothing Item';
+      const item = listing.item_type || fashionDetails.itemTypes[0] || 'Jumper';
       const size = listing.size || fashionDetails.sizes[0] || 'M';
       const color = listing.color || fashionDetails.colors[0] || 'Black';
-      const condition = listing.condition_score >= 8 ? 'Excellent' : 'Good';
+      const material = listing.material || 'Cotton';
       
-      listing.ebay_title = `${brand} ${item} Size ${size} ${color} ${condition} Condition UK Fashion`.substring(0, 80);
+      listing.ebay_title = `${brand} Mens ${item} Size ${size} ${color} ${material} Casual Streetwear UK VGC`;
     }
     
     // Format the title properly
@@ -392,7 +480,7 @@ Return ONLY this JSON structure (no other text):
       listing.ebay_title = listing.ebay_title.substring(0, 80).trim();
     } else if (listing.ebay_title.length < 80) {
       // Pad with relevant keywords if too short
-      const padding = ['UK', 'Fashion', 'Quality', 'Genuine', 'Authentic', 'Style', 'Trendy', 'Designer'];
+      const padding = ['UK', 'Seller', 'Fast', 'Post', 'Quality', 'Genuine', 'Authentic'];
       while (listing.ebay_title.length < 80 && padding.length > 0) {
         const word = padding.shift();
         if (listing.ebay_title.length + word.length + 1 <= 80) {
@@ -402,17 +490,6 @@ Return ONLY this JSON structure (no other text):
     }
     
     console.log('✅ Final eBay title:', listing.ebay_title, `(${listing.ebay_title.length} chars)`);
-    
-    // Add fallback values for any missing fields
-    listing.brand = listing.brand || 'Unbranded';
-    listing.item_type = listing.item_type || 'Fashion Item';
-    listing.size = listing.size || 'One Size';
-    listing.color = listing.color || 'Multi';
-    listing.condition_score = listing.condition_score || 7;
-    listing.suggested_price = listing.suggested_price || 15;
-    listing.category = listing.category || 'Clothes, Shoes & Accessories';
-    listing.gender = listing.gender || 'Unisex';
-    listing.keywords = listing.keywords || ['fashion', 'uk', 'style'];
     
     return listing;
     
@@ -430,7 +507,6 @@ export async function POST(request) {
   try {
     // 1. Check authentication (with bypass for testing)
     let userId = 'temp-user-' + Date.now();
-    let userEmail = 'test@example.com';
     
     try {
       const { userId: authUserId } = await auth();
@@ -490,7 +566,6 @@ export async function POST(request) {
     } catch (pipelineError) {
       console.error('❌ Pipeline error:', pipelineError.message);
       
-      // Return user-friendly error
       if (pipelineError.message.includes('AI service')) {
         return NextResponse.json({
           success: false,
@@ -508,13 +583,15 @@ export async function POST(request) {
       sku: `${(finalListing.brand || 'UNB').substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
       images_count: imageCount,
       image_urls: imageUrls,
-      credits_remaining: 49, // Mock for now
+      credits_remaining: 49,
       analyzed_at: new Date().toISOString(),
       vision_success: !!visionData,
-      brands_detected: fashionDetails?.brands || []
+      brands_detected: fashionDetails?.brands || [],
+      sizes_detected: fashionDetails?.sizes || [],
+      garment_hints: fashionDetails?.garmentHints || []
     };
     
-    // 5. Save to database (optional - only if user is authenticated)
+    // 5. Save to database (optional)
     if (userId && !userId.startsWith('temp-')) {
       try {
         await supabase.from('analyses').insert({
@@ -538,13 +615,14 @@ export async function POST(request) {
         console.log('✅ Analysis saved to database');
       } catch (dbError) {
         console.error('⚠️ Database save failed:', dbError.message);
-        // Continue anyway - don't fail the request
       }
     }
     
     console.log('✅ Analysis complete!');
     console.log('Title:', completeAnalysis.ebay_title);
     console.log('Brand:', completeAnalysis.brand);
+    console.log('Item Type:', completeAnalysis.item_type);
+    console.log('Size:', completeAnalysis.size);
     console.log('Price: £' + completeAnalysis.suggested_price);
     
     return NextResponse.json({
@@ -575,7 +653,7 @@ export async function GET() {
   
   return NextResponse.json({
     status: 'ok',
-    message: 'LightLister AI Analysis API v2.0',
+    message: 'LightLister AI Analysis API v2.1 - Enhanced Detection',
     apis,
     issues: Object.entries(apis)
       .filter(([_, configured]) => !configured)
