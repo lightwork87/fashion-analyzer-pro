@@ -1,5 +1,5 @@
 // app/api/analyze/route.js
-// FOCUSED FIX: Better color detection for pale/pastel colors
+// ENHANCED COLOR DETECTION WITH PROPER PALETTE
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -19,7 +19,263 @@ const supabase = createClient(
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-// ========== ANALYZE MULTIPLE IMAGES ==========
+// ========== COMPREHENSIVE COLOR PALETTE ==========
+
+const COLOR_PALETTE = {
+  // Pinks
+  'Pink': {
+    keywords: ['pink', 'rose', 'blush', 'salmon', 'coral', 'peach', 'dusty rose', 'mauve'],
+    rgb: { r: [180, 255], g: [150, 220], b: [150, 220] },
+    priority: 8
+  },
+  'Pale Pink': {
+    keywords: ['pale pink', 'light pink', 'baby pink', 'powder pink', 'pastel pink'],
+    rgb: { r: [220, 255], g: [190, 230], b: [190, 230] },
+    priority: 9
+  },
+  
+  // Reds
+  'Red': {
+    keywords: ['red', 'crimson', 'scarlet', 'cherry', 'ruby'],
+    rgb: { r: [180, 255], g: [0, 100], b: [0, 100] },
+    priority: 7
+  },
+  'Burgundy': {
+    keywords: ['burgundy', 'wine', 'maroon', 'bordeaux', 'oxblood'],
+    rgb: { r: [100, 180], g: [0, 80], b: [0, 80] },
+    priority: 7
+  },
+  
+  // Blues
+  'Blue': {
+    keywords: ['blue', 'azure', 'cobalt', 'royal blue', 'sapphire'],
+    rgb: { r: [0, 100], g: [0, 150], b: [150, 255] },
+    priority: 6
+  },
+  'Navy': {
+    keywords: ['navy', 'dark blue', 'midnight', 'marine'],
+    rgb: { r: [0, 50], g: [0, 50], b: [50, 150] },
+    priority: 6
+  },
+  'Light Blue': {
+    keywords: ['light blue', 'sky blue', 'baby blue', 'powder blue', 'pale blue'],
+    rgb: { r: [150, 220], g: [180, 230], b: [200, 255] },
+    priority: 6
+  },
+  'Denim': {
+    keywords: ['denim', 'jean'],
+    rgb: { r: [50, 120], g: [70, 140], b: [100, 180] },
+    priority: 3  // Lower priority - often background
+  },
+  
+  // Greens
+  'Green': {
+    keywords: ['green', 'emerald', 'forest', 'jade'],
+    rgb: { r: [0, 100], g: [100, 200], b: [0, 100] },
+    priority: 5
+  },
+  'Olive': {
+    keywords: ['olive', 'khaki', 'military', 'army'],
+    rgb: { r: [80, 150], g: [80, 150], b: [0, 80] },
+    priority: 5
+  },
+  'Mint': {
+    keywords: ['mint', 'sage', 'seafoam', 'pistachio'],
+    rgb: { r: [150, 220], g: [200, 255], b: [150, 220] },
+    priority: 5
+  },
+  
+  // Purples
+  'Purple': {
+    keywords: ['purple', 'violet', 'plum', 'amethyst'],
+    rgb: { r: [100, 200], g: [0, 100], b: [100, 200] },
+    priority: 5
+  },
+  'Lavender': {
+    keywords: ['lavender', 'lilac', 'mauve', 'periwinkle'],
+    rgb: { r: [180, 230], g: [150, 200], b: [200, 250] },
+    priority: 5
+  },
+  
+  // Neutrals
+  'White': {
+    keywords: ['white', 'ivory', 'cream', 'off-white', 'eggshell'],
+    rgb: { r: [230, 255], g: [230, 255], b: [230, 255] },
+    priority: 2  // Lower priority - often background
+  },
+  'Black': {
+    keywords: ['black', 'ebony', 'jet'],
+    rgb: { r: [0, 50], g: [0, 50], b: [0, 50] },
+    priority: 4
+  },
+  'Grey': {
+    keywords: ['grey', 'gray', 'charcoal', 'slate', 'ash', 'silver'],
+    rgb: { r: [100, 200], g: [100, 200], b: [100, 200] },
+    priority: 3
+  },
+  
+  // Browns/Beiges
+  'Brown': {
+    keywords: ['brown', 'chocolate', 'cocoa', 'coffee', 'espresso'],
+    rgb: { r: [80, 150], g: [50, 120], b: [20, 80] },
+    priority: 4
+  },
+  'Tan': {
+    keywords: ['tan', 'camel', 'taupe', 'sand', 'nude'],
+    rgb: { r: [180, 230], g: [150, 200], b: [100, 150] },
+    priority: 4
+  },
+  'Beige': {
+    keywords: ['beige', 'stone', 'oatmeal', 'natural', 'ecru'],
+    rgb: { r: [200, 240], g: [180, 220], b: [150, 200] },
+    priority: 4
+  },
+  
+  // Yellows/Oranges
+  'Yellow': {
+    keywords: ['yellow', 'gold', 'mustard', 'lemon', 'canary'],
+    rgb: { r: [200, 255], g: [180, 255], b: [0, 100] },
+    priority: 5
+  },
+  'Orange': {
+    keywords: ['orange', 'rust', 'terracotta', 'burnt orange', 'apricot'],
+    rgb: { r: [200, 255], g: [100, 180], b: [0, 100] },
+    priority: 5
+  }
+};
+
+// ========== RGB COLOR ANALYZER ==========
+
+function analyzeRGBColor(r, g, b) {
+  console.log(`🎨 Analyzing RGB(${r}, ${g}, ${b})`);
+  
+  let bestMatch = null;
+  let bestScore = 0;
+  
+  for (const [colorName, colorData] of Object.entries(COLOR_PALETTE)) {
+    const { rgb, priority } = colorData;
+    
+    // Check if RGB values fall within the color's range
+    const rMatch = r >= rgb.r[0] && r <= rgb.r[1];
+    const gMatch = g >= rgb.g[0] && g <= rgb.g[1];
+    const bMatch = b >= rgb.b[0] && b <= rgb.b[1];
+    
+    if (rMatch && gMatch && bMatch) {
+      // Calculate how well it matches (closer to center of range = better)
+      const rScore = 1 - Math.abs(r - (rgb.r[0] + rgb.r[1]) / 2) / ((rgb.r[1] - rgb.r[0]) / 2);
+      const gScore = 1 - Math.abs(g - (rgb.g[0] + rgb.g[1]) / 2) / ((rgb.g[1] - rgb.g[0]) / 2);
+      const bScore = 1 - Math.abs(b - (rgb.b[0] + rgb.b[1]) / 2) / ((rgb.b[1] - rgb.b[0]) / 2);
+      
+      const score = ((rScore + gScore + bScore) / 3) * priority;
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = colorName;
+      }
+    }
+  }
+  
+  if (bestMatch) {
+    console.log(`✅ RGB matched to: ${bestMatch} (score: ${bestScore.toFixed(2)})`);
+    return bestMatch;
+  }
+  
+  // Fallback to basic detection
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const diff = max - min;
+  
+  if (diff < 30) {
+    if ((r + g + b) / 3 > 230) return 'White';
+    if ((r + g + b) / 3 > 150) return 'Grey';
+    return 'Black';
+  }
+  
+  if (r > g && r > b) return 'Pink';  // Default to pink for reddish tones
+  if (b > r && b > g) return 'Blue';
+  if (g > r && g > b) return 'Green';
+  
+  return 'Neutral';
+}
+
+// ========== ENHANCED COLOR DETECTOR ==========
+
+function detectColor(labels, visionColors, dominantColors) {
+  console.log('\n🎨 === COLOR DETECTION ===');
+  console.log('Labels containing colors:', labels.filter(l => 
+    l.toLowerCase().match(/pink|blue|white|red|green|black|grey|brown|beige/)
+  ));
+  
+  const colorCandidates = [];
+  
+  // 1. Check dominant colors from image (if available)
+  if (dominantColors && dominantColors.length > 0) {
+    for (const colorData of dominantColors.slice(0, 5)) {
+      if (colorData.color && colorData.score > 0.1) { // Only consider significant colors
+        const { red = 0, green = 0, blue = 0 } = colorData.color;
+        const colorName = analyzeRGBColor(
+          Math.round(red * 255),
+          Math.round(green * 255),
+          Math.round(blue * 255)
+        );
+        
+        if (colorName && colorName !== 'White' && colorName !== 'Grey') {
+          colorCandidates.push({
+            name: colorName,
+            score: colorData.score * COLOR_PALETTE[colorName].priority,
+            source: 'rgb'
+          });
+        }
+      }
+    }
+  }
+  
+  // 2. Check labels for color keywords
+  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
+  
+  for (const [colorName, colorData] of Object.entries(COLOR_PALETTE)) {
+    for (const keyword of colorData.keywords) {
+      if (labelsText.includes(keyword)) {
+        // Skip denim if it's in clothing/garment context
+        if (keyword === 'denim' && labelsText.includes('clothing')) {
+          continue;
+        }
+        
+        colorCandidates.push({
+          name: colorName,
+          score: colorData.priority,
+          source: 'label'
+        });
+        break;
+      }
+    }
+  }
+  
+  // Sort by score and pick the best
+  colorCandidates.sort((a, b) => b.score - a.score);
+  
+  console.log('Color candidates:', colorCandidates.slice(0, 5));
+  
+  if (colorCandidates.length > 0) {
+    // Filter out background colors if we have garment colors
+    const garmentColors = colorCandidates.filter(c => 
+      !['White', 'Grey', 'Denim'].includes(c.name) || c.source === 'rgb'
+    );
+    
+    if (garmentColors.length > 0) {
+      console.log(`✅ Selected color: ${garmentColors[0].name}`);
+      return garmentColors[0].name;
+    }
+    
+    console.log(`✅ Selected color: ${colorCandidates[0].name}`);
+    return colorCandidates[0].name;
+  }
+  
+  console.log('⚠️ No color detected, defaulting to Neutral');
+  return 'Neutral';
+}
+
+// ========== ANALYZE IMAGES WITH COLOR FOCUS ==========
 
 async function analyzeAllImages(imageUrls) {
   const allTextData = {
@@ -27,12 +283,12 @@ async function analyzeAllImages(imageUrls) {
     textBlocks: [],
     labels: new Set(),
     logos: new Set(),
-    objects: new Set(),
-    colors: new Set()
+    dominantColors: []
   };
   
   console.log(`📸 Analyzing ${imageUrls.length} images...`);
   
+  // Prioritize first image for color detection (main product shot)
   for (let i = 0; i < Math.min(imageUrls.length, 3); i++) {
     try {
       const imageBase64 = await fetchImageAsBase64(imageUrls[i]);
@@ -51,51 +307,22 @@ async function analyzeAllImages(imageUrls) {
           });
         }
         
-        // Get labels - including colors
+        // Get labels
         if (visionData.labelAnnotations) {
           visionData.labelAnnotations.forEach(l => {
             allTextData.labels.add(l.description);
-            
-            // Check for color-related labels
-            const labelLower = l.description.toLowerCase();
-            const colorWords = [
-              'pink', 'rose', 'blush', 'salmon', 'coral', 'peach',
-              'white', 'cream', 'ivory', 'beige', 'nude',
-              'blue', 'navy', 'denim', 'azure', 'cobalt',
-              'black', 'charcoal', 'grey', 'gray', 'silver',
-              'red', 'burgundy', 'wine', 'maroon', 'crimson',
-              'green', 'olive', 'khaki', 'emerald', 'mint',
-              'purple', 'violet', 'plum', 'lavender', 'lilac',
-              'brown', 'tan', 'camel', 'chocolate', 'taupe',
-              'yellow', 'mustard', 'gold', 'lemon',
-              'orange', 'rust', 'burnt'
-            ];
-            
-            for (const colorWord of colorWords) {
-              if (labelLower.includes(colorWord)) {
-                allTextData.colors.add(colorWord);
-                console.log(`🎨 Color detected in label: ${colorWord}`);
-              }
-            }
           });
         }
         
-        // Check image properties for dominant colors
-        if (visionData.imagePropertiesAnnotation?.dominantColors?.colors) {
-          const dominantColors = visionData.imagePropertiesAnnotation.dominantColors.colors;
-          console.log('🎨 Dominant colors from Vision API:', dominantColors.slice(0, 3));
-          
-          // Analyze RGB values to determine actual color
-          for (const colorData of dominantColors.slice(0, 3)) {
-            if (colorData.color) {
-              const { red = 0, green = 0, blue = 0 } = colorData.color;
-              const colorName = rgbToColorName(red, green, blue);
-              if (colorName) {
-                allTextData.colors.add(colorName);
-                console.log(`🎨 Color from RGB (${red},${green},${blue}): ${colorName}`);
-              }
-            }
-          }
+        // Get dominant colors from first image mainly
+        if (i === 0 && visionData.imagePropertiesAnnotation?.dominantColors?.colors) {
+          allTextData.dominantColors = visionData.imagePropertiesAnnotation.dominantColors.colors;
+          console.log(`🎨 Image ${i + 1} dominant colors:`, 
+            allTextData.dominantColors.slice(0, 3).map(c => ({
+              rgb: `(${Math.round((c.color?.red || 0) * 255)}, ${Math.round((c.color?.green || 0) * 255)}, ${Math.round((c.color?.blue || 0) * 255)})`,
+              score: c.score?.toFixed(2)
+            }))
+          );
         }
         
         // Get logos
@@ -117,136 +344,14 @@ async function analyzeAllImages(imageUrls) {
     lines: allTextData.fullText.split('\n').filter(l => l.trim()),
     labels: Array.from(allTextData.labels),
     logos: Array.from(allTextData.logos),
-    objects: Array.from(allTextData.objects),
-    colors: Array.from(allTextData.colors)
+    dominantColors: allTextData.dominantColors
   };
 }
 
-// ========== RGB TO COLOR NAME CONVERTER ==========
-
-function rgbToColorName(r, g, b) {
-  // Normalize RGB values (0-255)
-  const red = Math.round(r);
-  const green = Math.round(g);
-  const blue = Math.round(b);
-  
-  // Calculate color properties
-  const max = Math.max(red, green, blue);
-  const min = Math.min(red, green, blue);
-  const diff = max - min;
-  const sum = red + green + blue;
-  const avg = sum / 3;
-  
-  console.log(`🔍 Analyzing RGB(${red}, ${green}, ${blue}) - Avg: ${avg}, Diff: ${diff}`);
-  
-  // Check for grayscale (including white)
-  if (diff < 30) {
-    if (avg > 230) return 'white';
-    if (avg > 200) return 'light grey';
-    if (avg > 150) return 'grey';
-    if (avg > 80) return 'dark grey';
-    return 'black';
-  }
-  
-  // Check for pale pink (high values with red slightly higher)
-  if (red > 200 && green > 180 && blue > 180 && red > green && red > blue) {
-    if (red - green < 30 && red - blue < 40) {
-      return 'pink'; // Pale pink/blush
-    }
-  }
-  
-  // Check for pink/rose tones
-  if (red > green && red > blue) {
-    if (red > 200 && green < 180 && blue < 180) return 'pink';
-    if (red > 180 && green < 150) return 'rose';
-    if (red > 150) return 'coral';
-  }
-  
-  // Check for blue tones
-  if (blue > red && blue > green) {
-    if (blue > 200) return 'light blue';
-    if (blue > 150) return 'blue';
-    if (blue > 100 && green < 100 && red < 100) return 'navy';
-  }
-  
-  // Check for green tones
-  if (green > red && green > blue) {
-    if (green > 200) return 'light green';
-    if (green > 150) return 'green';
-    if (green > 100 && red > 80) return 'olive';
-  }
-  
-  // Check for yellow/beige tones
-  if (red > 200 && green > 200 && blue < 180) {
-    if (blue < 150) return 'yellow';
-    return 'beige';
-  }
-  
-  // Check for brown tones
-  if (red > green && green > blue && red < 180) {
-    return 'brown';
-  }
-  
-  // Default for unclear colors
-  return null;
-}
-
-// ========== ENHANCED COLOR DETECTOR ==========
-
-function detectColor(labels, colors) {
-  console.log('\n🎨 COLOR DETECTION');
-  console.log('Colors found:', colors);
-  console.log('Labels (first 10):', labels.slice(0, 10));
-  
-  // Priority 1: Check detected colors from RGB analysis
-  if (colors.length > 0) {
-    // Filter out generic colors if we have specific ones
-    const specificColors = colors.filter(c => !['white', 'grey', 'black'].includes(c));
-    if (specificColors.length > 0) {
-      const color = specificColors[0];
-      console.log(`✅ Using specific color: ${color}`);
-      return color.charAt(0).toUpperCase() + color.slice(1);
-    }
-    
-    // Use first color found
-    const color = colors[0];
-    console.log(`✅ Using detected color: ${color}`);
-    return color.charAt(0).toUpperCase() + color.slice(1);
-  }
-  
-  // Priority 2: Check labels for color words
-  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
-  
-  const colorMap = [
-    { name: 'Pink', keywords: ['pink', 'rose', 'blush', 'salmon'] },
-    { name: 'Red', keywords: ['red', 'crimson', 'burgundy', 'scarlet'] },
-    { name: 'Blue', keywords: ['blue', 'navy', 'denim', 'azure'] },
-    { name: 'Green', keywords: ['green', 'olive', 'khaki', 'emerald'] },
-    { name: 'Purple', keywords: ['purple', 'violet', 'plum', 'lavender'] },
-    { name: 'Yellow', keywords: ['yellow', 'mustard', 'gold'] },
-    { name: 'Orange', keywords: ['orange', 'coral', 'peach'] },
-    { name: 'Brown', keywords: ['brown', 'tan', 'beige', 'camel'] },
-    { name: 'Grey', keywords: ['grey', 'gray', 'charcoal'] },
-    { name: 'Black', keywords: ['black'] },
-    { name: 'White', keywords: ['white', 'cream', 'ivory'] }
-  ];
-  
-  for (const { name, keywords } of colorMap) {
-    if (keywords.some(keyword => labelsText.includes(keyword))) {
-      console.log(`✅ Color from labels: ${name}`);
-      return name;
-    }
-  }
-  
-  console.log('⚠️ No color detected, using Neutral');
-  return 'Neutral';
-}
-
-// ========== OTHER DETECTORS (keep existing) ==========
+// ========== OTHER DETECTORS (keep as is) ==========
 
 function detectBrand(textData) {
   const { textUpper, textBlocks } = textData;
-  
   const brands = ['OSKA', 'CHILDISH', 'ZARA', 'H&M', 'NIKE', 'ADIDAS'];
   
   for (const brand of brands) {
@@ -255,7 +360,6 @@ function detectBrand(textData) {
       return brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase();
     }
   }
-  
   return 'Unbranded';
 }
 
@@ -263,35 +367,20 @@ function detectSize(textData, brand) {
   const { textBlocks } = textData;
   
   if (brand === 'Oska') {
-    const oskaRomanSizes = {
-      'I': '1',
-      'II': '2',
-      'III': '3',
-      'IV': '4',
-      'V': '5'
-    };
-    
+    const oskaRomanSizes = { 'I': '1', 'II': '2', 'III': '3', 'IV': '4', 'V': '5' };
     for (const block of textBlocks) {
-      if (oskaRomanSizes[block.trim()]) {
-        return oskaRomanSizes[block.trim()];
-      }
-      // Check for misread II
-      if (block === '11' || block === 'll') {
-        return '2';
-      }
+      if (oskaRomanSizes[block.trim()]) return oskaRomanSizes[block.trim()];
+      if (block === '11' || block === 'll') return '2';
     }
-    
-    return '2'; // Default for Oska
+    return '2';
   }
   
-  // Standard sizes
   const validSizes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'];
   for (const block of textBlocks) {
     if (validSizes.includes(block.toUpperCase().trim())) {
       return block.toUpperCase().trim();
     }
   }
-  
   return 'One Size';
 }
 
@@ -303,20 +392,11 @@ function detectGarmentType(labels, brand) {
     if (labelsText.includes('tunic')) return 'Tunic';
     if (labelsText.includes('vest') || labelsText.includes('sleeveless')) return 'Top';
     if (labelsText.includes('trouser')) return 'Trousers';
-    return 'Top'; // Default for Oska
+    return 'Top';
   }
   
-  // Check garment types
   if (labelsText.includes('vest') || labelsText.includes('tank')) return 'Vest';
   if (labelsText.includes('dress')) return 'Dress';
-  if (labelsText.includes('jeans')) return 'Jeans';
-  if (labelsText.includes('trouser')) return 'Trousers';
-  if (labelsText.includes('hoodie')) return 'Hoodie';
-  if (labelsText.includes('sweatshirt')) return 'Sweatshirt';
-  if (labelsText.includes('jumper')) return 'Jumper';
-  if (labelsText.includes('t-shirt')) return 'T-Shirt';
-  if (labelsText.includes('shirt')) return 'Shirt';
-  
   if (labelsText.includes('sleeveless')) return 'Top';
   
   return 'Top';
@@ -353,7 +433,7 @@ async function analyzeWithGoogleVision(imageBase64) {
             { type: 'TEXT_DETECTION', maxResults: 100 },
             { type: 'LABEL_DETECTION', maxResults: 50 },
             { type: 'LOGO_DETECTION', maxResults: 10 },
-            { type: 'IMAGE_PROPERTIES', maxResults: 10 } // Add color detection
+            { type: 'IMAGE_PROPERTIES', maxResults: 1 } // Get dominant colors
           ]
         }]
       })
@@ -387,9 +467,8 @@ export async function POST(request) {
     const brand = detectBrand(combinedData);
     const size = detectSize(combinedData, brand);
     const garmentType = detectGarmentType(combinedData.labels, brand);
-    const color = detectColor(combinedData.labels, combinedData.colors);
+    const color = detectColor(combinedData.labels, [], combinedData.dominantColors);
     
-    // Material detection
     let material = 'Cotton';
     if (brand === 'Oska') material = 'Linen';
     if (combinedData.textUpper.includes('LINEN')) material = 'Linen';
@@ -403,19 +482,9 @@ export async function POST(request) {
     console.log('Size:', size);
     console.log('Color:', color);
     
-    // Build title
     const gender = brand === 'Oska' ? 'Womens' : 'Womens';
     
-    const titleParts = [
-      brand,
-      garmentType,
-      gender,
-      'Size',
-      size,
-      color,
-      material
-    ];
-    
+    const titleParts = [brand, garmentType, gender, 'Size', size, color, material];
     let title = titleParts.join(' ');
     
     for (const keyword of keywords.slice(0, 3)) {
@@ -424,13 +493,8 @@ export async function POST(request) {
       }
     }
     
-    if (title.length + 7 <= 80) {
-      title += ' VGC UK';
-    }
-    
-    if (title.length > 80) {
-      title = title.substring(0, 80).trim();
-    }
+    if (title.length + 7 <= 80) title += ' VGC UK';
+    if (title.length > 80) title = title.substring(0, 80).trim();
     
     const analysis = {
       brand,
@@ -445,16 +509,10 @@ export async function POST(request) {
       condition_score: 7
     };
     
-    return NextResponse.json({
-      success: true,
-      analysis
-    });
+    return NextResponse.json({ success: true, analysis });
     
   } catch (error) {
     console.error('Error:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Analysis failed'
-    }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Analysis failed' }, { status: 500 });
   }
 }
