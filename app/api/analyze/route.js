@@ -1,5 +1,5 @@
 // app/api/analyze/route.js
-// DEBUG VERSION - Log everything Vision API returns
+// FIXED: Analyze ALL images, handle OSKA Roman numerals
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -13,95 +13,86 @@ const supabase = createClient(
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-// ========== DEBUG: LOG ALL VISION DATA ==========
+// ========== ANALYZE MULTIPLE IMAGES ==========
 
-function extractAndLogTextFromVision(visionData) {
-  const fullText = visionData?.textAnnotations?.[0]?.description || '';
-  const textBlocks = visionData?.textAnnotations?.slice(1).map(t => t.description) || [];
-  
-  console.log('\n🔍 ===== VISION API TEXT EXTRACTION =====');
-  console.log('📝 FULL TEXT (first 500 chars):');
-  console.log(fullText.substring(0, 500));
-  console.log('\n📝 TEXT BLOCKS (individual words detected):');
-  textBlocks.forEach((block, index) => {
-    console.log(`  ${index}: "${block}"`);
-  });
-  console.log('\n📝 LINES FROM TEXT:');
-  const lines = fullText.split('\n').filter(l => l.trim());
-  lines.forEach((line, index) => {
-    console.log(`  Line ${index}: "${line}"`);
-  });
-  console.log('===== END VISION DATA =====\n');
-  
-  return {
-    fullText,
-    textBlocks,
-    textUpper: fullText.toUpperCase(),
-    lines
+async function analyzeAllImages(imageUrls) {
+  const allTextData = {
+    fullText: '',
+    textBlocks: [],
+    labels: new Set(),
+    logos: new Set(),
+    objects: new Set()
   };
-}
-
-// ========== SIZE DETECTOR WITH LOGGING ==========
-
-function detectSize(textData) {
-  const { textUpper, textBlocks, lines } = textData;
   
-  console.log('\n🔎 SIZE DETECTION ATTEMPTS:');
+  console.log(`📸 Analyzing ${imageUrls.length} images...`);
   
-  // Check each text block
-  const validSizes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-  console.log('Checking text blocks for sizes...');
-  for (let i = 0; i < textBlocks.length; i++) {
-    const block = textBlocks[i].toUpperCase().trim();
-    if (validSizes.includes(block)) {
-      console.log(`  ✅ FOUND SIZE "${block}" at position ${i}`);
-      return block;
-    }
-    // Log near-misses
-    if (block.length <= 3 && block.match(/[SML]/)) {
-      console.log(`  ❓ Potential size candidate: "${block}" at position ${i}`);
-    }
-  }
-  
-  // Check lines
-  console.log('Checking lines for size patterns...');
-  for (const line of lines) {
-    const lineUpper = line.toUpperCase().trim();
-    console.log(`  Checking line: "${lineUpper}"`);
+  // Analyze EACH image
+  for (let i = 0; i < Math.min(imageUrls.length, 3); i++) { // Analyze first 3 images
+    console.log(`Analyzing image ${i + 1}...`);
     
-    if (validSizes.includes(lineUpper)) {
-      console.log(`    ✅ FOUND SIZE AS COMPLETE LINE: ${lineUpper}`);
-      return lineUpper;
-    }
+    const imageBase64 = await fetchImageAsBase64(imageUrls[i]);
+    const visionData = await analyzeWithGoogleVision(imageBase64);
     
-    if (lineUpper.includes('SIZE')) {
-      console.log(`    💡 Line contains "SIZE": "${lineUpper}"`);
-      // Try to extract size after "SIZE"
-      const afterSize = lineUpper.split('SIZE')[1]?.trim();
-      if (afterSize) {
-        const firstWord = afterSize.split(' ')[0].replace(/[^A-Z0-9]/g, '');
-        if (validSizes.includes(firstWord)) {
-          console.log(`    ✅ FOUND SIZE AFTER "SIZE": ${firstWord}`);
-          return firstWord;
-        }
+    if (visionData) {
+      // Combine text from all images
+      if (visionData.textAnnotations?.[0]) {
+        allTextData.fullText += ' ' + visionData.textAnnotations[0].description;
+      }
+      
+      // Collect all text blocks
+      if (visionData.textAnnotations) {
+        visionData.textAnnotations.slice(1).forEach(t => {
+          allTextData.textBlocks.push(t.description);
+        });
+      }
+      
+      // Collect labels
+      if (visionData.labelAnnotations) {
+        visionData.labelAnnotations.forEach(l => {
+          allTextData.labels.add(l.description);
+        });
+      }
+      
+      // Collect logos
+      if (visionData.logoAnnotations) {
+        visionData.logoAnnotations.forEach(l => {
+          allTextData.logos.add(l.description);
+        });
+      }
+      
+      // Collect objects
+      if (visionData.localizedObjectAnnotations) {
+        visionData.localizedObjectAnnotations.forEach(o => {
+          allTextData.objects.add(o.name);
+        });
       }
     }
   }
   
-  console.log('❌ No size found in any format');
-  return 'Check Photos';
+  return {
+    fullText: allTextData.fullText,
+    textBlocks: allTextData.textBlocks,
+    textUpper: allTextData.fullText.toUpperCase(),
+    lines: allTextData.fullText.split('\n').filter(l => l.trim()),
+    labels: Array.from(allTextData.labels),
+    logos: Array.from(allTextData.logos),
+    objects: Array.from(allTextData.objects)
+  };
 }
 
-// ========== OTHER DETECTORS ==========
+// ========== BRAND DETECTOR WITH OSKA ==========
 
 function detectBrand(textData, logos) {
   const { textUpper, textBlocks } = textData;
   
+  // Extended brand list including OSKA
   const brands = [
-    'CHILDISH', 'ZARA', 'H&M', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK',
-    'TOPSHOP', 'ASOS', 'RIVER ISLAND', 'UNIQLO', 'GAP', 'MANGO'
+    'OSKA', 'CHILDISH', 'ZARA', 'H&M', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK',
+    'TOPSHOP', 'ASOS', 'RIVER ISLAND', 'UNIQLO', 'GAP', 'MANGO', 'COS',
+    'WHISTLES', 'REISS', 'TOAST', 'ME+EM', 'JIGSAW', 'BODEN'
   ];
   
+  // Check main text
   for (const brand of brands) {
     if (textUpper.includes(brand)) {
       console.log(`✅ Brand found: ${brand}`);
@@ -109,7 +100,16 @@ function detectBrand(textData, logos) {
     }
   }
   
-  if (logos?.length > 0) {
+  // Check individual text blocks
+  for (const block of textBlocks) {
+    const blockUpper = block.toUpperCase();
+    if (brands.includes(blockUpper)) {
+      console.log(`✅ Brand found in block: ${blockUpper}`);
+      return block;
+    }
+  }
+  
+  if (logos && logos.length > 0) {
     console.log(`✅ Brand from logo: ${logos[0]}`);
     return logos[0];
   }
@@ -117,65 +117,163 @@ function detectBrand(textData, logos) {
   return 'Unbranded';
 }
 
-function detectGarmentType(labels, textData) {
-  const labelsText = labels.map(l => l.toLowerCase()).join(' ');
+// ========== SIZE DETECTOR WITH ROMAN NUMERALS ==========
+
+function detectSize(textData) {
+  const { textUpper, textBlocks, lines } = textData;
   
-  console.log('\n🔎 GARMENT DETECTION:');
-  console.log('Labels:', labels.slice(0, 10));
+  console.log('🔍 SIZE DETECTION:');
+  console.log('Text blocks:', textBlocks.slice(0, 20));
   
-  const longSleeveIndicators = [
-    'long sleeve', 'sweater', 'jumper', 'sweatshirt', 
-    'pullover', 'crew neck'
-  ];
+  // OSKA uses Roman numerals for sizes
+  const romanSizes = {
+    'I': '1',
+    'II': '2',
+    'III': '3',
+    'IV': '4',
+    'V': '5'
+  };
   
-  const hasLongSleeves = longSleeveIndicators.some(indicator => 
-    labelsText.includes(indicator)
-  );
+  // Check for Roman numeral sizes
+  for (const [roman, numeric] of Object.entries(romanSizes)) {
+    // Check exact matches in text blocks
+    if (textBlocks.includes(roman)) {
+      console.log(`✅ OSKA size found: ${roman} = Size ${numeric}`);
+      return numeric;
+    }
+    // Check in lines
+    for (const line of lines) {
+      if (line.trim() === roman) {
+        console.log(`✅ OSKA size found in line: ${roman} = Size ${numeric}`);
+        return numeric;
+      }
+    }
+  }
+  
+  // Standard size detection
+  const validSizes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'];
+  for (const block of textBlocks) {
+    const blockUpper = block.toUpperCase().trim();
+    if (validSizes.includes(blockUpper)) {
+      console.log(`✅ Standard size found: ${blockUpper}`);
+      return blockUpper;
+    }
+  }
+  
+  // Numeric sizes
+  const numericPattern = /\b(\d{1,2})\b/;
+  for (const block of textBlocks) {
+    const match = block.match(numericPattern);
+    if (match && parseInt(match[1]) >= 6 && parseInt(match[1]) <= 20) {
+      console.log(`✅ Numeric size found: ${match[1]}`);
+      return match[1];
+    }
+  }
+  
+  return 'One Size';
+}
+
+// ========== GARMENT DETECTOR ==========
+
+function detectGarmentType(labels, objects, textData) {
+  const allLabels = [...labels, ...objects].map(l => l.toLowerCase()).join(' ');
+  
+  console.log('🔍 GARMENT DETECTION:');
+  console.log('Labels found:', labels.slice(0, 10));
+  
+  // Check for specific garment types
+  if (allLabels.includes('vest') || allLabels.includes('tank')) {
+    return 'Vest';
+  }
+  if (allLabels.includes('sleeveless') && allLabels.includes('top')) {
+    return 'Top';
+  }
+  if (allLabels.includes('blouse')) {
+    return 'Blouse';
+  }
+  if (allLabels.includes('tunic')) {
+    return 'Tunic';
+  }
+  
+  // Check for sleeves
+  const hasNoSleeves = allLabels.includes('sleeveless') || allLabels.includes('vest');
+  const hasLongSleeves = allLabels.includes('long sleeve') || allLabels.includes('sweater');
+  
+  if (hasNoSleeves) {
+    return 'Top'; // Sleeveless top/vest
+  }
   
   if (hasLongSleeves) {
-    console.log('✅ Long sleeves detected - NOT T-Shirt');
-    if (labelsText.includes('hood')) return 'Hoodie';
-    if (labelsText.includes('sweat')) return 'Sweatshirt';
+    if (allLabels.includes('hood')) return 'Hoodie';
+    if (allLabels.includes('sweat')) return 'Sweatshirt';
     return 'Jumper';
   }
   
-  if (labelsText.includes('t-shirt') && !labelsText.includes('long')) {
-    console.log('✅ T-Shirt detected');
-    return 'T-Shirt';
+  // Check for other types
+  if (allLabels.includes('dress')) return 'Dress';
+  if (allLabels.includes('skirt')) return 'Skirt';
+  if (allLabels.includes('trousers') || allLabels.includes('pants')) return 'Trousers';
+  if (allLabels.includes('jeans')) return 'Jeans';
+  if (allLabels.includes('jacket')) return 'Jacket';
+  
+  // Default based on what we see
+  if (allLabels.includes('clothing') || allLabels.includes('garment')) {
+    return 'Top';
   }
   
-  if (labelsText.includes('jeans')) return 'Jeans';
-  if (labelsText.includes('trousers')) return 'Trousers';
-  if (labelsText.includes('dress')) return 'Dress';
-  
-  console.log('⚠️ Defaulting to Jumper');
-  return 'Jumper';
+  return 'Top';
 }
+
+// ========== MATERIAL DETECTOR ==========
 
 function detectMaterial(textData) {
   const { textUpper } = textData;
   
-  const materials = ['Cotton', 'Polyester', 'Jersey', 'Fleece', 'Wool'];
+  // Check for percentage compositions first
+  const compositionPattern = /(\d{1,3})[%\s]*(COTTON|POLYESTER|LINEN|VISCOSE|WOOL|SILK)/g;
+  const matches = textUpper.matchAll(compositionPattern);
+  
+  for (const match of matches) {
+    console.log(`✅ Material found: ${match[1]}% ${match[2]}`);
+    // Return the main material
+    return match[2].charAt(0) + match[2].slice(1).toLowerCase();
+  }
+  
+  // Check for material words
+  const materials = ['Linen', 'Cotton', 'Silk', 'Wool', 'Polyester', 'Viscose'];
   for (const material of materials) {
     if (textUpper.includes(material.toUpperCase())) {
+      console.log(`✅ Material found: ${material}`);
       return material;
     }
   }
   
-  return 'Cotton';
+  return 'See Label';
 }
+
+// ========== COLOR DETECTOR ==========
 
 function detectColor(labels) {
   const labelsText = labels.map(l => l.toLowerCase()).join(' ');
   
-  const colors = ['Black', 'White', 'Grey', 'Navy', 'Blue', 'Red', 'Green'];
+  // Check for specific colors
+  const colors = [
+    'Pink', 'Rose', 'Blush', 'Coral',
+    'White', 'Cream', 'Ivory', 'Beige',
+    'Black', 'Grey', 'Charcoal',
+    'Blue', 'Navy', 'Denim',
+    'Red', 'Burgundy', 'Wine',
+    'Green', 'Olive', 'Khaki',
+    'Brown', 'Tan', 'Camel'
+  ];
+  
   for (const color of colors) {
     if (labelsText.includes(color.toLowerCase())) {
       return color;
     }
   }
   
-  return 'Multi';
+  return 'Neutral';
 }
 
 // ========== MAIN FUNCTIONS ==========
@@ -227,7 +325,7 @@ async function analyzeWithGoogleVision(imageBase64) {
 // ========== MAIN HANDLER ==========
 
 export async function POST(request) {
-  console.log('\n🚀 === ANALYSIS START (DEBUG MODE) ===');
+  console.log('\n🚀 === MULTI-IMAGE ANALYSIS ===');
   
   try {
     const body = await request.json();
@@ -240,26 +338,18 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    const imageBase64 = await fetchImageAsBase64(imageUrls[0]);
-    const visionData = await analyzeWithGoogleVision(imageBase64);
+    // Analyze ALL images, not just the first
+    const combinedData = await analyzeAllImages(imageUrls);
     
-    if (!visionData) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Image analysis failed' 
-      }, { status: 500 });
-    }
+    // Detect all attributes
+    const brand = detectBrand(combinedData, combinedData.logos);
+    const size = detectSize(combinedData);
+    const garmentType = detectGarmentType(combinedData.labels, combinedData.objects, combinedData);
+    const material = detectMaterial(combinedData);
+    const color = detectColor(combinedData.labels);
     
-    // Extract and log all text data
-    const textData = extractAndLogTextFromVision(visionData);
-    const labels = visionData.labelAnnotations?.map(l => l.description) || [];
-    const logos = visionData.logoAnnotations?.map(l => l.description) || [];
-    
-    const brand = detectBrand(textData, logos);
-    const size = detectSize(textData);
-    const garmentType = detectGarmentType(labels, textData);
-    const material = detectMaterial(textData);
-    const color = detectColor(labels);
+    // Determine gender (OSKA is primarily women's)
+    const gender = brand === 'Oska' ? 'Womens' : 'Womens';
     
     console.log('\n📊 FINAL RESULTS:');
     console.log('Brand:', brand);
@@ -272,7 +362,7 @@ export async function POST(request) {
     const titleParts = [
       brand,
       garmentType,
-      'Unisex',
+      gender,
       'Size',
       size,
       color,
@@ -282,13 +372,14 @@ export async function POST(request) {
     let title = titleParts.join(' ');
     
     // Add keywords
-    const keywords = ['VGC', 'UK', 'Genuine'];
-    if (garmentType === 'Jumper' || garmentType === 'Sweatshirt') {
-      keywords.unshift('Warm');
+    const keywords = [];
+    if (brand === 'Oska') {
+      keywords.push('Designer', 'Lagenlook');
     }
-    if (brand === 'Childish') {
-      keywords.unshift('Streetwear');
+    if (material === 'Linen') {
+      keywords.push('Natural', 'Breathable');
     }
+    keywords.push('VGC', 'UK');
     
     for (const keyword of keywords) {
       if (title.length + keyword.length + 1 <= 80) {
@@ -303,17 +394,17 @@ export async function POST(request) {
     const analysis = {
       brand: brand,
       item_type: garmentType,
-      gender: 'Unisex',
+      gender: gender,
       size: size,
       color: color,
       material: material,
       keywords: keywords.slice(0, 5),
       ebay_title: title,
-      suggested_price: 15,
+      suggested_price: brand === 'Oska' ? 35 : 15, // OSKA is designer
       condition_score: 7,
       condition_text: 'Good',
-      description: `${brand} ${garmentType.toLowerCase()}. Size ${size}. ${material}. Very good condition.`,
-      category: `Clothing > ${garmentType}s`,
+      description: `${brand} ${garmentType.toLowerCase()} in ${color.toLowerCase()}. Size ${size}. ${material} construction. Excellent condition.`,
+      category: `Womens Clothing > Tops`,
       id: `analysis-${Date.now()}`,
       sku: `${brand.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-6)}`,
       images_count: imageUrls.length,
@@ -338,6 +429,6 @@ export async function POST(request) {
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
-    version: '11.0-debug'
+    version: '12.0 - Multi-image & OSKA support'
   });
 }
