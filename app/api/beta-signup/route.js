@@ -1,31 +1,38 @@
 // app/api/beta-signup/route.js
-// WORKING VERSION WITH PROPER SUPABASE CONNECTION
+// FIXED VERSION WITH EXPLICIT SCHEMA REFERENCE
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Debug: Log environment variables (remove in production)
+console.log('Supabase URL exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log('Supabase Key exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables');
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing Supabase credentials');
+  console.error('URL:', supabaseUrl);
+  console.error('Key exists:', !!supabaseKey);
 }
 
-const supabase = createClient(
-  supabaseUrl || '',
-  supabaseAnonKey || ''
-);
+const supabase = createClient(supabaseUrl || '', supabaseKey || '', {
+  db: {
+    schema: 'public'
+  },
+  auth: {
+    persistSession: false
+  }
+});
 
 export async function POST(request) {
-  console.log('=== Beta Signup Request ===');
+  console.log('=== Beta Signup POST Request ===');
   
   try {
-    // Parse request body
     const body = await request.json();
-    console.log('Received data for:', body.email);
+    console.log('Email:', body.email);
     
-    // Validate email
     if (!body.email) {
       return NextResponse.json(
         { error: 'Email is required' },
@@ -33,160 +40,121 @@ export async function POST(request) {
       );
     }
     
-    const email = body.email.toLowerCase().trim();
-    
-    // First, test if we can connect to the table
-    console.log('Testing database connection...');
-    const { error: testError } = await supabase
+    // Test connection with a simple query
+    console.log('Testing Supabase connection...');
+    const { data: testData, error: testError } = await supabase
       .from('beta_signups')
-      .select('count(*)', { count: 'exact', head: true });
+      .select('id')
+      .limit(1);
     
     if (testError) {
-      console.error('Database test failed:', testError);
-      return NextResponse.json(
-        { 
-          error: 'Database configuration error. Table may not exist.',
-          details: testError.message,
-          hint: 'Please run the SQL setup script in Supabase'
-        },
-        { status: 500 }
-      );
+      console.error('❌ Connection test failed:', testError);
+      console.error('Error code:', testError.code);
+      console.error('Error message:', testError.message);
+      console.error('Error details:', testError.details);
+      console.error('Error hint:', testError.hint);
+      
+      return NextResponse.json({
+        error: 'Cannot connect to database',
+        details: testError.message,
+        code: testError.code,
+        hint: 'Check Supabase environment variables'
+      }, { status: 500 });
     }
     
-    // Check if email already exists
-    console.log('Checking if email exists...');
-    const { data: existing, error: checkError } = await supabase
+    console.log('✅ Connection successful');
+    
+    // Check for existing email
+    const { data: existing } = await supabase
       .from('beta_signups')
       .select('email')
-      .eq('email', email)
+      .eq('email', body.email.toLowerCase())
       .maybeSingle();
     
-    if (checkError) {
-      console.error('Check error:', checkError);
-      // Continue anyway - might be a permissions issue
-    }
-    
     if (existing) {
-      console.log('Email already registered');
       return NextResponse.json(
-        { error: 'This email is already registered for beta access' },
+        { error: 'Email already registered' },
         { status: 400 }
       );
     }
     
-    // Prepare data with all fields
-    const signupData = {
-      email: email,
-      name: body.name || null,
-      business_type: body.business_type || 'individual',
-      monthly_items: body.monthly_items || '0-25',
-      platforms: body.platforms || [],
-      experience_level: body.experience_level || 'beginner',
-      biggest_challenge: body.biggest_challenge || null,
-      features_interested: body.features_interested || [],
-      referral_source: body.referral_source || 'direct',
-      additional_notes: body.additional_notes || null,
-      status: 'pending'
-    };
-    
-    console.log('Inserting signup data...');
-    
-    // Insert the signup
-    const { data, error: insertError } = await supabase
+    // Insert new signup
+    const { data, error } = await supabase
       .from('beta_signups')
-      .insert([signupData])
+      .insert([{
+        email: body.email.toLowerCase(),
+        name: body.name || null,
+        business_type: 'individual',
+        monthly_items: '0-25',
+        platforms: ['eBay UK', 'Vinted'],
+        experience_level: 'beginner',
+        status: 'pending'
+      }])
       .select()
       .single();
     
-    if (insertError) {
-      console.error('Insert error:', insertError);
-      
-      // Detailed error messages
-      if (insertError.code === '23505') {
-        return NextResponse.json(
-          { error: 'This email is already registered' },
-          { status: 400 }
-        );
-      }
-      
-      if (insertError.code === '42P01') {
-        return NextResponse.json(
-          { 
-            error: 'Database table does not exist',
-            hint: 'Please run the SQL setup in Supabase'
-          },
-          { status: 500 }
-        );
-      }
-      
-      if (insertError.code === '42703') {
-        return NextResponse.json(
-          { 
-            error: 'Database column missing',
-            details: insertError.message,
-            hint: 'Please run the updated SQL schema'
-          },
-          { status: 500 }
-        );
-      }
-      
-      return NextResponse.json(
-        { 
-          error: 'Failed to save signup',
-          details: insertError.message
-        },
-        { status: 500 }
-      );
+    if (error) {
+      console.error('❌ Insert error:', error);
+      return NextResponse.json({
+        error: 'Failed to save signup',
+        details: error.message
+      }, { status: 500 });
     }
     
     console.log('✅ Signup successful:', data.email);
     
     return NextResponse.json({
       success: true,
-      message: 'Successfully signed up for beta access!',
+      message: 'Successfully signed up!',
       email: data.email
     });
     
   } catch (error) {
-    console.error('Unexpected error:', error);
-    return NextResponse.json(
-      { 
-        error: 'Server error occurred',
-        details: error.message
-      },
-      { status: 500 }
-    );
+    console.error('❌ Unexpected error:', error);
+    return NextResponse.json({
+      error: 'Server error',
+      details: error.message
+    }, { status: 500 });
   }
 }
 
-// Health check endpoint
 export async function GET() {
-  try {
-    // Check Supabase connection
-    const { count, error } = await supabase
-      .from('beta_signups')
-      .select('*', { count: 'exact', head: true });
-    
-    if (error) {
-      return NextResponse.json({
-        status: 'error',
-        message: 'Database not configured',
-        error: error.message,
-        solution: 'Run the SQL setup script in Supabase'
-      });
+  // Test endpoint
+  const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const hasKey = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  let dbStatus = 'unknown';
+  let rowCount = 0;
+  
+  if (hasUrl && hasKey) {
+    try {
+      const { count, error } = await supabase
+        .from('beta_signups')
+        .select('*', { count: 'exact', head: true });
+      
+      if (error) {
+        dbStatus = `Error: ${error.message}`;
+      } else {
+        dbStatus = 'Connected';
+        rowCount = count || 0;
+      }
+    } catch (e) {
+      dbStatus = `Exception: ${e.message}`;
     }
-    
-    return NextResponse.json({
-      status: 'healthy',
-      message: 'Beta signup API is working',
-      signups_count: count || 0,
-      database: 'connected'
-    });
-    
-  } catch (error) {
-    return NextResponse.json({
-      status: 'error',
-      message: error.message
-    });
+  } else {
+    dbStatus = 'Missing credentials';
   }
+  
+  return NextResponse.json({
+    status: 'Beta Signup API',
+    environment: {
+      hasSupabaseUrl: hasUrl,
+      hasSupabaseKey: hasKey,
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...'
+    },
+    database: {
+      status: dbStatus,
+      signups: rowCount
+    }
+  });
 }
