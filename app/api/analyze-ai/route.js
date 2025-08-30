@@ -1,5 +1,5 @@
 // app/api/analyze-ai/route.js
-// ENHANCED VERSION WITH COMPREHENSIVE DEBUGGING
+// COMPLETE VERSION WITH ADAPTIVE LEARNING SYSTEM
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -13,227 +13,232 @@ const supabase = createClient(
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-// Enhanced logging helper
-function logStep(step, data, isError = false) {
-  const timestamp = new Date().toISOString();
-  const prefix = isError ? '❌' : '✅';
-  console.log(`[${timestamp}] ${prefix} ${step}:`, JSON.stringify(data, null, 2));
-  return { step, data, timestamp, isError };
+// Check learned patterns before external API calls
+async function checkLearnedPatterns(textContent) {
+  try {
+    const results = {
+      brand: null,
+      confidence: 0,
+      patterns: []
+    };
+
+    // Clean and prepare text
+    const cleanText = textContent.toUpperCase().trim();
+    const words = cleanText.split(/\s+/);
+    
+    // Check brand aliases first
+    for (const word of words) {
+      const { data: aliases } = await supabase
+        .from('brand_aliases')
+        .select('canonical_brand, confidence')
+        .ilike('alias', `%${word}%`)
+        .order('confidence', { ascending: false })
+        .limit(1);
+
+      if (aliases && aliases.length > 0) {
+        results.brand = aliases[0].canonical_brand;
+        results.confidence = aliases[0].confidence;
+        console.log(`✅ Found brand from alias: ${results.brand}`);
+        return results;
+      }
+    }
+
+    // Check learned patterns
+    const { data: learned } = await supabase
+      .from('brand_learning')
+      .select('actual_brand, confidence, times_confirmed')
+      .or(words.map(w => `detected_text.ilike.%${w}%`).join(','))
+      .order('confidence', { ascending: false })
+      .limit(5);
+
+    if (learned && learned.length > 0) {
+      // Take the highest confidence match
+      const best = learned[0];
+      if (best.confidence > 0.6) {
+        results.brand = best.actual_brand;
+        results.confidence = best.confidence;
+        console.log(`✅ Found learned brand: ${results.brand} (confidence: ${results.confidence})`);
+        
+        // Increment confirmation count
+        await supabase
+          .from('brand_learning')
+          .update({
+            times_confirmed: best.times_confirmed + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('actual_brand', best.actual_brand);
+      }
+    }
+
+    // Check keyword patterns
+    const { data: keywords } = await supabase
+      .from('keyword_patterns')
+      .select('associated_brand, associated_type, association_strength')
+      .in('keyword', words)
+      .order('association_strength', { ascending: false })
+      .limit(5);
+
+    if (keywords && keywords.length > 0) {
+      results.patterns = keywords;
+      if (!results.brand && keywords[0].associated_brand) {
+        results.brand = keywords[0].associated_brand;
+        results.confidence = keywords[0].association_strength;
+      }
+    }
+
+    return results;
+    
+  } catch (error) {
+    console.error('Error checking learned patterns:', error);
+    return { brand: null, confidence: 0, patterns: [] };
+  }
 }
 
-// Test image accessibility
-async function testImageAccess(imageUrl) {
+// Fetch image from URL and convert to base64
+async function fetchImageAsBase64(imageUrl) {
   try {
-    logStep('Testing image URL accessibility', { url: imageUrl });
-    
-    const response = await fetch(imageUrl, { method: 'HEAD' });
+    console.log('📥 Fetching image from:', imageUrl);
+    const response = await fetch(imageUrl);
     
     if (!response.ok) {
-      logStep('Image not accessible', { 
-        status: response.status, 
-        statusText: response.statusText 
-      }, true);
-      return false;
+      console.error('❌ Failed to fetch image:', response.status);
+      return null;
     }
     
-    const contentType = response.headers.get('content-type');
-    const contentLength = response.headers.get('content-length');
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    console.log('✅ Image fetched, size:', Math.round(base64.length / 1024), 'KB');
+    return base64;
     
-    logStep('Image accessible', { 
-      contentType, 
-      sizeKB: Math.round(parseInt(contentLength) / 1024) 
-    });
-    
-    return true;
   } catch (error) {
-    logStep('Image access test failed', { error: error.message }, true);
-    return false;
+    console.error('❌ Error fetching image:', error.message);
+    return null;
   }
 }
 
-// Fetch image with retry logic
-async function fetchImageAsBase64(imageUrl, retries = 3) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      logStep(`Fetching image (attempt ${attempt}/${retries})`, { url: imageUrl });
-      
-      const response = await fetch(imageUrl);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const buffer = await response.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      
-      logStep('Image fetched successfully', { 
-        sizeKB: Math.round(base64.length / 1024),
-        attempt 
-      });
-      
-      return base64;
-      
-    } catch (error) {
-      logStep(`Fetch attempt ${attempt} failed`, { error: error.message }, true);
-      
-      if (attempt === retries) {
-        return null;
-      }
-      
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-    }
-  }
-  return null;
-}
-
-// Enhanced Google Vision API call
+// Call Google Vision API
 async function analyzeWithGoogleVision(imageBase64) {
   const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
   
   if (!apiKey) {
-    logStep('Google Vision API key missing', {}, true);
+    console.error('❌ No Google Vision API key');
     return null;
   }
   
-  logStep('Google Vision API key present', { 
-    keyPrefix: apiKey.substring(0, 10) + '...' 
-  });
-  
   try {
-    const requestBody = {
-      requests: [{
-        image: { content: imageBase64 },
-        features: [
-          { type: 'TEXT_DETECTION', maxResults: 10 },
-          { type: 'LABEL_DETECTION', maxResults: 20 },
-          { type: 'LOGO_DETECTION', maxResults: 10 },
-          { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
-          { type: 'WEB_DETECTION', maxResults: 10 }
-        ]
-      }]
-    };
-    
-    logStep('Calling Google Vision API', { 
-      features: requestBody.requests[0].features.map(f => f.type) 
-    });
+    console.log('🔍 Calling Google Vision API...');
     
     const response = await fetch(
       `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          requests: [{
+            image: { content: imageBase64 },
+            features: [
+              { type: 'TEXT_DETECTION', maxResults: 10 },
+              { type: 'LABEL_DETECTION', maxResults: 20 },
+              { type: 'LOGO_DETECTION', maxResults: 10 },
+              { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
+              { type: 'WEB_DETECTION', maxResults: 10 }
+            ]
+          }]
+        })
       }
     );
 
     const responseText = await response.text();
     
     if (!response.ok) {
-      logStep('Google Vision API error', { 
-        status: response.status,
-        response: responseText.substring(0, 500)
-      }, true);
+      console.error('❌ Google Vision API error:', response.status, responseText);
       return null;
     }
 
     const data = JSON.parse(responseText);
     const result = data.responses?.[0];
     
-    if (result?.error) {
-      logStep('Vision API returned error', result.error, true);
-      return null;
+    if (result) {
+      console.log('✅ Vision API detected:', {
+        textFound: !!(result.textAnnotations?.length > 0),
+        firstText: result.textAnnotations?.[0]?.description?.substring(0, 100) || 'No text',
+        labelsCount: result.labelAnnotations?.length || 0,
+        labels: result.labelAnnotations?.slice(0, 5).map(l => l.description) || [],
+        logos: result.logoAnnotations?.map(l => l.description) || [],
+        objects: result.localizedObjectAnnotations?.slice(0, 5).map(o => o.name) || []
+      });
     }
-    
-    // Log detailed results
-    const analysisResults = {
-      textFound: !!(result?.textAnnotations?.length > 0),
-      fullText: result?.textAnnotations?.[0]?.description || 'No text detected',
-      labelsCount: result?.labelAnnotations?.length || 0,
-      topLabels: result?.labelAnnotations?.slice(0, 5).map(l => ({
-        description: l.description,
-        score: l.score
-      })) || [],
-      logosFound: result?.logoAnnotations?.map(l => ({
-        description: l.description,
-        score: l.score
-      })) || [],
-      objectsFound: result?.localizedObjectAnnotations?.slice(0, 5).map(o => ({
-        name: o.name,
-        score: o.score
-      })) || [],
-      webEntities: result?.webDetection?.webEntities?.slice(0, 5).map(e => ({
-        description: e.description,
-        score: e.score
-      })) || []
-    };
-    
-    logStep('Vision API analysis complete', analysisResults);
     
     return result;
     
   } catch (error) {
-    logStep('Google Vision API exception', { 
-      error: error.message,
-      stack: error.stack 
-    }, true);
+    console.error('❌ Google Vision error:', error.message);
     return null;
   }
 }
 
-// Enhanced fashion detail extraction
-function extractFashionDetails(visionData) {
+// Extract fashion details with learning integration
+async function extractFashionDetailsWithLearning(visionData) {
   const details = {
     allText: '',
     possibleBrands: [],
+    learnedBrand: null,
+    learnedConfidence: 0,
     possibleSizes: [],
     itemTypes: [],
     colors: [],
-    materials: [],
-    webDetectedBrands: []
+    materials: []
   };
   
   // Get all text
   if (visionData?.textAnnotations?.length > 0) {
     details.allText = visionData.textAnnotations[0].description || '';
+    console.log('📝 Text found:', details.allText.substring(0, 200));
   }
   
+  // Check learned patterns FIRST
+  const learnedResults = await checkLearnedPatterns(details.allText);
+  
+  if (learnedResults.brand && learnedResults.confidence > 0.6) {
+    details.learnedBrand = learnedResults.brand;
+    details.learnedConfidence = learnedResults.confidence;
+    details.possibleBrands.push(learnedResults.brand);
+    console.log(`🧠 Using learned brand: ${learnedResults.brand} (${Math.round(learnedResults.confidence * 100)}% confidence)`);
+  }
+  
+  // Extract from text
   const textUpper = details.allText.toUpperCase();
   
-  // Comprehensive UK fashion brand list
+  // Common UK fashion brands
   const brandList = [
-    // High Street
-    'ZARA', 'H&M', 'HM', 'H & M', 'NEXT', 'PRIMARK', 'TOPSHOP', 'TOPMAN',
-    'ASOS', 'MARKS & SPENCER', 'M&S', 'UNIQLO', 'GAP', 'MANGO', 'COS',
-    'RIVER ISLAND', 'NEW LOOK', 'BOOHOO', 'MISSGUIDED', 'PRETTY LITTLE THING',
-    
-    // Sports
-    'NIKE', 'ADIDAS', 'PUMA', 'REEBOK', 'UNDER ARMOUR', 'NEW BALANCE',
-    'ASICS', 'FILA', 'CHAMPION', 'KAPPA', 'UMBRO', 'ELLESSE',
-    
-    // Designer/Premium
-    'RALPH LAUREN', 'TOMMY HILFIGER', 'CALVIN KLEIN', 'HUGO BOSS', 'BOSS',
-    'LACOSTE', 'FRED PERRY', 'PAUL SMITH', 'TED BAKER', 'ARMANI',
-    'VERSACE', 'GUCCI', 'PRADA', 'BURBERRY', 'BALENCIAGA', 'DIOR',
-    
-    // Denim
-    'LEVI\'S', 'LEVIS', 'WRANGLER', 'LEE', 'DIESEL', 'G-STAR', 'GSTAR',
-    
-    // Outdoor
-    'NORTH FACE', 'THE NORTH FACE', 'PATAGONIA', 'COLUMBIA', 'BERGHAUS',
-    'JACK WOLFSKIN', 'REGATTA', 'CRAGHOPPERS', 'BARBOUR', 'SUPERDRY'
+    'ZARA', 'H&M', 'HM', 'H & M', 'NIKE', 'ADIDAS', 'NEXT', 'PRIMARK', 
+    'TOPSHOP', 'ASOS', 'MARKS & SPENCER', 'M&S', 'UNIQLO', 'GAP', 
+    'MANGO', 'COS', 'RIVER ISLAND', 'NEW LOOK', 'BOOHOO', 'MISSGUIDED',
+    'RALPH LAUREN', 'TOMMY HILFIGER', 'CALVIN KLEIN', 'LEVI\'S', 'LEVIS',
+    'LACOSTE', 'FRED PERRY', 'BURBERRY', 'TED BAKER', 'SUPERDRY',
+    'NORTH FACE', 'PATAGONIA', 'COLUMBIA', 'BERGHAUS', 'FILA', 'PUMA',
+    'PRETTY LITTLE THING', 'PLT', 'SHEIN', 'URBAN OUTFITTERS', 'JACK WILLS',
+    'HOLLISTER', 'ABERCROMBIE', 'ALL SAINTS', 'REISS', 'WHISTLES', 'JOHN LEWIS',
+    'GEORGE', 'TU', 'F&F', 'MATALAN', 'SPORTS DIRECT', 'JD SPORTS'
   ];
   
-  // Check for brands in text
+  // Check for brands
   for (const brand of brandList) {
     if (textUpper.includes(brand)) {
-      details.possibleBrands.push(brand);
+      if (!details.possibleBrands.includes(brand)) {
+        details.possibleBrands.push(brand);
+      }
     }
   }
   
   // Check logos
   if (visionData?.logoAnnotations) {
-    details.possibleBrands.push(...visionData.logoAnnotations.map(l => l.description.toUpperCase()));
+    for (const logo of visionData.logoAnnotations) {
+      const logoBrand = logo.description.toUpperCase();
+      if (!details.possibleBrands.includes(logoBrand)) {
+        details.possibleBrands.push(logoBrand);
+      }
+    }
   }
   
   // Check web entities for brands
@@ -241,146 +246,131 @@ function extractFashionDetails(visionData) {
     for (const entity of visionData.webDetection.webEntities) {
       const entityUpper = entity.description?.toUpperCase() || '';
       for (const brand of brandList) {
-        if (entityUpper.includes(brand)) {
-          details.webDetectedBrands.push(brand);
+        if (entityUpper.includes(brand) && !details.possibleBrands.includes(brand)) {
+          details.possibleBrands.push(brand);
         }
       }
     }
   }
   
-  // Enhanced size detection for UK
+  // Size detection
   const sizePatterns = [
     /SIZE:?\s*([XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL])\b/i,
-    /\b([XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL])\b/,
     /UK\s*SIZE:?\s*(\d{1,2})/i,
     /SIZE:?\s*UK\s*(\d{1,2})/i,
-    /UK\s*(\d{1,2})\b/i,
     /EUR:?\s*(\d{2,3})/i,
-    /US:?\s*(\d{1,2})/i,
-    /\b(\d{1,2})[\/\-](\d{1,2})\b/  // Size ranges like 14/16
+    /\b([XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL])\b/,
+    /UK\s*(\d{1,2})\b/i
   ];
   
   for (const pattern of sizePatterns) {
-    const matches = textUpper.matchAll(pattern);
-    for (const match of matches) {
-      if (match[1]) {
-        details.possibleSizes.push(match[1]);
-      }
+    const match = textUpper.match(pattern);
+    if (match && match[1]) {
+      details.possibleSizes.push(match[1]);
     }
   }
   
-  // Item type detection
+  // Get item types from labels and objects
   const labels = visionData?.labelAnnotations?.map(l => l.description) || [];
   const objects = visionData?.localizedObjectAnnotations?.map(o => o.name) || [];
-  const webEntities = visionData?.webDetection?.webEntities?.map(e => e.description) || [];
   
   const clothingTypes = [
-    'Shirt', 'T-shirt', 'Polo', 'Dress', 'Jeans', 'Trousers', 'Pants',
-    'Jacket', 'Coat', 'Blazer', 'Suit', 'Sweater', 'Jumper', 'Hoodie',
-    'Sweatshirt', 'Cardigan', 'Vest', 'Waistcoat', 'Skirt', 'Shorts',
-    'Top', 'Blouse', 'Knitwear', 'Pullover', 'Fleece', 'Tracksuit',
-    'Leggings', 'Joggers', 'Chinos', 'Cargo', 'Denim', 'Parka', 'Windbreaker'
+    'Shirt', 'T-shirt', 'Dress', 'Jeans', 'Trousers', 'Jacket', 'Coat',
+    'Sweater', 'Jumper', 'Hoodie', 'Blazer', 'Skirt', 'Shorts', 'Top',
+    'Blouse', 'Cardigan', 'Vest', 'Suit', 'Pants', 'Sweatshirt', 'Leggings',
+    'Joggers', 'Chinos', 'Polo', 'Tank Top', 'Knitwear', 'Parka', 'Windbreaker'
   ];
   
-  const allDetections = [...labels, ...objects, ...webEntities];
+  const allDetections = [...labels, ...objects];
   for (const item of clothingTypes) {
-    if (allDetections.some(d => d?.toLowerCase().includes(item.toLowerCase()))) {
+    if (allDetections.some(d => d.toLowerCase().includes(item.toLowerCase()))) {
       details.itemTypes.push(item);
     }
   }
   
-  // Color detection
-  const colorWords = [
-    'Black', 'White', 'Blue', 'Navy', 'Red', 'Green', 'Grey', 'Gray',
-    'Brown', 'Pink', 'Purple', 'Orange', 'Yellow', 'Beige', 'Cream',
-    'Khaki', 'Burgundy', 'Maroon', 'Teal', 'Turquoise', 'Olive'
-  ];
+  // Apply learned patterns to item types
+  if (learnedResults.patterns && learnedResults.patterns.length > 0) {
+    for (const pattern of learnedResults.patterns) {
+      if (pattern.associated_type && !details.itemTypes.includes(pattern.associated_type)) {
+        details.itemTypes.push(pattern.associated_type);
+      }
+    }
+  }
   
+  // Extract colors
+  const colorWords = ['Black', 'White', 'Blue', 'Red', 'Green', 'Navy', 'Grey', 'Brown', 'Pink', 'Purple', 'Beige'];
   for (const color of colorWords) {
-    if (allDetections.some(d => d?.toLowerCase().includes(color.toLowerCase()))) {
+    if (allDetections.some(d => d.toLowerCase().includes(color.toLowerCase()))) {
       details.colors.push(color);
     }
   }
   
-  // Material detection
-  const materials = [
-    'Cotton', 'Polyester', 'Wool', 'Silk', 'Linen', 'Denim', 'Leather',
-    'Suede', 'Velvet', 'Fleece', 'Nylon', 'Spandex', 'Elastane', 'Viscose',
-    'Rayon', 'Cashmere', 'Merino', 'Gore-tex', 'Canvas'
-  ];
-  
-  for (const material of materials) {
-    if (textUpper.includes(material.toUpperCase())) {
-      details.materials.push(material);
-    }
-  }
-  
-  logStep('Fashion details extracted', details);
+  console.log('🔍 Extracted details with learning:', {
+    learnedBrand: details.learnedBrand,
+    allBrands: details.possibleBrands,
+    itemTypes: details.itemTypes
+  });
   
   return details;
 }
 
-// Enhanced Claude listing generation
+// Generate listing with Claude
 async function generateListingWithClaude(fashionDetails, visionData, imageCount) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   
   if (!apiKey) {
-    logStep('Claude API key missing', {}, true);
+    console.error('❌ No Claude API key');
     return null;
   }
   
-  logStep('Claude API key present', { 
-    keyPrefix: apiKey.substring(0, 10) + '...' 
-  });
-  
   try {
-    const labels = visionData?.labelAnnotations?.map(l => `${l.description} (${Math.round(l.score * 100)}%)`)?.join(', ') || 'none';
-    const objects = visionData?.localizedObjectAnnotations?.map(o => `${o.name} (${Math.round(o.score * 100)}%)`)?.join(', ') || 'none';
-    const webEntities = visionData?.webDetection?.webEntities?.slice(0, 10).map(e => e.description)?.join(', ') || 'none';
+    console.log('🤖 Calling Claude API...');
     
-    const prompt = `You are an expert UK eBay and Vinted fashion seller. Analyze this item and create a perfect listing.
+    const labels = visionData?.labelAnnotations?.map(l => l.description).join(', ') || 'none';
+    const objects = visionData?.localizedObjectAnnotations?.map(o => o.name).join(', ') || 'none';
+    
+    // Prioritize learned brand in prompt
+    const brandToUse = fashionDetails.learnedBrand || fashionDetails.possibleBrands[0] || 'Unbranded';
+    
+    const prompt = `You are an expert UK eBay fashion seller. Create a perfect listing based on this item analysis.
 
-VISION API DETECTION RESULTS:
-- Full text from item: "${fashionDetails.allText}"
-- Detected brands: ${[...new Set([...fashionDetails.possibleBrands, ...fashionDetails.webDetectedBrands])].join(', ') || 'None'}
-- Detected sizes: ${fashionDetails.possibleSizes.join(', ') || 'None'}
+DETECTED INFORMATION:
+- Text from labels/tags: "${fashionDetails.allText}"
+- AI LEARNED BRAND (HIGH CONFIDENCE): ${fashionDetails.learnedBrand || 'None'}
+- Other possible brands: ${fashionDetails.possibleBrands.join(', ') || 'None detected'}
+- Possible sizes: ${fashionDetails.possibleSizes.join(', ') || 'None detected'}
 - Visual labels: ${labels}
 - Objects detected: ${objects}
-- Web entities: ${webEntities}
-- Colors detected: ${fashionDetails.colors.join(', ') || 'None'}
-- Item types detected: ${fashionDetails.itemTypes.join(', ') || 'None'}
-- Materials detected: ${fashionDetails.materials.join(', ') || 'None'}
-- Number of photos: ${imageCount}
+- Colors: ${fashionDetails.colors.join(', ') || 'Not detected'}
+- Item types: ${fashionDetails.itemTypes.join(', ') || 'Not detected'}
 
-CRITICAL REQUIREMENTS:
-1. ALWAYS identify the specific item type (never just "Clothing Item")
-2. Use detected brand if found, otherwise "Unbranded" is acceptable
-3. Create eBay UK title (MAX 80 chars): [Brand] [Gender] [Item Type] [Color] Size [Size] [Condition/Feature]
-4. Be specific - if it's a shirt, say shirt. If it's jeans, say jeans.
-5. Use UK spelling (colour, centre, etc.)
-6. Price in GBP (£) for UK market
-7. If you can't determine exact details, make educated guesses based on the visual analysis
+IMPORTANT: If there's an AI LEARNED BRAND with high confidence, prioritize using that brand.
 
-Generate a complete listing. Return ONLY valid JSON:
+REQUIREMENTS:
+1. Create an eBay UK title (MAX 80 characters) format: [Brand] [Gender] [Item Type] [Color] Size [Size] [Condition]
+2. Use the learned brand if available, otherwise use detected brand or "Unbranded"
+3. Determine specific item type from the analysis
+4. Use UK spelling and sizing
+5. Price in GBP (£) for UK market
+
+Return ONLY valid JSON:
 {
-  "brand": "exact brand or Unbranded",
-  "item_type": "specific item type (e.g., T-Shirt, Jeans, Hoodie)",
-  "size": "UK size or best guess",
+  "brand": "${brandToUse}",
+  "item_type": "specific item type",
+  "size": "UK size",
   "color": "main colour",
   "condition_score": 7,
   "estimated_value_min": 10,
-  "estimated_value_max": 30,
-  "ebay_title": "Complete eBay UK title under 80 chars",
-  "description": "Professional multi-paragraph description with key features",
-  "suggested_price": 18,
-  "category": "specific category",
-  "material": "detected or likely material",
-  "style": "casual/formal/sports/etc",
+  "estimated_value_max": 25,
+  "ebay_title": "Perfect eBay UK title under 80 chars",
+  "description": "Professional description with bullet points",
+  "suggested_price": 15,
+  "category": "Clothes, Shoes & Accessories",
+  "material": "detected material",
+  "style": "style type",
   "gender": "Men's/Women's/Unisex",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+  "keywords": ["keyword1", "keyword2", "keyword3"]
 }`;
-
-    logStep('Sending prompt to Claude', { promptLength: prompt.length });
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -391,7 +381,7 @@ Generate a complete listing. Return ONLY valid JSON:
       },
       body: JSON.stringify({
         model: 'claude-3-sonnet-20240229',
-        max_tokens: 2000,
+        max_tokens: 1500,
         temperature: 0.3,
         messages: [{
           role: 'user',
@@ -403,92 +393,60 @@ Generate a complete listing. Return ONLY valid JSON:
     const responseText = await response.text();
     
     if (!response.ok) {
-      logStep('Claude API error', { 
-        status: response.status,
-        response: responseText.substring(0, 500)
-      }, true);
+      console.error('❌ Claude API error:', response.status, responseText);
       return null;
     }
 
     const data = JSON.parse(responseText);
     const content = data.content?.[0]?.text || '';
     
-    logStep('Claude response received', { 
-      responseLength: content.length,
-      preview: content.substring(0, 200)
-    });
+    console.log('📝 Claude response received');
     
-    // Extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
         const listing = JSON.parse(jsonMatch[0]);
-        logStep('Listing generated successfully', listing);
+        console.log('✅ Listing generated:', listing.ebay_title);
         return listing;
       } catch (e) {
-        logStep('Failed to parse Claude JSON', { error: e.message }, true);
+        console.error('❌ Failed to parse Claude JSON:', e);
         return null;
       }
     }
     
-    logStep('No JSON found in Claude response', {}, true);
     return null;
     
   } catch (error) {
-    logStep('Claude API exception', { 
-      error: error.message,
-      stack: error.stack 
-    }, true);
+    console.error('❌ Claude API error:', error.message);
     return null;
   }
 }
 
-// Main handler with comprehensive error handling
+// Main handler
 export async function POST(request) {
-  const debugLog = [];
+  console.log('\n🚀 === NEW AI ANALYSIS WITH LEARNING ===');
   
   try {
-    debugLog.push(logStep('=== NEW ANALYSIS REQUEST STARTED ===', { 
-      timestamp: new Date().toISOString() 
-    }));
-    
-    // Authenticate user
     const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json({ 
-        error: 'Unauthorized',
-        debugLog 
-      }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    debugLog.push(logStep('User authenticated', { userId }));
-    
-    // Parse request
+
     const body = await request.json();
     const { imageUrls = [], imageCount } = body;
     const numImages = imageUrls.length || imageCount || 1;
     
-    debugLog.push(logStep('Request parsed', { 
-      imageCount: numImages,
-      firstImageUrl: imageUrls[0] 
-    }));
+    console.log(`📸 Processing ${numImages} images for user ${userId}`);
     
-    // Get user credits
-    let { data: userData, error: userError } = await supabase
+    // Get or create user
+    let { data: userData } = await supabase
       .from('users')
       .select('*')
       .eq('clerk_id', userId)
       .single();
 
-    if (userError && userError.code !== 'PGRST116') {
-      debugLog.push(logStep('Database error', { error: userError }, true));
-      throw new Error('Database error');
-    }
-
     if (!userData) {
-      debugLog.push(logStep('Creating new user', { userId }));
-      
-      const { data: newUser, error: insertError } = await supabase
+      const { data: newUser } = await supabase
         .from('users')
         .insert({
           clerk_id: userId,
@@ -499,121 +457,67 @@ export async function POST(request) {
         })
         .select()
         .single();
-        
-      if (insertError) {
-        debugLog.push(logStep('Failed to create user', { error: insertError }, true));
-        throw new Error('Failed to create user');
-      }
-      
       userData = newUser;
     }
 
     const creditsAvailable = (userData?.credits_total || 0) - (userData?.credits_used || 0) + (userData?.bonus_credits || 0);
     
-    debugLog.push(logStep('Credits checked', { 
-      available: creditsAvailable,
-      total: userData?.credits_total,
-      used: userData?.credits_used 
-    }));
-    
     if (creditsAvailable <= 0) {
       return NextResponse.json({ 
         error: 'No credits available',
-        credits_remaining: 0,
-        debugLog
+        credits_remaining: 0 
       }, { status: 402 });
     }
 
-    // Main AI analysis
+    // Main AI analysis with learning
     let finalListing = null;
-    let visionData = null;
-    let fashionDetails = null;
     
     if (imageUrls && imageUrls.length > 0) {
-      // Test image accessibility
-      const isAccessible = await testImageAccess(imageUrls[0]);
-      debugLog.push(logStep('Image accessibility test', { 
-        url: imageUrls[0],
-        accessible: isAccessible 
-      }));
-      
-      if (!isAccessible) {
-        debugLog.push(logStep('Image not accessible, check Supabase storage settings', {}, true));
-      }
-      
-      // Fetch and convert image
+      // Fetch and analyze first image
       const imageBase64 = await fetchImageAsBase64(imageUrls[0]);
       
       if (imageBase64) {
-        debugLog.push(logStep('Image converted to base64', { 
-          sizeKB: Math.round(imageBase64.length / 1024) 
-        }));
-        
-        // Analyze with Google Vision
-        visionData = await analyzeWithGoogleVision(imageBase64);
+        const visionData = await analyzeWithGoogleVision(imageBase64);
         
         if (visionData) {
-          debugLog.push(logStep('Vision API analysis complete', { 
-            hasText: !!(visionData.textAnnotations?.length > 0),
-            labelCount: visionData.labelAnnotations?.length || 0
-          }));
-          
-          // Extract fashion details
-          fashionDetails = extractFashionDetails(visionData);
-          debugLog.push(logStep('Fashion details extracted', { 
-            brandsFound: fashionDetails.possibleBrands.length,
-            sizesFound: fashionDetails.possibleSizes.length 
-          }));
-          
-          // Generate listing with Claude
+          // Use enhanced extraction with learning
+          const fashionDetails = await extractFashionDetailsWithLearning(visionData);
           finalListing = await generateListingWithClaude(fashionDetails, visionData, numImages);
-        } else {
-          debugLog.push(logStep('Vision API failed', {}, true));
+          
+          // Add learning confidence to listing
+          if (finalListing && fashionDetails.learnedBrand) {
+            finalListing.ai_confidence = fashionDetails.learnedConfidence;
+            finalListing.used_learning = true;
+          }
         }
-      } else {
-        debugLog.push(logStep('Image fetch/conversion failed', {}, true));
       }
     }
     
-    // If AI failed, use enhanced fallback
+    // If AI failed, use fallback
     if (!finalListing) {
-      debugLog.push(logStep('Using fallback listing', { 
-        reason: 'AI analysis failed' 
-      }, true));
-      
-      // Try to use any detected info for better fallback
-      const detectedBrand = fashionDetails?.possibleBrands?.[0] || 
-                           fashionDetails?.webDetectedBrands?.[0] || 
-                           'Unbranded';
-      const detectedType = fashionDetails?.itemTypes?.[0] || 'Fashion Item';
-      const detectedSize = fashionDetails?.possibleSizes?.[0] || 'See Photos';
-      const detectedColor = fashionDetails?.colors?.[0] || 'Multi';
-      
+      console.log('⚠️ Using fallback listing');
       finalListing = {
-        brand: detectedBrand,
-        item_type: detectedType,
-        size: detectedSize,
-        color: detectedColor,
+        brand: "Unbranded",
+        item_type: "Clothing Item",
+        size: "See Label",
+        color: "Multi",
         condition_score: 7,
         estimated_value_min: 8,
-        estimated_value_max: 25,
-        ebay_title: `${detectedBrand} ${detectedType} - Size ${detectedSize} - Good Condition`,
-        description: `${detectedType} from ${detectedBrand}.
+        estimated_value_max: 20,
+        ebay_title: "Unbranded Clothing Item - Please See Photos for Details",
+        description: `Item as shown in photos.
 
-- Brand: ${detectedBrand}
-- Size: ${detectedSize}
-- Colour: ${detectedColor}
-- Condition: Good pre-owned condition (7/10)
-- Please check all ${numImages} photos for full details
+- Condition: Good pre-owned condition
+- Please check all photos for size, brand, and item details
 
-Item will be dispatched within 1 business day via Royal Mail.
-Any questions? Please don't hesitate to ask!`,
-        suggested_price: 15,
+Ships within 1 business day via Royal Mail.`,
+        suggested_price: 12,
         category: "Clothes, Shoes & Accessories",
-        material: fashionDetails?.materials?.[0] || "See label",
+        material: "See label",
         style: "Casual",
         gender: "Unisex",
-        keywords: ["fashion", "clothing", "uk", detectedBrand.toLowerCase(), detectedType.toLowerCase()]
+        keywords: ["clothing", "fashion", "uk"],
+        used_learning: false
       };
     }
     
@@ -625,39 +529,36 @@ Any questions? Please don't hesitate to ask!`,
       images_count: numImages,
       image_urls: imageUrls,
       credits_remaining: creditsAvailable - 1,
-      analyzed_at: new Date().toISOString(),
-      debug_info: {
-        vision_success: !!visionData,
-        brands_detected: fashionDetails?.possibleBrands?.length || 0,
-        text_detected: !!(fashionDetails?.allText?.length > 0)
-      }
+      analyzed_at: new Date().toISOString()
     };
     
-    debugLog.push(logStep('Analysis complete', { 
-      title: completeAnalysis.ebay_title,
-      brand: completeAnalysis.brand 
-    }));
-    
     // Save to database
-    const { error: saveError } = await supabase.from('analyses').insert({
-      user_id: userId,
-      brand: completeAnalysis.brand,
-      item_type: completeAnalysis.item_type,
-      size: completeAnalysis.size,
-      condition_score: completeAnalysis.condition_score,
-      estimated_value_min: completeAnalysis.estimated_value_min,
-      estimated_value_max: completeAnalysis.estimated_value_max,
-      ebay_title: completeAnalysis.ebay_title,
-      description: completeAnalysis.description,
-      suggested_price: completeAnalysis.suggested_price,
-      category: completeAnalysis.category,
-      sku: completeAnalysis.sku,
-      images_count: completeAnalysis.images_count,
-      metadata: completeAnalysis
-    });
+    const { data: savedAnalysis, error: saveError } = await supabase
+      .from('analyses')
+      .insert({
+        user_id: userId,
+        brand: completeAnalysis.brand,
+        item_type: completeAnalysis.item_type,
+        size: completeAnalysis.size || 'Not specified',
+        condition_score: completeAnalysis.condition_score,
+        estimated_value_min: completeAnalysis.estimated_value_min,
+        estimated_value_max: completeAnalysis.estimated_value_max,
+        ebay_title: completeAnalysis.ebay_title,
+        description: completeAnalysis.description,
+        buy_it_now_price: completeAnalysis.suggested_price,
+        department: completeAnalysis.gender || 'Unisex',
+        style: completeAnalysis.style || 'Casual',
+        sku: completeAnalysis.sku,
+        images_count: completeAnalysis.images_count,
+        metadata: completeAnalysis
+      })
+      .select()
+      .single();
     
     if (saveError) {
-      debugLog.push(logStep('Failed to save analysis', { error: saveError }, true));
+      console.error('Save error:', saveError);
+    } else {
+      completeAnalysis.id = savedAnalysis.id;
     }
     
     // Update credits
@@ -666,63 +567,46 @@ Any questions? Please don't hesitate to ask!`,
       .update({ credits_used: (userData?.credits_used || 0) + 1 })
       .eq('clerk_id', userId);
     
-    debugLog.push(logStep('=== ANALYSIS COMPLETE ===', { 
-      success: true 
-    }));
+    console.log('✅ Analysis complete:', completeAnalysis.ebay_title);
+    console.log('🧠 Used learning:', completeAnalysis.used_learning || false);
     
     return NextResponse.json({
       success: true,
-      analysis: completeAnalysis,
-      debugLog: process.env.NODE_ENV === 'development' ? debugLog : undefined
+      analysis: completeAnalysis
     });
     
   } catch (error) {
-    debugLog.push(logStep('Fatal error', { 
-      error: error.message,
-      stack: error.stack 
-    }, true));
-    
-    console.error('Analysis failed:', error);
-    
+    console.error('❌ Fatal error:', error);
     return NextResponse.json({
       success: false,
-      error: error.message,
-      debugLog: process.env.NODE_ENV === 'development' ? debugLog : undefined
+      error: error.message
     }, { status: 500 });
   }
 }
 
-// Enhanced health check endpoint
+// Health check endpoint
 export async function GET() {
-  const checks = {
-    timestamp: new Date().toISOString(),
-    version: '5.0',
-    environment: process.env.NODE_ENV,
+  // Check learning system status
+  const { count: learnedBrands } = await supabase
+    .from('brand_learning')
+    .select('*', { count: 'exact', head: true });
+  
+  const { count: corrections } = await supabase
+    .from('ai_corrections')
+    .select('*', { count: 'exact', head: true });
+  
+  return NextResponse.json({
+    status: 'ok',
+    message: 'AI Analysis API v5.0 with Learning',
     apis: {
-      googleVision: {
-        configured: !!process.env.GOOGLE_CLOUD_VISION_API_KEY,
-        keyLength: process.env.GOOGLE_CLOUD_VISION_API_KEY?.length || 0
-      },
-      claude: {
-        configured: !!process.env.ANTHROPIC_API_KEY,
-        keyLength: process.env.ANTHROPIC_API_KEY?.length || 0
-      },
-      supabase: {
-        configured: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-        url: process.env.NEXT_PUBLIC_SUPABASE_URL
-      }
-    }
-  };
-  
-  // Test Supabase connection
-  try {
-    const { count } = await supabase.from('users').select('*', { count: 'exact', head: true });
-    checks.apis.supabase.connected = true;
-    checks.apis.supabase.userCount = count;
-  } catch (error) {
-    checks.apis.supabase.connected = false;
-    checks.apis.supabase.error = error.message;
-  }
-  
-  return NextResponse.json(checks);
+      googleVision: !!process.env.GOOGLE_CLOUD_VISION_API_KEY,
+      claude: !!process.env.ANTHROPIC_API_KEY,
+      supabase: !!process.env.NEXT_PUBLIC_SUPABASE_URL
+    },
+    learning: {
+      learnedPatterns: learnedBrands || 0,
+      totalCorrections: corrections || 0
+    },
+    timestamp: new Date().toISOString()
+  });
 }
