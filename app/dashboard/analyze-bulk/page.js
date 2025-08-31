@@ -1,397 +1,348 @@
-// app/dashboard/batch-processing/page.js
-// COMPLETE BATCH PROCESSING PAGE FILE
-
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
-import Link from 'next/link';
-import {
-  ArrowLeft,
-  Upload,
+import { useAuth } from '@clerk/nextjs';
+import { 
+  Camera, 
+  Upload, 
+  X, 
+  Loader2, 
+  ArrowLeft, 
+  Info, 
   Package,
-  Image,
-  Loader2,
-  AlertCircle,
-  Info,
-  CheckCircle,
-  X,
   Plus,
   Trash2,
-  Camera,
-  CreditCard
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 
-export default function BatchProcessingPage() {
-  const { user } = useUser();
+export default function AnalyzeBulkPage() {
+  const { userId } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef(null);
   
-  const [items, setItems] = useState([]);
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [images, setImages] = useState([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [credits, setCredits] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [groupedItems, setGroupedItems] = useState([]);
 
-  useEffect(() => {
-    fetchCredits();
-  }, []);
-
-  const fetchCredits = async () => {
-    try {
-      const response = await fetch('/api/user/credits');
-      if (response.ok) {
-        const data = await response.json();
-        setCredits(data.available || 0);
-      }
-    } catch (error) {
-      console.error('Error fetching credits:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addNewItem = () => {
-    if (items.length >= 25) {
-      alert('Maximum 25 items per batch');
-      return;
-    }
-    
-    const newItem = {
-      id: Date.now(),
-      name: `Item ${items.length + 1}`,
-      images: [],
-      status: 'pending'
-    };
-    
-    setItems([...items, newItem]);
-    setCurrentItemIndex(items.length);
-  };
-
-  const handleImageUpload = (e) => {
+  const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     
-    const currentItem = items[currentItemIndex];
-    if (!currentItem) {
-      alert('Please add an item first');
-      return;
-    }
-    
-    const remainingSlots = 24 - currentItem.images.length;
-    const filesToAdd = files.slice(0, remainingSlots);
-    
-    const newImage = filesToAdd.map(file => ({
+    // Define newImages properly - this fixes the bug!
+    const newImages = files.slice(0, 600).map(file => ({ // 25 items × 24 photos = 600 max
       id: Date.now() + Math.random(),
       file: file,
       preview: URL.createObjectURL(file),
-      name: file.name
+      name: file.name,
+      grouped: false
     }));
     
-    const updatedItems = [...items];
-    updatedItems[currentItemIndex].images = [
-      ...currentItem.images,
+    setImages(prev => [
+      ...prev,
       ...newImages
-    ];
-    setItems(updatedItems);
+    ].slice(0, 600));
+    setError(null);
   };
 
-  const removeImage = (itemIndex, imageId) => {
-    const updatedItems = [...items];
-    const item = updatedItems[itemIndex];
-    const imageToRemove = item.images.find(img => img.id === imageId);
+  const removeImage = (id) => {
+    const image = images.find(img => img.id === id);
+    if (image?.preview) {
+      URL.revokeObjectURL(image.preview);
+    }
+    setImages(images.filter(img => img.id !== id));
+  };
+
+  const groupImages = () => {
+    // Simple grouping logic - group every 24 images as one item
+    const groups = [];
+    const ungroupedImages = images.filter(img => !img.grouped);
     
-    if (imageToRemove?.preview) {
-      URL.revokeObjectURL(imageToRemove.preview);
+    for (let i = 0; i < ungroupedImages.length; i += 24) {
+      const itemImages = ungroupedImages.slice(i, i + 24);
+      if (itemImages.length > 0) {
+        groups.push({
+          id: Date.now() + i,
+          images: itemImages,
+          name: `Item ${groups.length + 1}`,
+          status: 'pending'
+        });
+      }
     }
     
-    item.images = item.images.filter(img => img.id !== imageId);
-    setItems(updatedItems);
+    setGroupedItems(groups);
+    
+    // Mark images as grouped
+    const groupedImageIds = groups.flatMap(g => g.images.map(img => img.id));
+    setImages(prev => prev.map(img => ({
+      ...img,
+      grouped: groupedImageIds.includes(img.id)
+    })));
   };
 
-  const removeItem = (itemIndex) => {
-    const itemToRemove = items[itemIndex];
-    itemToRemove.images.forEach(img => {
-      if (img.preview) URL.revokeObjectURL(img.preview);
-    });
-    
-    const updatedItems = items.filter((_, index) => index !== itemIndex);
-    setItems(updatedItems);
-    
-    if (currentItemIndex >= updatedItems.length) {
-      setCurrentItemIndex(Math.max(0, updatedItems.length - 1));
-    }
-  };
-
-  const processItems = async () => {
-    const validItems = items.filter(item => item.images.length > 0);
-    
-    if (validItems.length === 0) {
-      alert('Please add at least one item with photos');
+  const analyzeBulk = async () => {
+    if (groupedItems.length === 0) {
+      setError('Please group your images first');
       return;
     }
     
-    if (credits < validItems.length) {
-      alert(`You need ${validItems.length} credits but only have ${credits}`);
-      router.push('/dashboard/get-credits');
-      return;
-    }
-    
-    setIsProcessing(true);
+    setIsAnalyzing(true);
+    setError(null);
     setUploadProgress(0);
     
     try {
-      for (let i = 0; i < validItems.length; i++) {
-        const item = validItems[i];
-        setUploadProgress(Math.round(((i + 1) / validItems.length) * 100));
+      const results = [];
+      
+      for (let i = 0; i < groupedItems.length; i++) {
+        const item = groupedItems[i];
+        setUploadProgress(Math.round((i / groupedItems.length) * 90));
         
-        const updatedItems = [...items];
-        const itemIndex = items.findIndex(it => it.id === item.id);
-        updatedItems[itemIndex].status = 'processing';
-        setItems(updatedItems);
+        // Update item status
+        setGroupedItems(prev => prev.map(g => 
+          g.id === item.id ? { ...g, status: 'analyzing' } : g
+        ));
         
-        // TODO: Upload images and call analyze API
+        // Upload images for this item
+        const uploadedUrls = [];
+        for (const image of item.images) {
+          // Simulate upload - replace with actual upload logic
+          const url = URL.createObjectURL(image.file);
+          uploadedUrls.push(url);
+        }
+        
+        // Call AI analysis for this item
+        const response = await fetch('/api/analyze-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            imageUrls: uploadedUrls,
+            imageCount: uploadedUrls.length 
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          results.push({
+            itemId: item.id,
+            analysis: data.analysis
+          });
+          
+          // Update item status
+          setGroupedItems(prev => prev.map(g => 
+            g.id === item.id ? { ...g, status: 'completed', analysis: data.analysis } : g
+          ));
+        } else {
+          // Update item status to failed
+          setGroupedItems(prev => prev.map(g => 
+            g.id === item.id ? { ...g, status: 'failed', error: data.error } : g
+          ));
+        }
+        
+        // Small delay between analyses
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        updatedItems[itemIndex].status = 'completed';
-        setItems(updatedItems);
       }
       
       setUploadProgress(100);
       
-      setTimeout(() => {
-        router.push('/dashboard/listings');
-      }, 1000);
+      // Store results and navigate
+      sessionStorage.setItem('bulkAnalysisResults', JSON.stringify(results));
+      router.push('/dashboard/bulk-results');
       
-    } catch (error) {
-      console.error('Processing error:', error);
-      alert('Failed to process items. Please try again.');
+    } catch (err) {
+      setError(err.message || 'Failed to analyze items');
     } finally {
-      setIsProcessing(false);
+      setIsAnalyzing(false);
     }
   };
 
-  // Cleanup previews on unmount
-  useEffect(() => {
+  // Cleanup on unmount
+  React.useEffect(() => {
     return () => {
-      items.forEach(item => {
-        item.images.forEach(img => {
-          if (img.preview) URL.revokeObjectURL(img.preview);
-        });
+      images.forEach(img => {
+        if (img.preview) URL.revokeObjectURL(img.preview);
       });
     };
-  }, [items]);
+  }, [images]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
-      </div>
-    );
-  }
+  const maxItems = 25;
+  const maxPhotosPerItem = 24;
+  const currentItems = Math.ceil(images.length / maxPhotosPerItem);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="p-2 hover:bg-gray-100 rounded-lg">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <h1 className="text-xl font-bold">Batch Processing</h1>
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back to Dashboard
+          </button>
+          
+          <h1 className="text-3xl font-bold text-gray-900">Bulk Analysis</h1>
+          <p className="text-gray-600 mt-2">
+            Upload photos of multiple items for batch AI-powered listing creation
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex items-center">
+              <Package className="w-5 h-5 text-blue-600 mr-2" />
+              <div>
+                <p className="text-sm text-gray-600">Items</p>
+                <p className="text-lg font-semibold">{currentItems}/{maxItems}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
-              <CreditCard className="w-4 h-4 text-gray-600" />
-              <span className="font-medium">{credits} Credits</span>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex items-center">
+              <Camera className="w-5 h-5 text-green-600 mr-2" />
+              <div>
+                <p className="text-sm text-gray-600">Photos</p>
+                <p className="text-lg font-semibold">{images.length}/{maxItems * maxPhotosPerItem}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex items-center">
+              <CheckCircle className="w-5 h-5 text-purple-600 mr-2" />
+              <div>
+                <p className="text-sm text-gray-600">Grouped</p>
+                <p className="text-lg font-semibold">{groupedItems.length} items</p>
+              </div>
             </div>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Info Banner */}
+        {/* Info Box */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <p className="font-semibold text-blue-900">Batch Processing</p>
-              <p className="text-sm text-blue-700 mt-1">
-                Process up to 25 items with 24 photos each. Each item uses 1 credit.
-              </p>
+          <div className="flex">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5 mr-3" />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-1">Bulk Analysis Process:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Upload up to {maxItems} items with {maxPhotosPerItem} photos each</li>
+                <li>AI will group similar photos automatically</li>
+                <li>Each item gets professional fashion terminology analysis</li>
+                <li>Generate eBay listings with proper titles and descriptions</li>
+                <li>Process includes brand detection and size identification</li>
+              </ul>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Items List */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm border">
-              <div className="p-4 border-b">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">Items ({items.length}/25)</h2>
-                  <button
-                    onClick={addNewItem}
-                    disabled={items.length >= 25 || isProcessing}
-                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="max-h-96 overflow-y-auto">
-                {items.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
-                    <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No items added</p>
-                    <button
-                      onClick={addNewItem}
-                      className="mt-3 text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      Add your first item
-                    </button>
-                  </div>
-                ) : (
-                  <div className="divide-y">
-                    {items.map((item, index) => (
-                      <div
-                        key={item.id}
-                        className={`p-3 cursor-pointer hover:bg-gray-50 ${
-                          currentItemIndex === index ? 'bg-blue-50' : ''
-                        }`}
-                        onClick={() => setCurrentItemIndex(index)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <p className="font-medium">{item.name}</p>
-                            <p className="text-sm text-gray-500">
-                              {item.images.length} photo{item.images.length !== 1 ? 's' : ''}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {item.status === 'completed' && (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                            )}
-                            {item.status === 'processing' && (
-                              <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeItem(index);
-                              }}
-                              disabled={isProcessing}
-                              className="p-1 hover:bg-gray-200 rounded disabled:opacity-50"
-                            >
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+              <p className="text-sm text-red-800">{error}</p>
             </div>
           </div>
+        )}
 
-          {/* Image Upload Area */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              {items.length === 0 || !items[currentItemIndex] ? (
-                <div className="text-center py-12">
-                  <Image className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <p className="text-gray-500">Add an item to start uploading photos</p>
-                </div>
-              ) : (
-                <>
-                  <div className="mb-4">
-                    <h3 className="font-semibold text-lg">
-                      {items[currentItemIndex].name}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {items[currentItemIndex].images.length}/24 photos
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 mb-4">
-                    {items[currentItemIndex].images.map((image) => (
-                      <div key={image.id} className="relative group">
-                        <img
-                          src={image.preview}
-                          alt={image.name}
-                          className="w-full h-20 object-cover rounded-lg"
-                        />
-                        <button
-                          onClick={() => removeImage(currentItemIndex, image.id)}
-                          disabled={isProcessing}
-                          className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                    
-                    {items[currentItemIndex].images.length < 24 && !isProcessing && (
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="h-20 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-gray-400 transition"
-                      >
-                        <Camera className="w-6 h-6 text-gray-400" />
-                      </button>
-                    )}
-                  </div>
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                </>
+        {/* Upload Area */}
+        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Upload Photos</h2>
+            <div className="flex gap-2">
+              {images.length > 0 && groupedItems.length === 0 && (
+                <button
+                  onClick={groupImages}
+                  disabled={isAnalyzing}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  Group Images
+                </button>
               )}
             </div>
           </div>
+
+          {images.length === 0 ? (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-gray-400 transition"
+            >
+              <Upload className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-2 text-sm text-gray-600">
+                Click to upload photos or drag and drop
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                PNG, JPG up to 10MB each • Up to {maxItems * maxPhotosPerItem} photos total
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+              {images.map((image) => (
+                <div key={image.id} className="relative group">
+                  <img
+                    src={image.preview}
+                    alt={image.name}
+                    className={`w-full h-20 object-cover rounded-lg ${
+                      image.grouped ? 'opacity-50' : ''
+                    }`}
+                  />
+                  <button
+                    onClick={() => removeImage(image.id)}
+                    disabled={isAnalyzing}
+                    className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              
+              {images.length < maxItems * maxPhotosPerItem && !isAnalyzing && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-20 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-gray-400 transition"
+                >
+                  <Plus className="w-6 h-6 text-gray-400" />
+                </button>
+              )}
+            </div>
+          )}
+          
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
         </div>
 
-        {/* Process Button */}
-        {items.length > 0 && (
-          <div className="mt-6 bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold">Ready to process?</p>
-                <p className="text-sm text-gray-500">
-                  {items.filter(item => item.images.length > 0).length} items will use {items.filter(item => item.images.length > 0).length} credits
-                </p>
-              </div>
-              
+        {/* Grouped Items */}
+        {groupedItems.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Grouped Items</h2>
               <button
-                onClick={processItems}
-                disabled={isProcessing || items.filter(item => item.images.length > 0).length === 0}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                onClick={analyzeBulk}
+                disabled={isAnalyzing}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
               >
-                {isProcessing ? (
+                {isAnalyzing ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Processing {uploadProgress}%
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analyzing {Math.floor(uploadProgress)}%
                   </>
                 ) : (
-                  <>
-                    <Upload className="w-5 h-5" />
-                    Process All Items
-                  </>
+                  `Analyze ${groupedItems.length} Items`
                 )}
               </button>
             </div>
-            
-            {isProcessing && (
-              <div className="mt-4">
+
+            {isAnalyzing && (
+              <div className="mb-4">
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
@@ -400,9 +351,54 @@ export default function BatchProcessingPage() {
                 </div>
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {groupedItems.map((item) => (
+                <div key={item.id} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-medium">{item.name}</h3>
+                    <div className={`px-2 py-1 rounded-full text-xs ${
+                      item.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      item.status === 'analyzing' ? 'bg-yellow-100 text-yellow-800' :
+                      item.status === 'failed' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {item.status}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-4 gap-1 mb-2">
+                    {item.images.slice(0, 8).map((img) => (
+                      <img
+                        key={img.id}
+                        src={img.preview}
+                        alt=""
+                        className="w-full h-12 object-cover rounded"
+                      />
+                    ))}
+                    {item.images.length > 8 && (
+                      <div className="w-full h-12 bg-gray-100 rounded flex items-center justify-center text-xs text-gray-600">
+                        +{item.images.length - 8}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <p className="text-sm text-gray-600">
+                    {item.images.length} photos
+                  </p>
+
+                  {item.analysis && (
+                    <div className="mt-2 text-sm">
+                      <p className="font-medium">{item.analysis.ebay_title}</p>
+                      <p className="text-gray-600">£{item.analysis.suggested_price}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
