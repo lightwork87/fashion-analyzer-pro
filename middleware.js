@@ -1,5 +1,3 @@
-# Revert to the minimal middleware that worked
-cat > middleware.js << 'EOF'
 // middleware.js
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
@@ -11,4 +9,3 @@ export const config = {
     '/(api|trpc)(.*)',
   ],
 };
-EOF
