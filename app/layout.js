@@ -1,4 +1,6 @@
-// app/layout.js - Replace your current ClerkProvider with this
+// app/layout.js
+// COMPLETE FILE - Copy this entire file
+
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { ClerkProvider } from '@clerk/nextjs';
@@ -15,19 +17,26 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <ClerkProvider
+      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       afterSignInUrl="/dashboard"
       afterSignUpUrl="/dashboard"
-      domain={undefined}  // Explicitly undefined
-      isSatellite={false}  // Disable satellite
-      sdkMetadata={{
-        host: window?.location?.host || 'lightlisterai.co.uk',
-        protocol: 'https',
-        name: '@clerk/nextjs',
+      appearance={{
+        baseTheme: undefined,
+        variables: {
+          colorPrimary: '#4F46E5',
+          colorText: '#111827',
+          colorTextSecondary: '#6B7280',
+          colorBackground: '#FFFFFF',
+          colorInputBackground: '#FFFFFF',
+          colorInputText: '#111827',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          borderRadius: '0.5rem'
+        }
       }}
     >
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning>
         <body className={inter.className}>
           <ThemeProvider>
             <CreditsProvider>
