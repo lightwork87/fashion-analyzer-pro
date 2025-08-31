@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 import { 
   Home,
   Camera,
-  Images,
+  Image,
   Package,
   History,
   CreditCard,
@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }) {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Single Analysis', href: '/dashboard/analyze-single', icon: Camera },
-    { name: 'Batch Processing', href: '/dashboard/batch-processing/', icon: Images }, // FIXED: Added trailing slash
+    { name: 'Batch Processing', href: '/dashboard/batch-processing/', icon: Image }, // FIXED: Added trailing slash
     { name: 'Listings', href: '/dashboard/listings', icon: Package },
     { name: 'History', href: '/dashboard/history', icon: History },
     { name: 'Buy Credits', href: '/dashboard/get-credits', icon: CreditCard },

@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Camera,
-  Images,
+  Image,
   CreditCard,
   Package,
   TrendingUp,
@@ -93,7 +93,7 @@ export default function DashboardPage() {
     {
       title: 'Batch Processing',
       description: 'Process up to 25 items with 24 photos each',
-      icon: Images,
+      icon: Image,
       color: 'purple',
       href: '/dashboard/batch-processing/'
     }

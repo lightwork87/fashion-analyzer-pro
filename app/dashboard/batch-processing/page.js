@@ -11,7 +11,7 @@ import {
   ArrowLeft,
   Upload,
   Package,
-  Images,
+  Image,
   Loader2,
   AlertCircle,
   Info,
@@ -84,7 +84,7 @@ export default function BatchProcessingPage() {
     const remainingSlots = 24 - currentItem.images.length;
     const filesToAdd = files.slice(0, remainingSlots);
     
-    const newImages = filesToAdd.map(file => ({
+    const newImage = filesToAdd.map(file => ({
       id: Date.now() + Math.random(),
       file: file,
       preview: URL.createObjectURL(file),
@@ -317,7 +317,7 @@ export default function BatchProcessingPage() {
             <div className="bg-white rounded-lg shadow-sm border p-6">
               {items.length === 0 || !items[currentItemIndex] ? (
                 <div className="text-center py-12">
-                  <Images className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <Image className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                   <p className="text-gray-500">Add an item to start uploading photos</p>
                 </div>
               ) : (

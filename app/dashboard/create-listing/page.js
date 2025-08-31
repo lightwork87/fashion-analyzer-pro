@@ -23,7 +23,7 @@ export default function CreateListingPage() {
       return;
     }
 
-    const newImages = files.map(file => ({
+    const newImage = files.map(file => ({
       file,
       preview: URL.createObjectURL(file),
       id: Math.random().toString(36).substr(2, 9)
@@ -50,7 +50,7 @@ export default function CreateListingPage() {
     try {
       // For now, just send placeholder data since we know the API works
       // This avoids the 413 error while still getting results
-      const placeholderImages = images.map((_, index) => `image-${index + 1}`);
+      const placeholderImage = images.map((_, index) => `image-${index + 1}`);
       
       console.log('Sending request with placeholder images:', placeholderImages.length);
       

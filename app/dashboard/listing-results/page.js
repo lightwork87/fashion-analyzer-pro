@@ -25,7 +25,7 @@ export default function NewListingPage() {
       return;
     }
 
-    const newImages = files.map(file => ({
+    const newImage = files.map(file => ({
       file,
       preview: URL.createObjectURL(file),
       id: Math.random().toString(36).substr(2, 9)
@@ -66,7 +66,7 @@ export default function NewListingPage() {
       console.log('Converting images to base64...');
       setDebugInfo('Converting images...');
       
-      const base64Images = await Promise.all(
+      const base64Image = await Promise.all(
         images.map(img => convertToBase64(img.file))
       );
       

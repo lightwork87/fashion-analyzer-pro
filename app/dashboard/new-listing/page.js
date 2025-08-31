@@ -23,7 +23,7 @@ export default function NewListingPage() {
       return;
     }
 
-    const newImages = files.map(file => ({
+    const newImage = files.map(file => ({
       file,
       preview: URL.createObjectURL(file),
       id: Math.random().toString(36).substr(2, 9)

@@ -83,7 +83,7 @@ export default function SmartUploadPage() {
     }
   };
 
-  const analyzeImages = async (urls) => {
+  const analyzeImage = async (urls) => {
     setIsAnalyzing(true);
     
     try {

@@ -56,7 +56,7 @@ export default function AnalyzeSinglePage() {
     }
     
     // Add valid images (max 24 total)
-    const newImages = validFiles.slice(0, 24 - images.length).map(file => ({
+    const newImage = validFiles.slice(0, 24 - images.length).map(file => ({
       id: Date.now() + Math.random(),
       file: file,
       preview: URL.createObjectURL(file),
@@ -95,7 +95,7 @@ export default function AnalyzeSinglePage() {
     try {
       // Step 1: Upload images to storage
       const uploadedUrls = [];
-      const totalImages = images.length;
+      const totalImage = images.length;
       
       for (let i = 0; i < totalImages; i++) {
         setUploadProgress(Math.round((i / totalImages) * 40));
