@@ -1,3 +1,4 @@
+// app/layout.js - Replace your current ClerkProvider with this
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { ClerkProvider } from '@clerk/nextjs';
@@ -18,6 +19,13 @@ export default function RootLayout({ children }) {
       signUpUrl="/sign-up"
       afterSignInUrl="/dashboard"
       afterSignUpUrl="/dashboard"
+      domain={undefined}  // Explicitly undefined
+      isSatellite={false}  // Disable satellite
+      sdkMetadata={{
+        host: window?.location?.host || 'lightlisterai.co.uk',
+        protocol: 'https',
+        name: '@clerk/nextjs',
+      }}
     >
       <html lang="en">
         <body className={inter.className}>
