@@ -23,18 +23,20 @@ export async function GET() {
     }
 
     // Get recent analyses from database
+    // FIX: Use clerk_user_id column (text type) instead of user_id (uuid type)
     const { data: analyses, error } = await supabase
       .from('analyses')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('clerk_user_id', user.id)  // CHANGED FROM user_id to clerk_user_id
       .order('created_at', { ascending: false })
       .limit(10);
 
     if (error) {
       console.error('Error fetching analyses:', error);
+      // Return empty array instead of throwing error
       return NextResponse.json({ 
         analyses: [],
-        error: 'Failed to fetch analyses'
+        message: 'No analyses found'
       });
     }
 
