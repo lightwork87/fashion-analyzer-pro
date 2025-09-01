@@ -6,7 +6,7 @@
 import Link from 'next/link';
 import { ArrowLeft, HelpCircle, Mail, FileText, Video } from 'lucide-react';
 
-export default function HelpPage() {
+HelpPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -83,3 +83,4 @@ export default function HelpPage() {
   );
 }
 
+export default HelpPage;

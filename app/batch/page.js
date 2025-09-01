@@ -7,7 +7,7 @@ import { useUserData } from '../hooks/useUserData';
 import Image from 'next/image';
 import Link from 'next/link';
 
-export default function BatchProcessing() {
+BatchProcessing() {
     const router = useRouter();
     const { user: clerkUser, isLoaded } = useUser();
     const { user, loading: userLoading } = useUserData();
@@ -452,3 +452,5 @@ export default function BatchProcessing() {
       </div>
     );
 }
+
+export default BatchProcessing;

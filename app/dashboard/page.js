@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/page.js - COMPLETE FIXED VERSION
 'use client';
 

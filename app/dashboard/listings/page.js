@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/listings/page.js - COMPLETE FILE
 'use client';
 
@@ -12,7 +14,7 @@ import {
   ExternalLink 
 } from 'lucide-react';
 
-export default function ListingsPage() {
+ListingsPage() {
   const router = useRouter();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -193,3 +195,4 @@ export default function ListingsPage() {
   );
 }
 
+export default ListingsPage;

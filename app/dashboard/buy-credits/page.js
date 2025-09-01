@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/buy-credits/page.js
 // COMPLETE FILE - BUY CREDITS PAGE
 
@@ -20,7 +22,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
-export default function BuyCreditsPage() {
+BuyCreditsPage() {
   const { user } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -366,3 +368,4 @@ export default function BuyCreditsPage() {
   );
 }
 
+export default BuyCreditsPage;

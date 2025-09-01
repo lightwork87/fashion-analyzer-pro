@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function BatchResults() {
+BatchResults() {
     const router = useRouter();
     const [results, setResults] = useState([]);
     const [selectedItems, setSelectedItems] = useState([]);
@@ -227,3 +227,5 @@ export default function BatchResults() {
       </div>
     );
 }
+
+export default BatchResults;

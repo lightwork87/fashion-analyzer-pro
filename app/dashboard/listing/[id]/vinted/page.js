@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/listing/[id]/vinted/page.js
 // VINTED EXPORT PAGE - CORRECT PATH (singular)
 
@@ -16,7 +18,7 @@ import {
   Download
 } from 'lucide-react';
 
-export default function VintedListingPage() {
+VintedListingPage() {
   const params = useParams();
   const router = useRouter();
   const [analysis, setAnalysis] = useState(null);
@@ -271,3 +273,4 @@ Feel free to ask any questions! 😊`;
   );
 }
 
+export default VintedListingPage;

@@ -181,3 +181,4 @@ function AnalyzeSinglePage() {
   );
 }
 
+export default AnalyzeSinglePage;

@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/results/page.js
 // COMPLETE RESULTS PAGE WITH AI LEARNING CORRECTIONS
 
@@ -22,7 +24,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-export default function ResultsPage() {
+ResultsPage() {
   const router = useRouter();
   const { userId } = useAuth();
   const [analysis, setAnalysis] = useState(null);
@@ -501,3 +503,4 @@ export default function ResultsPage() {
   );
 }
 
+export default ResultsPage;

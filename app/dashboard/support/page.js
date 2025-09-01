@@ -4,7 +4,7 @@ import Link from 'next/link';
 import CreditsDisplay from '../../components/CreditsDisplay';
 import ThemeToggle from '../../components/ThemeToggle';
 
-export default function SupportPage() {
+SupportPage() {
   const handleEmailClick = () => {
     window.location.href = 'mailto:lightlisterai@outlook.com?subject=Support Request';
   };
@@ -108,3 +108,4 @@ export default function SupportPage() {
   );
 }
 
+export default SupportPage;

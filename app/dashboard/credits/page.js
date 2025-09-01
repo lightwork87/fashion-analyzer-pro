@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/credits/page.js
 // FIXED TO MATCH YOUR ACTUAL STRIPE PRODUCTS
 
@@ -12,7 +14,7 @@ import {
   ChevronRight, Loader2, Star, Package, Info
 } from 'lucide-react';
 
-export default function CreditsPage() {
+CreditsPage() {
   const { user } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -268,3 +270,4 @@ export default function CreditsPage() {
   );
 }
 
+export default CreditsPage;

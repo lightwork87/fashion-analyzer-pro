@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function EbaySettingsPage() {
+EbaySettingsPage() {
   const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
   
@@ -89,3 +89,4 @@ export default function EbaySettingsPage() {
   );
 }
 
+export default EbaySettingsPage;

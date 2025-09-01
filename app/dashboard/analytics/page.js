@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/analytics/page.js
 // ANALYTICS DASHBOARD
 
@@ -16,7 +18,7 @@ import {
   BarChart3
 } from 'lucide-react';
 
-export default function AnalyticsPage() {
+AnalyticsPage() {
   const router = useRouter();
   const [dateRange, setDateRange] = useState('30d');
   const [stats, setStats] = useState({
@@ -178,3 +180,4 @@ export default function AnalyticsPage() {
   );
 }
 
+export default AnalyticsPage;

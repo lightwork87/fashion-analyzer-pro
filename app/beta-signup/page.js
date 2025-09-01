@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2, Check } from 'lucide-react';
 
-export default function BetaSignupPage() {
+BetaSignupPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -192,3 +192,5 @@ export default function BetaSignupPage() {
       </div>
     );
 }
+
+export default BetaSignupPage;

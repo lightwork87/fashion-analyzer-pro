@@ -239,3 +239,4 @@ function BatchProcessingPage() {
   );
 }
 
+export default BatchProcessingPage;

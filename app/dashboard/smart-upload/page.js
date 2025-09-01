@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/smart-upload/page.js
 // WORKING VERSION WITH REAL AI ANALYSIS
 
@@ -9,7 +11,7 @@ import { useAuth } from '@clerk/nextjs';
 import { Upload, X, AlertCircle, Loader2, Image as ImageIcon } from 'lucide-react';
 import { uploadImage, deleteImage } from '../../lib/storage';
 
-export default function SmartUploadPage() {
+SmartUploadPage() {
   const { userId } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef(null);
@@ -256,3 +258,4 @@ export default function SmartUploadPage() {
   );
 }
 
+export default SmartUploadPage;

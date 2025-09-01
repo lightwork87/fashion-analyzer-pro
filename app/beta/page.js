@@ -1,3 +1,5 @@
+'use client';
+
 // app/beta/page.js - COMPLETE FIXED VERSION  
 'use client';
 

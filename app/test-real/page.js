@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export default function TestRealPage() {
+TestRealPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -164,3 +164,4 @@ export default function TestRealPage() {
   );
 }
 
+export default TestRealPage;

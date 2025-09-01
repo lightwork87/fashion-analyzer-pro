@@ -1,7 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 
-export default function QuickList() {
+QuickList() {
   const router = useRouter();
   
   const handleQuickAnalyze = async () => {
@@ -31,3 +31,4 @@ export default function QuickList() {
   );
 }
 
+export default QuickList;

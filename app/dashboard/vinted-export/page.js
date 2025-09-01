@@ -1,9 +1,11 @@
+'use client';
+
 // app/dashboard/vinted-export/page.js
 'use client';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Download } from 'lucide-react';
 
-export default function VintedExportPage() {
+VintedExportPage() {
   const router = useRouter();
   
   return (
@@ -27,3 +29,4 @@ export default function VintedExportPage() {
   );
 }
 
+export default VintedExportPage;

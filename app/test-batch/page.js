@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export default function TestBatch() {
+TestBatch() {
   const [log, setLog] = useState([]);
   const [images, setImages] = useState([]);
 
@@ -145,3 +145,4 @@ export default function TestBatch() {
   );
 }
 
+export default TestBatch;

@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/create-listing/page.js
 // FIXED VERSION - Sends data in correct format
 
@@ -8,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Upload, X, Loader2 } from 'lucide-react';
 
-export default function CreateListingPage() {
+CreateListingPage() {
   const [images, setImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
@@ -231,3 +233,4 @@ export default function CreateListingPage() {
   );
 }
 
+export default CreateListingPage;

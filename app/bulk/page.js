@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 
-export default function BulkProcessing() {
+BulkProcessing() {
   const [images, setImages] = useState([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [results, setResults] = useState([])
@@ -609,3 +609,4 @@ export default function BulkProcessing() {
   )
 }
 
+export default BulkProcessing;

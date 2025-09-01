@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-export default function History() {
+History() {
   const [analyses, setAnalyses] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -71,3 +71,4 @@ export default function History() {
   );
 }
 
+export default History;

@@ -1,9 +1,11 @@
+'use client';
+
 // app/dashboard/ebay-settings/page.js
 'use client';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
-export default function EbaySettingsPage() {
+EbaySettingsPage() {
   const router = useRouter();
   
   return (
@@ -23,3 +25,4 @@ export default function EbaySettingsPage() {
   );
 }
 
+export default EbaySettingsPage;

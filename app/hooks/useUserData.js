@@ -1,77 +1,63 @@
-import { useUser } from '@clerk/nextjs';
+// app/hooks/useUserData.js - COMPLETE REWRITE
+'use client';
+
 import { useEffect, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { getOrCreateUser, checkUserCredits } from '../lib/supabase';
 
 export function useUserData() {
-  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const { user, isLoaded } = useUser();
   const [userData, setUserData] = useState(null);
-  const [creditInfo, setCreditInfo] = useState({
-    creditsRemaining: 0,
-    totalCredits: 0,
-    creditsUsed: 0,
-    subscription: 'free'
-  });
+  const [credits, setCredits] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    async function loadUserData() {
-      if (!clerkLoaded) return;
-      
-      if (!clerkUser) {
+    async function fetchUserData() {
+      if (!isLoaded || !user) {
         setLoading(false);
         return;
       }
 
       try {
-        // Get or create user in database
-        const { user, error: userError } = await getOrCreateUser(clerkUser);
+        setLoading(true);
         
-        if (userError) {
-          setError(userError);
-          setLoading(false);
-          return;
-        }
-
-        setUserData(user);
-
-        // Get credit info
-        const creditCheck = await checkUserCredits(clerkUser.id);
+        // Get or create user
+        const dbUser = await getOrCreateUser(user.id, user.emailAddresses[0]?.emailAddress);
+        setUserData(dbUser);
         
-        setCreditInfo({
-          creditsRemaining: creditCheck.creditsAvailable || 0,
-          totalCredits: creditCheck.totalCredits || 0,
-          creditsUsed: creditCheck.creditsUsed || 0,
-          subscription: user?.subscription_plan || 'free'
-        });
-      } catch (err) {
-        console.error('Error loading user data:', err);
-        setError(err);
+        // Check credits
+        const userCredits = await checkUserCredits(user.id);
+        setCredits(userCredits);
+        
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        setError(error.message);
       } finally {
         setLoading(false);
       }
     }
 
-    loadUserData();
-  }, [clerkUser, clerkLoaded]);
+    fetchUserData();
+  }, [user, isLoaded]);
 
   const refreshCredits = async () => {
-    if (!clerkUser) return;
+    if (!user) return;
     
-    const creditCheck = await checkUserCredits(clerkUser.id);
-    setCreditInfo({
-      creditsRemaining: creditCheck.creditsAvailable || 0,
-      totalCredits: creditCheck.totalCredits || 0,
-      creditsUsed: creditCheck.creditsUsed || 0,
-      subscription: userData?.subscription_plan || 'free'
-    });
+    try {
+      const userCredits = await checkUserCredits(user.id);
+      setCredits(userCredits);
+    } catch (error) {
+      console.error('Error refreshing credits:', error);
+    }
   };
 
   return {
-    user: userData,
-    creditInfo,
+    userData,
+    credits,
     loading,
     error,
-    refreshCredits
+    refreshCredits,
+    user
   };
 }

@@ -1,3 +1,5 @@
+'use client';
+
 // app/clerk-debug/page.js
 // CREATE THIS FILE to debug Clerk issues
 
@@ -5,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 
-export default function ClerkDebugPage() {
+ClerkDebugPage() {
   const [clerkStatus, setClerkStatus] = useState('Checking...');
   const [debugInfo, setDebugInfo] = useState({});
 
@@ -120,3 +122,4 @@ export default function ClerkDebugPage() {
   );
 }
 
+export default ClerkDebugPage;

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { formatPrice, formatPriceRange } from '../utils/currency';
 
-export default function HistoryPage() {
+HistoryPage() {
   const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
   
@@ -684,3 +684,4 @@ export default function HistoryPage() {
   );
 }
 
+export default HistoryPage;

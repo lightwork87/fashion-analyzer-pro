@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/new-listing/page.js
 // WORKING VERSION - Does NOT send base64 images
 
@@ -8,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Upload, X, Loader2 } from 'lucide-react';
 
-export default function NewListingPage() {
+NewListingPage() {
   const [images, setImages] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
@@ -194,3 +196,4 @@ export default function NewListingPage() {
   );
 }
 
+export default NewListingPage;

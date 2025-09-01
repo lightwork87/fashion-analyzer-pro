@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 
-export default function TestUpload() {
+TestUpload() {
   const fileInputRef = useRef(null);
   const [files, setFiles] = useState([]);
   const [log, setLog] = useState([]);
@@ -77,3 +77,4 @@ export default function TestUpload() {
   );
 }
 
+export default TestUpload;

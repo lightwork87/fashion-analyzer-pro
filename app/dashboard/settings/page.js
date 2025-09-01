@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 
-export default function SettingsPage() {
+SettingsPage() {
   const { user } = useUser();
   const router = useRouter();
   const [ebayConnected, setEbayConnected] = useState(false);
@@ -288,3 +288,4 @@ export default function SettingsPage() {
   );
 }
 
+export default SettingsPage;

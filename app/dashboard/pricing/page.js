@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useCredits } from '../../contexts/CreditsContext';
 
-export default function PricingPage() {
+PricingPage() {
   const { user } = useUser();
   const { credits, updateCredits } = useCredits();
   const [isMember, setIsMember] = useState(false); // Would check actual membership status
@@ -193,3 +193,4 @@ export default function PricingPage() {
   );
 }
 
+export default PricingPage;

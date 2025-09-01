@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function BatchItemDetail() {
+BatchItemDetail() {
     const params = useParams();
     const router = useRouter();
     const [item, setItem] = useState(null);
@@ -180,3 +180,5 @@ export default function BatchItemDetail() {
       </div>
     );
 }
+
+export default BatchItemDetail;

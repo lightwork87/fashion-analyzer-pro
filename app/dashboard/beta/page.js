@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/beta/page.js
 // COMPLETE BETA PROGRAM PAGE WITH SIGNUP FORM
 
@@ -20,7 +22,7 @@ import {
   Shield
 } from 'lucide-react';
 
-export default function BetaProgramPage() {
+BetaProgramPage() {
   const { user } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -301,3 +303,4 @@ export default function BetaProgramPage() {
   );
 }
 
+export default BetaProgramPage;

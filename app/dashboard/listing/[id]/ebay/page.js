@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/listing/[id]/ebay/page.js
 // EBAY LISTING PAGE - CORRECT PATH (singular)
 
@@ -16,7 +18,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-export default function EbayListingPage() {
+EbayListingPage() {
   const params = useParams();
   const router = useRouter();
   const [analysis, setAnalysis] = useState(null);
@@ -238,3 +240,4 @@ export default function EbayListingPage() {
   );
 }
 
+export default EbayListingPage;

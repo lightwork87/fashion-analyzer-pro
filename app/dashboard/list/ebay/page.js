@@ -125,7 +125,7 @@ const ITEM_SPECIFICS = {
   }
 };
 
-export default function EbayListingPage() {
+EbayListingPage() {
   const { user } = useUser();
   const router = useRouter();
   
@@ -1079,3 +1079,4 @@ export default function EbayListingPage() {
   );
 }
 
+export default EbayListingPage;

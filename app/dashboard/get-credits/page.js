@@ -1,3 +1,5 @@
+'use client';
+
 // app/dashboard/get-credits/page.js
 // COMPLETE FILE - UPDATED TO MATCH ACTUAL STRIPE PRODUCTS
 
@@ -17,7 +19,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
-export default function GetCreditsPage() {
+GetCreditsPage() {
   const { user } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -362,3 +364,4 @@ export default function GetCreditsPage() {
   );
 }
 
+export default GetCreditsPage;

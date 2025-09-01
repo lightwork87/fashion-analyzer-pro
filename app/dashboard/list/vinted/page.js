@@ -177,7 +177,7 @@ const CONDITIONS = [
   { value: 'satisfactory', label: 'Satisfactory', description: 'Worn frequently, visible signs of wear' }
 ];
 
-export default function VintedListingPage() {
+VintedListingPage() {
   const { user } = useUser();
   const router = useRouter();
   
@@ -1243,3 +1243,4 @@ export default function VintedListingPage() {
   );
 }
 
+export default VintedListingPage;

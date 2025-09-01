@@ -1,3 +1,5 @@
+'use client';
+
 // app/admin/beta/page.js - COMPLETE FIXED VERSION
 'use client';
 
