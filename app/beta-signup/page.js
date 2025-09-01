@@ -195,3 +195,5 @@ export default function BetaSignupPage() {
     </div>
   );
 }
+
+export default BetaSignupPage;

@@ -192,3 +192,5 @@ export default function PricingPage() {
     </div>
   );
 }
+
+export default PricingPage;

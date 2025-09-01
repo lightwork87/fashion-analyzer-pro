@@ -119,3 +119,5 @@ export default function ClerkDebugPage() {
     </div>
   );
 }
+
+export default ClerkDebugPage;

@@ -82,3 +82,5 @@ export default function HelpPage() {
     </div>
   );
 }
+
+export default HelpPage;

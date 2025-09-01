@@ -26,3 +26,5 @@ export default function VintedExportPage() {
     </div>
   );
 }
+
+export default VintedExportPage;

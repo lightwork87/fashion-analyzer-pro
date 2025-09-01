@@ -270,3 +270,5 @@ export default function BetaAdmin() {
     </main>
   );
 }
+
+export default BetaAdmin;

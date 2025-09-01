@@ -70,3 +70,5 @@ export default function History() {
     </div>
   );
 }
+
+export default History;

@@ -133,3 +133,5 @@ export default function TutorialPage() {
     </div>
   );
 }
+
+export default TutorialPage;

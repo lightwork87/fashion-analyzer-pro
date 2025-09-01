@@ -102,3 +102,5 @@ export default function TestDBPage() {
     </div>
   );
 }
+
+export default TestDBPage;

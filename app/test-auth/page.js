@@ -18,3 +18,5 @@ export default function TestAuth() {
     </div>
   );
 }
+
+export default TestAuth;

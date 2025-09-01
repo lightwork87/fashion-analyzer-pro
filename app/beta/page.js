@@ -294,3 +294,5 @@ export default function BetaPage() {
     </main>
   );
 }
+
+export default BetaPage;

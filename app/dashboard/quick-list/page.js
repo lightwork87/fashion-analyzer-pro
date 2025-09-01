@@ -30,3 +30,5 @@ export default function QuickList() {
     </div>
   );
 }
+
+export default QuickList;

@@ -180,3 +180,5 @@ export default function BatchItemDetail() {
     </div>
   );
 }
+
+export default BatchItemDetail;

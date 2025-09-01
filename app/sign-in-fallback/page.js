@@ -94,3 +94,5 @@ export default function SignInFallback() {
     </div>
   );
 }
+
+export default SignInFallback;

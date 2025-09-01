@@ -22,3 +22,5 @@ export default function EbaySettingsPage() {
     </div>
   );
 }
+
+export default EbaySettingsPage;

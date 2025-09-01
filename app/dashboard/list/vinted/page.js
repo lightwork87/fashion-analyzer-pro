@@ -1242,3 +1242,5 @@ export default function VintedListingPage() {
     </div>
   );
 }
+
+export default VintedListingPage;

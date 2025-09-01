@@ -300,3 +300,5 @@ export default function BetaProgramPage() {
     </div>
   );
 }
+
+export default BetaProgramPage;

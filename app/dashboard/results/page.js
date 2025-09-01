@@ -500,3 +500,5 @@ export default function ResultsPage() {
     </div>
   );
 }
+
+export default ResultsPage;

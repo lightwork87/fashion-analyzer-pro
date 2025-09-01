@@ -608,3 +608,5 @@ export default function BulkProcessing() {
     </div>
   )
 }
+
+export default BulkProcessing;

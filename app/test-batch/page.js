@@ -144,3 +144,5 @@ export default function TestBatch() {
     </div>
   );
 }
+
+export default TestBatch;

@@ -255,3 +255,5 @@ export default function SmartUploadPage() {
     </div>
   );
 }
+
+export default SmartUploadPage;

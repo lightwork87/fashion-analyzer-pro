@@ -270,3 +270,5 @@ Feel free to ask any questions! 😊`;
     </div>
   );
 }
+
+export default VintedListingPage;

@@ -192,3 +192,5 @@ export default function ListingsPage() {
     </div>
   );
 }
+
+export default ListingsPage;

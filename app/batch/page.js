@@ -452,3 +452,5 @@ export default function BatchProcessing() {
     </div>
   );
 }
+
+export default BatchProcessing;

@@ -683,3 +683,5 @@ export default function HistoryPage() {
     </div>
   );
 }
+
+export default HistoryPage;

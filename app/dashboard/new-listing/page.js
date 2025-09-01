@@ -193,3 +193,5 @@ export default function NewListingPage() {
     </div>
   );
 }
+
+export default NewListingPage;

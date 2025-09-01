@@ -1078,3 +1078,5 @@ export default function EbayListingPage() {
     </div>
   );
 }
+
+export default EbayListingPage;

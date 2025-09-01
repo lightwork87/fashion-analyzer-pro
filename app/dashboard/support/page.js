@@ -107,3 +107,5 @@ export default function SupportPage() {
     </div>
   );
 }
+
+export default SupportPage;

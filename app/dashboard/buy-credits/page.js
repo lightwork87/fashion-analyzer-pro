@@ -365,3 +365,5 @@ export default function BuyCreditsPage() {
     </div>
   );
 }
+
+export default BuyCreditsPage;

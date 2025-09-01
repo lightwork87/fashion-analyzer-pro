@@ -670,3 +670,5 @@ export default function PricingGuidePage() {
     </div>
   );
 }
+
+export default PricingGuidePage;

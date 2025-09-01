@@ -361,3 +361,5 @@ export default function GetCreditsPage() {
     </div>
   );
 }
+
+export default GetCreditsPage;

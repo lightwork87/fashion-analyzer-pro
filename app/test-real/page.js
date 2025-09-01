@@ -163,3 +163,5 @@ export default function TestRealPage() {
     </div>
   );
 }
+
+export default TestRealPage;

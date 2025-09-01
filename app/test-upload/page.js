@@ -76,3 +76,5 @@ export default function TestUpload() {
     </div>
   );
 }
+
+export default TestUpload;
