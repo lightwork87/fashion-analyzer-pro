@@ -8,11 +8,11 @@ const supabase = createClient(
 
 export async function POST(request) {
   try {
-    const { clerk_user_id, credits_to_add } = await request.json();
+    const { clerk_id, credits_to_add } = await request.json();
     
-    if (!clerk_user_id || !credits_to_add) {
+    if (!clerk_id || !credits_to_add) {
       return NextResponse.json(
-        { error: 'Missing clerk_user_id or credits_to_add' },
+        { error: 'Missing clerk_id or credits_to_add' },
         { status: 400 }
       );
     }
@@ -21,7 +21,7 @@ export async function POST(request) {
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('*')
-      .eq('clerk_user_id', clerk_user_id)
+      .eq('clerk_id', clerk_id)
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
@@ -39,26 +39,16 @@ export async function POST(request) {
       const { data, error } = await supabase
         .from('users')
         .update({ credits: newCredits })
-        .eq('clerk_user_id', clerk_user_id)
+        .eq('clerk_id', clerk_id)
         .select();
       
       result = data;
       if (error) throw error;
     } else {
-      // User doesn't exist, create new user with credits
-      const { data, error } = await supabase
-        .from('users')
-        .insert([
-          {
-            clerk_user_id,
-            credits: credits_to_add,
-            created_at: new Date().toISOString()
-          }
-        ])
-        .select();
-      
-      result = data;
-      if (error) throw error;
+      return NextResponse.json(
+        { error: 'User not found. Please sign up first.' },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
@@ -81,11 +71,11 @@ export async function POST(request) {
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const clerk_user_id = searchParams.get('clerk_user_id');
+    const clerk_id = searchParams.get('clerk_id');
 
-    if (!clerk_user_id) {
+    if (!clerk_id) {
       return NextResponse.json(
-        { error: 'Missing clerk_user_id parameter' },
+        { error: 'Missing clerk_id parameter' },
         { status: 400 }
       );
     }
@@ -93,7 +83,7 @@ export async function GET(request) {
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('clerk_user_id', clerk_user_id)
+      .eq('clerk_id', clerk_id)
       .single();
 
     if (error) {
