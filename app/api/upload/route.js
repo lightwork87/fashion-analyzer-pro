@@ -7,8 +7,10 @@ export async function POST(request) {
   try {
     const { userId } = await auth();
     
+    console.log('Upload route - userId:', userId);
+    
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized - No userId' }, { status: 401 });
     }
 
     const formData = await request.formData();
@@ -17,30 +19,39 @@ export async function POST(request) {
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'Invalid file type. Only images allowed.' }, { status: 400 });
-    }
-
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large. Maximum size is 10MB.' }, { status: 400 });
-    }
-
-    // Upload to Supabase
-    const url = await uploadImage(file, userId);
     
-    return NextResponse.json({ 
-      success: true, 
-      url 
-    });
+    // Check file size before processing
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    
+    if (buffer.length > 4.5 * 1024 * 1024) { // 4.5MB limit
+      return NextResponse.json({ error: 'File too large. Max 4.5MB allowed' }, { status: 413 });
+    }
 
+    // Upload to storage
+    const uploadResult = await uploadImage(buffer, file.name);
+    
+    if (!uploadResult.success) {
+      return NextResponse.json({ error: uploadResult.error }, { status: 500 });
+    }
+
+    return NextResponse.json({ 
+      url: uploadResult.url,
+      filename: file.name,
+      size: buffer.length
+    });
+    
   } catch (error) {
-    console.error('Upload API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to upload image' },
-      { status: 500 }
-    );
+    console.error('Upload error:', error);
+    return NextResponse.json({ 
+      error: 'Upload failed', 
+      details: error.message 
+    }, { status: 500 });
   }
 }
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
