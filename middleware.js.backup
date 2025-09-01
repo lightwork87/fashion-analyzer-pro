@@ -1,19 +1,19 @@
-// middleware.js
+cat > middleware.js << 'EOF'
 import { authMiddleware } from '@clerk/nextjs';
 
 export default authMiddleware({
   publicRoutes: [
     '/',
-    '/sign-in(.*)',
-    '/sign-up(.*)',
-    '/api/webhooks(.*)',
+    '/sign-in',
+    '/sign-up',
+    '/api/webhooks/(.*)',
     '/api/check-env',
-    '/clerk-debug',
-    '/pricing',
-    '/beta'
-  ]
+    '/clerk-debug'
+  ],
+  ignoredRoutes: ['/((?!api|trpc))(_next.*|.+\.[\w]+$)']
 });
 
 export const config = {
-  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: ['/((?!.*\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 };
+EOF
