@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { auth } from '@clerk/nextjs/server';
+import { currentUser } from '@clerk/nextjs/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,39 +9,36 @@ const supabase = createClient(
 
 export async function GET() {
   try {
-    const { userId } = auth();
+    const user = await currentUser();
+    const userId = user?.id;
     
     console.log('Debug - Clerk User ID:', userId);
 
     if (!userId) {
       return NextResponse.json({
         error: 'No userId from Clerk',
-        userId: userId
+        userId: userId,
+        hasUser: !!user
       });
     }
 
-    // Try to find user
-    const { data: user, error } = await supabase
+    // Try to find user in Supabase
+    const { data: dbUser, error } = await supabase
       .from('users')
       .select('*')
       .eq('clerk_id', userId)
       .single();
 
-    console.log('Debug - Supabase user:', user);
+    console.log('Debug - Supabase user:', dbUser);
     console.log('Debug - Supabase error:', error);
-
-    // Also check all users to see what clerk_ids exist
-    const { data: allUsers } = await supabase
-      .from('users')
-      .select('clerk_id, email, credits_remaining')
-      .limit(10);
 
     return NextResponse.json({
       clerk_user_id: userId,
-      found_user: user,
+      found_user: dbUser,
       supabase_error: error,
-      all_users_sample: allUsers,
-      credits_remaining: user?.credits_remaining || 0
+      credits_remaining: dbUser?.credits_remaining || 0,
+      credits_total: dbUser?.credits_total || 0,
+      credits_used: dbUser?.credits_used || 0
     });
 
   } catch (error) {
