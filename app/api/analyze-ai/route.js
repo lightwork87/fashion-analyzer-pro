@@ -1,4 +1,4 @@
-// app/api/analyze-ai/route.js - COMPLETE VERSION WITH DEBUG LOGGING
+// app/api/analyze-ai/route.js - COMPLETE FIXED VERSION WITH CLAUDE 3.5
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
@@ -163,7 +163,7 @@ Create a professional eBay UK listing. Respond with ONLY valid JSON:
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20240620',  // UPDATED TO CLAUDE 3.5 SONNET
         max_tokens: 2000,
         temperature: 0.2,
         messages: [{ role: 'user', content: prompt }]
@@ -200,6 +200,25 @@ Create a professional eBay UK listing. Respond with ONLY valid JSON:
   } catch (error) {
     console.error('❌ Claude analysis error:', error);
     return null;
+  }
+}
+
+// Store detected fashion terms for learning
+async function storeFashionTermsLearning(analysis, originalText) {
+  try {
+    if (analysis && (analysis.neckline || analysis.sleeve_type || analysis.silhouette)) {
+      await supabase.from('fashion_term_usage').insert({
+        original_text: originalText,
+        detected_terms: {
+          neckline: analysis.neckline,
+          sleeve_type: analysis.sleeve_type,
+          silhouette: analysis.silhouette
+        },
+        created_at: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Error storing fashion terms learning:', error);
   }
 }
 
@@ -337,6 +356,11 @@ export async function POST(request) {
               console.log('🏷️ Applying learned brand:', learnedPatterns.brand);
               finalAnalysis.brand = learnedPatterns.brand;
             }
+            
+            // Store fashion terms learning
+            if (finalAnalysis && textContent) {
+              await storeFashionTermsLearning(finalAnalysis, textContent);
+            }
           } else {
             console.log('⚠️ No vision results returned');
           }
@@ -378,12 +402,12 @@ export async function POST(request) {
     finalAnalysis.sku = sku;
     console.log('🏷️ Generated SKU:', sku);
     
-    // Store analysis in database
+    // Store analysis in database (simplified to avoid schema errors)
     try {
       console.log('💾 Storing analysis in database...');
       const { error: dbError } = await supabase.from('analyses').insert({
         user_id: userId,
-        results: finalAnalysis,
+        analysis_data: finalAnalysis,  // Store as JSON in single column
         created_at: new Date().toISOString()
       });
       
