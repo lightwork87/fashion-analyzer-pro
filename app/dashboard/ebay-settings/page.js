@@ -5,7 +5,7 @@
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
-EbaySettingsPage() {
+function EbaySettingsPage() {
   const router = useRouter();
   
   return (

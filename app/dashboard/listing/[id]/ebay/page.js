@@ -18,7 +18,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-EbayListingPage() {
+function EbayListingPage() {
   const params = useParams();
   const router = useRouter();
   const [analysis, setAnalysis] = useState(null);

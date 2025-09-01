@@ -18,7 +18,7 @@ import {
   BarChart3
 } from 'lucide-react';
 
-AnalyticsPage() {
+function AnalyticsPage() {
   const router = useRouter();
   const [dateRange, setDateRange] = useState('30d');
   const [stats, setStats] = useState({

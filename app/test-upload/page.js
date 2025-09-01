@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 
-TestUpload() {
+function TestUpload() {
   const fileInputRef = useRef(null);
   const [files, setFiles] = useState([]);
   const [log, setLog] = useState([]);

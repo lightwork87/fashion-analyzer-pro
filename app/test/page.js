@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-TestPage() {
+function TestPage() {
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <h1 className="text-2xl font-bold mb-8">Navigation Test Page</h1>

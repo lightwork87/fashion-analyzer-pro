@@ -11,7 +11,7 @@ import { useAuth } from '@clerk/nextjs';
 import { Upload, X, AlertCircle, Loader2, Image as ImageIcon } from 'lucide-react';
 import { uploadImage, deleteImage } from '../../lib/storage';
 
-SmartUploadPage() {
+function SmartUploadPage() {
   const { userId } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef(null);

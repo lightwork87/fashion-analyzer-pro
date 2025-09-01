@@ -177,7 +177,7 @@ const CONDITIONS = [
   { value: 'satisfactory', label: 'Satisfactory', description: 'Worn frequently, visible signs of wear' }
 ];
 
-VintedListingPage() {
+function VintedListingPage() {
   const { user } = useUser();
   const router = useRouter();
   

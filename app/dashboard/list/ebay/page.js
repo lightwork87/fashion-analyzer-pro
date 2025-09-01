@@ -125,7 +125,7 @@ const ITEM_SPECIFICS = {
   }
 };
 
-EbayListingPage() {
+function EbayListingPage() {
   const { user } = useUser();
   const router = useRouter();
   

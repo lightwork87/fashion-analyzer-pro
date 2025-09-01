@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 
-SettingsPage() {
+function SettingsPage() {
   const { user } = useUser();
   const router = useRouter();
   const [ebayConnected, setEbayConnected] = useState(false);

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-TestBatch() {
+function TestBatch() {
   const [log, setLog] = useState([]);
   const [images, setImages] = useState([]);
 

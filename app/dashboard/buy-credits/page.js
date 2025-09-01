@@ -22,7 +22,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
-BuyCreditsPage() {
+function BuyCreditsPage() {
   const { user } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(true);

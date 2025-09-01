@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-History() {
+function History() {
   const [analyses, setAnalyses] = useState([]);
   const [loading, setLoading] = useState(true);
 

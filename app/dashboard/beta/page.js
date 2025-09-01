@@ -22,7 +22,7 @@ import {
   Shield
 } from 'lucide-react';
 
-BetaProgramPage() {
+function BetaProgramPage() {
   const { user } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(true);

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-TestRealPage() {
+function TestRealPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);

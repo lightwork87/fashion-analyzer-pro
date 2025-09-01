@@ -14,7 +14,7 @@ import {
   ChevronRight, Loader2, Star, Package, Info
 } from 'lucide-react';
 
-CreditsPage() {
+function CreditsPage() {
   const { user } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(true);

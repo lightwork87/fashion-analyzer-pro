@@ -14,7 +14,7 @@ import {
   ExternalLink 
 } from 'lucide-react';
 
-ListingsPage() {
+function ListingsPage() {
   const router = useRouter();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);

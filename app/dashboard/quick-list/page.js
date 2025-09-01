@@ -1,7 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 
-QuickList() {
+function QuickList() {
   const router = useRouter();
   
   const handleQuickAnalyze = async () => {

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import CreditsDisplay from '../../components/CreditsDisplay';
 import ThemeToggle from '../../components/ThemeToggle';
 
-SupportPage() {
+function SupportPage() {
   const handleEmailClick = () => {
     window.location.href = 'mailto:lightlisterai@outlook.com?subject=Support Request';
   };

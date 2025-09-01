@@ -18,7 +18,7 @@ import {
   Download
 } from 'lucide-react';
 
-VintedListingPage() {
+function VintedListingPage() {
   const params = useParams();
   const router = useRouter();
   const [analysis, setAnalysis] = useState(null);

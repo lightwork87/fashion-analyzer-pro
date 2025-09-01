@@ -7,7 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { formatPrice, formatPriceRange } from '../utils/currency';
 
-HistoryPage() {
+function HistoryPage() {
   const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
   

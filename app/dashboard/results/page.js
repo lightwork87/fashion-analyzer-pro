@@ -24,7 +24,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-ResultsPage() {
+function ResultsPage() {
   const router = useRouter();
   const { userId } = useAuth();
   const [analysis, setAnalysis] = useState(null);

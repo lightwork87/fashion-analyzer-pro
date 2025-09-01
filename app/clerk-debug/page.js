@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 
-ClerkDebugPage() {
+function ClerkDebugPage() {
   const [clerkStatus, setClerkStatus] = useState('Checking...');
   const [debugInfo, setDebugInfo] = useState({});
 

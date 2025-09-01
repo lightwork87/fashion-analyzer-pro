@@ -66,7 +66,7 @@ const SEASONAL_INSIGHTS = [
   { item: 'Christmas Jumpers', bestMonth: 'November', increase: '120%' }
 ];
 
-PricingGuidePage() {
+function PricingGuidePage() {
   const { user } = useUser();
   const router = useRouter();
   

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { supabase, getOrCreateUser } from '../lib/supabase';
 
-TestDBPage() {
+function TestDBPage() {
   const { user, isLoaded } = useUser();
   const [status, setStatus] = useState('Checking...');
   const [dbUser, setDbUser] = useState(null);

@@ -5,7 +5,7 @@
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Download } from 'lucide-react';
 
-VintedExportPage() {
+function VintedExportPage() {
   const router = useRouter();
   
   return (
