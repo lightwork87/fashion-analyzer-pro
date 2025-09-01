@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 
-export default function AnalyzeSinglePage() {
+function AnalyzeSinglePage() {
   const { user } = useUser();
   const [credits, setCredits] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -46,3 +46,6 @@ export default function AnalyzeSinglePage() {
     </div>
   );
 }
+
+// This MUST be the default export
+export default AnalyzeSinglePage;
