@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { auth } from '@clerk/nextjs/server';
+import { currentUser } from '@clerk/nextjs/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,7 +9,8 @@ const supabase = createClient(
 
 export async function GET() {
   try {
-    const { userId } = auth();
+    const user = await currentUser();
+    const userId = user?.id;
     
     if (!userId) {
       return NextResponse.json(
@@ -18,13 +19,13 @@ export async function GET() {
       );
     }
 
-    const { data: user, error } = await supabase
+    const { data: dbUser, error } = await supabase
       .from('users')
       .select('credits_total, credits_used, credits_remaining, bonus_credits')
       .eq('clerk_id', userId)
       .single();
 
-    if (error || !user) {
+    if (error || !dbUser) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -33,10 +34,10 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      credits_total: user.credits_total,
-      credits_used: user.credits_used,
-      credits_remaining: user.credits_remaining,
-      bonus_credits: user.bonus_credits
+      credits_total: dbUser.credits_total,
+      credits_used: dbUser.credits_used,
+      credits_remaining: dbUser.credits_remaining,
+      bonus_credits: dbUser.bonus_credits
     });
 
   } catch (error) {
