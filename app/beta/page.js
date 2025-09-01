@@ -1,12 +1,12 @@
-// app/admin/beta/page.js - COMPLETE CORRECTED VERSION
+// app/beta/page.js - COMPLETE FIXED VERSION  
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { supabase } from '../../lib/supabase'; // CORRECT PATH: ../../lib/supabase
+import { supabase } from '../lib/supabase'; // CORRECT: ../lib/supabase
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-function AdminBetaPage() {
+function BetaPage() {
   const { user } = useUser();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ function AdminBetaPage() {
   if (loading) {
     return (
       <div className="container mx-auto p-6">
-        <div className="animate-pulse">Loading admin dashboard...</div>
+        <div className="animate-pulse">Loading beta dashboard...</div>
       </div>
     );
   }
@@ -45,10 +45,11 @@ function AdminBetaPage() {
     <div className="container mx-auto p-6">
       <Card>
         <CardHeader>
-          <CardTitle>Beta User Management</CardTitle>
+          <CardTitle>Beta Program</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            <p>Welcome to the beta program!</p>
             {users.map((user) => (
               <div key={user.id} className="p-4 border rounded-lg">
                 <h3 className="font-semibold">{user.email}</h3>
@@ -63,4 +64,4 @@ function AdminBetaPage() {
   );
 }
 
-export default AdminBetaPage;
+export default BetaPage;

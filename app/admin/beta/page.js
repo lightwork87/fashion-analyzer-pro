@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { supabase } from '../../../lib/supabase';
+import { supabase } from '../../lib/supabase'; // CORRECT: ../../lib/supabase
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 function AdminBetaPage() {
