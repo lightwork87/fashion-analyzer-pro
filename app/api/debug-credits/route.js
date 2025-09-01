@@ -1,51 +1,44 @@
-import { NextResponse } from 'next/server';
+// Add this line to force dynamic rendering
+export const dynamic = 'force-dynamic';
+
+import { auth } from '@clerk/nextjs';
 import { createClient } from '@supabase/supabase-js';
-import { currentUser } from '@clerk/nextjs/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 export async function GET() {
   try {
-    const user = await currentUser();
-    const userId = user?.id;
+    // Get user from Clerk
+    const { userId } = auth();
     
-    console.log('Debug - Clerk User ID:', userId);
-
     if (!userId) {
-      return NextResponse.json({
-        error: 'No userId from Clerk',
-        userId: userId,
-        hasUser: !!user
-      });
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Try to find user in Supabase
-    const { data: dbUser, error } = await supabase
+    // Get user credits from Supabase
+    const { data: userData, error } = await supabase
       .from('users')
-      .select('*')
+      .select('credits_remaining')
       .eq('clerk_id', userId)
       .single();
 
-    console.log('Debug - Supabase user:', dbUser);
-    console.log('Debug - Supabase error:', error);
+    if (error) {
+      console.error('Supabase error:', error);
+      return Response.json({ error: 'Database error' }, { status: 500 });
+    }
 
-    return NextResponse.json({
-      clerk_user_id: userId,
-      found_user: dbUser,
-      supabase_error: error,
-      credits_remaining: dbUser?.credits_remaining || 0,
-      credits_total: dbUser?.credits_total || 0,
-      credits_used: dbUser?.credits_used || 0
+    return Response.json({ 
+      credits: userData?.credits_remaining || 0,
+      userId: userId,
+      debug: true,
+      timestamp: new Date().toISOString()
     });
-
+    
   } catch (error) {
-    console.error('Debug error:', error);
-    return NextResponse.json({
-      error: 'Debug error',
-      details: error.message
-    });
+    console.error('Debug credits error:', error);
+    return Response.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
