@@ -1,81 +1,54 @@
-// app/api/debug-credits/route.js
-// Debug endpoint to check credit status
-
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
+import { auth } from '@clerk/nextjs/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-export const dynamic = 'force-dynamic';
-
 export async function GET() {
   try {
-    const { userId } = await auth();
+    const { userId } = auth();
     
+    console.log('Debug - Clerk User ID:', userId);
+
     if (!userId) {
-      return NextResponse.json({ error: 'Not authenticated' });
+      return NextResponse.json({
+        error: 'No userId from Clerk',
+        userId: userId
+      });
     }
 
-    // Check if user exists
-    const { data: userData, error: userError } = await supabase
+    // Try to find user
+    const { data: user, error } = await supabase
       .from('users')
       .select('*')
       .eq('clerk_id', userId)
       .single();
 
-    // If user doesn't exist, create them with free credits
-    if (!userData || userError) {
-      console.log('Creating new user with 50 credits');
-      
-      const { data: newUser, error: createError } = await supabase
-        .from('users')
-        .insert({
-          clerk_id: userId,
-          email: `user-${userId}@example.com`,
-          credits_total: 50,
-          credits_used: 0,
-          bonus_credits: 0,
-          subscription_status: 'trial'
-        })
-        .select()
-        .single();
+    console.log('Debug - Supabase user:', user);
+    console.log('Debug - Supabase error:', error);
 
-      if (createError) {
-        return NextResponse.json({ 
-          error: 'Failed to create user', 
-          details: createError 
-        });
-      }
-
-      return NextResponse.json({
-        message: 'User created with 50 free credits',
-        user: newUser,
-        credits_available: 50
-      });
-    }
-
-    // Calculate available credits
-    const creditsAvailable = (userData.credits_total || 0) - (userData.credits_used || 0) + (userData.bonus_credits || 0);
+    // Also check all users to see what clerk_ids exist
+    const { data: allUsers } = await supabase
+      .from('users')
+      .select('clerk_id, email, credits_remaining')
+      .limit(10);
 
     return NextResponse.json({
-      userId,
-      userData,
-      credits_available: creditsAvailable,
-      breakdown: {
-        total: userData.credits_total || 0,
-        used: userData.credits_used || 0,
-        bonus: userData.bonus_credits || 0
-      }
+      clerk_user_id: userId,
+      found_user: user,
+      supabase_error: error,
+      all_users_sample: allUsers,
+      credits_remaining: user?.credits_remaining || 0
     });
 
   } catch (error) {
-    return NextResponse.json({ 
-      error: 'Server error', 
-      message: error.message 
+    console.error('Debug error:', error);
+    return NextResponse.json({
+      error: 'Debug error',
+      details: error.message
     });
   }
 }
