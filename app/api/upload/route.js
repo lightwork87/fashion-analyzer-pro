@@ -1,4 +1,4 @@
-// app/api/upload/route.js - COMPLETE FILE
+// app/api/upload/route.js - COMPLETE FIXED VERSION
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { uploadImage } from '@/app/lib/storage';
@@ -20,6 +20,10 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
     
+    // Get filename BEFORE converting to buffer
+    const filename = file.name || 'image.jpg';
+    console.log('Uploading file:', filename);
+    
     // Check file size before processing
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
@@ -28,8 +32,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'File too large. Max 4.5MB allowed' }, { status: 413 });
     }
 
-    // Upload to storage
-    const uploadResult = await uploadImage(buffer, file.name);
+    // Upload to storage - pass filename explicitly
+    const uploadResult = await uploadImage(buffer, filename);
     
     if (!uploadResult.success) {
       return NextResponse.json({ error: uploadResult.error }, { status: 500 });
@@ -37,7 +41,7 @@ export async function POST(request) {
 
     return NextResponse.json({ 
       url: uploadResult.url,
-      filename: file.name,
+      filename: filename,
       size: buffer.length
     });
     
