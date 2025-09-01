@@ -178,4 +178,3 @@ export default function AnalyticsPage() {
   );
 }
 
-export default AnalyticsPage;

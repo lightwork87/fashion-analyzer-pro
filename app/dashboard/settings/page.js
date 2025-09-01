@@ -288,4 +288,3 @@ export default function SettingsPage() {
   );
 }
 
-export default SettingsPage;

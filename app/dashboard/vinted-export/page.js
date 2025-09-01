@@ -27,4 +27,3 @@ export default function VintedExportPage() {
   );
 }
 
-export default VintedExportPage;

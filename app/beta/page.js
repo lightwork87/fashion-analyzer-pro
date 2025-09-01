@@ -295,4 +295,3 @@ export default function BetaPage() {
   );
 }
 
-export default BetaPage;

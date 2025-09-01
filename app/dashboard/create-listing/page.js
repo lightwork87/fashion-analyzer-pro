@@ -231,4 +231,3 @@ export default function CreateListingPage() {
   );
 }
 
-export default CreateListingPage;

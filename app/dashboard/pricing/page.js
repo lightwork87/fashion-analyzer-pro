@@ -193,4 +193,3 @@ export default function PricingPage() {
   );
 }
 
-export default PricingPage;

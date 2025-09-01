@@ -248,4 +248,3 @@ export default function NewListingPage() {
   );
 }
 
-export default NewListingPage;

@@ -120,4 +120,3 @@ export default function ClerkDebugPage() {
   );
 }
 
-export default ClerkDebugPage;

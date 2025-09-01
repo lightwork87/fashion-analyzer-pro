@@ -134,4 +134,3 @@ export default function TutorialPage() {
   );
 }
 
-export default TutorialPage;

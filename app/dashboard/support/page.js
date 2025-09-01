@@ -108,4 +108,3 @@ export default function SupportPage() {
   );
 }
 
-export default SupportPage;

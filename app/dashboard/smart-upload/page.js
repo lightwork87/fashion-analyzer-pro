@@ -256,4 +256,3 @@ export default function SmartUploadPage() {
   );
 }
 
-export default SmartUploadPage;

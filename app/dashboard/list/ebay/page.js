@@ -1079,4 +1079,3 @@ export default function EbayListingPage() {
   );
 }
 
-export default EbayListingPage;

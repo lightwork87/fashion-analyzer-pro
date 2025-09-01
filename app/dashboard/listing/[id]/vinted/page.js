@@ -271,4 +271,3 @@ Feel free to ask any questions! 😊`;
   );
 }
 
-export default VintedListingPage;

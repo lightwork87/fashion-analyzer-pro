@@ -29,4 +29,3 @@ export default function SignInPage() {
   );
 }
 
-export default SignInPage;

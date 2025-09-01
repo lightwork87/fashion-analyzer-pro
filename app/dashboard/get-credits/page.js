@@ -362,4 +362,3 @@ export default function GetCreditsPage() {
   );
 }
 
-export default GetCreditsPage;

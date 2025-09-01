@@ -23,4 +23,3 @@ export default function EbaySettingsPage() {
   );
 }
 
-export default EbaySettingsPage;

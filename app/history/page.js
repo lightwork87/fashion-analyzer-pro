@@ -684,4 +684,3 @@ export default function HistoryPage() {
   );
 }
 
-export default HistoryPage;

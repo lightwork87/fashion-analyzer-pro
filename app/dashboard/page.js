@@ -149,4 +149,3 @@ function DashboardPage() {
         {/* Quick Action Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3
 
-export default DashboardPage;

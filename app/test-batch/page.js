@@ -145,4 +145,3 @@ export default function TestBatch() {
   );
 }
 
-export default TestBatch;

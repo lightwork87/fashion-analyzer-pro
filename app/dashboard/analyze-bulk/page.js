@@ -194,4 +194,3 @@ function AnalyzeBulkPage() {
   );
 }
 
-export default AnalyzeBulkPage;
