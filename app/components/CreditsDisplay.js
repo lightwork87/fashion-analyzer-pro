@@ -1,22 +1,43 @@
 'use client';
-
-import { useCredits } from '../contexts/CreditsContext';
+import { useState, useEffect } from 'react';
+import { useUser } from '@clerk/nextjs';
 
 export default function CreditsDisplay() {
-  const { credits, loading } = useCredits();
+  const { user } = useUser();
+  const [credits, setCredits] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
-        <span className="text-sm text-gray-600 dark:text-gray-300">Loading...</span>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const fetchCredits = async () => {
+      if (!user) return;
+      
+      try {
+        const response = await fetch('/api/user/credits');
+        if (response.ok) {
+          const data = await response.json();
+          setCredits(data.credits_remaining || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching credits:', error);
+        setCredits(0);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCredits();
+  }, [user]);
+
+  if (loading) return <span>Loading...</span>;
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
-      <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Credits:</span>
-      <span className="text-sm font-bold text-black dark:text-white">{credits}</span>
+    <div className="flex items-center space-x-2">
+      <span className="text-sm text-gray-600">
+        {credits?.toLocaleString()} credits
+      </span>
+      <button className="text-blue-600 text-sm hover:underline">
+        Get More
+      </button>
     </div>
   );
 }

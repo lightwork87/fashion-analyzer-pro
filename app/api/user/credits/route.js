@@ -1,23 +1,49 @@
-// app/api/user/credits/route.js
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { auth } from '@clerk/nextjs/server';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export async function GET() {
   try {
-    // Return mock credits data while Supabase/Clerk issues are resolved
+    const { userId } = auth();
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('credits_total, credits_used, credits_remaining, bonus_credits')
+      .eq('clerk_id', userId)
+      .single();
+
+    if (error || !user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({
-      available: 10,
-      total: 10,
-      used: 0,
-      bonus: 0
+      success: true,
+      credits_total: user.credits_total,
+      credits_used: user.credits_used,
+      credits_remaining: user.credits_remaining,
+      bonus_credits: user.bonus_credits
     });
+
   } catch (error) {
-    console.error('Credits API error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to fetch credits',
-      available: 10, // Fallback
-      total: 10,
-      used: 0,
-      bonus: 0
-    }, { status: 500 });
+    console.error('Error fetching user credits:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
