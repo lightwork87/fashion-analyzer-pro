@@ -1,17 +1,20 @@
+
+export const dynamic = 'force-dynamic';
 // app/api/ai-learning/route.js
 // API for handling AI learning and corrections
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/app/lib/supabase-server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+
 
 // Save user correction and update learning
 export async function POST(request) {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+  }
   try {
     const { userId } = await auth();
     if (!userId) {

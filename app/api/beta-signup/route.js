@@ -1,8 +1,10 @@
+
+export const dynamic = 'force-dynamic';
 // app/api/beta-signup/route.js
 // FIXED VERSION WITH EXPLICIT SCHEMA REFERENCE
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/app/lib/supabase-server';
 
 // Debug: Log environment variables (remove in production)
 console.log('Supabase URL exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -17,16 +19,13 @@ if (!supabaseUrl || !supabaseKey) {
   console.error('Key exists:', !!supabaseKey);
 }
 
-const supabase = createClient(supabaseUrl || '', supabaseKey || '', {
-  db: {
-    schema: 'public'
-  },
-  auth: {
-    persistSession: false
-  }
-});
+
 
 export async function POST(request) {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+  }
   console.log('=== Beta Signup POST Request ===');
   
   try {

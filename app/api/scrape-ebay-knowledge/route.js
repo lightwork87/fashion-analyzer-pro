@@ -1,13 +1,12 @@
+
+export const dynamic = 'force-dynamic';
 // app/api/scrape-ebay-knowledge/route.js
 // Build knowledge base from eBay listings
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/app/lib/supabase-server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+
 
 // Parse eBay title patterns
 function parseEbayTitle(title) {

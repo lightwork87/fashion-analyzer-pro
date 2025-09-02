@@ -1,17 +1,16 @@
+
+export const dynamic = 'force-dynamic';
 // app/api/stripe/purchase-credits/route.js
 import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/app/lib/supabase-server';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
 });
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+
 
 // Map pack IDs to Stripe price IDs
 const PACK_PRICE_IDS = {
@@ -21,6 +20,10 @@ const PACK_PRICE_IDS = {
 };
 
 export async function POST(request) {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+  }
   try {
     const { userId } = await auth();
     const user = await currentUser();

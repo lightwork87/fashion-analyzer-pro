@@ -1,12 +1,9 @@
 // app/api/user/billing/route.js
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/app/lib/supabase-server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+
 
 export const dynamic = 'force-dynamic';
 

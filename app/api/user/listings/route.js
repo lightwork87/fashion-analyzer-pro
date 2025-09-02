@@ -1,15 +1,12 @@
 // app/api/user/listings/route.js - COMPLETE FIXED FILE
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/app/lib/supabase-server';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+
 
 export async function GET() {
   try {
