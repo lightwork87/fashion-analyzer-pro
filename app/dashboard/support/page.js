@@ -1,111 +1,186 @@
 'use client';
 
-import Link from 'next/link';
-import CreditsDisplay from '../../components/CreditsDisplay';
-import ThemeToggle from '../../components/ThemeToggle';
+import { useState } from 'react';
+import { useUser } from '@clerk/nextjs';
+import { 
+  MessageCircle, 
+  Mail, 
+  Book, 
+  HelpCircle,
+  Send,
+  CheckCircle
+} from 'lucide-react';
 
-function SupportPage() {
-  const handleEmailClick = () => {
-    window.location.href = 'mailto:lightlisterai@outlook.com?subject=Support Request';
+export default function SupportPage() {
+  const { user } = useUser();
+  const [message, setMessage] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    // TODO: Implement support ticket submission
+    console.log('Support message:', message);
+    setSubmitted(true);
+    setTimeout(() => {
+      setMessage('');
+      setSubmitted(false);
+    }, 3000);
   };
 
+  const faqs = [
+    {
+      question: 'How do I analyze an item?',
+      answer: 'Simply upload a photo of your fashion item, and our AI will automatically analyze it, providing details about the brand, condition, and suggested pricing.'
+    },
+    {
+      question: 'What payment methods do you accept?',
+      answer: 'We accept all major credit cards, debit cards, and PayPal through our secure payment processor Stripe.'
+    },
+    {
+      question: 'Can I cancel my subscription?',
+      answer: 'Yes, you can cancel your subscription at any time from your account settings. You\'ll continue to have access until the end of your billing period.'
+    },
+    {
+      question: 'How accurate is the AI analysis?',
+      answer: 'Our AI has been trained on millions of fashion items and achieves over 90% accuracy in identifying brands and conditions.'
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Navigation */}
-      <nav className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80">
-                <div className="w-8 h-8 bg-black dark:bg-white rounded-lg flex items-center justify-center">
-                  <span className="text-white dark:text-black font-bold text-sm">LL</span>
-                </div>
-                <h1 className="text-xl font-bold dark:text-white">LightLister AI</h1>
-              </Link>
-            </div>
-            <div className="flex items-center gap-4">
-              <CreditsDisplay />
-              <ThemeToggle />
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Support Center</h1>
+          <p className="text-gray-600 mt-2">
+            Get help with Fashion Analyzer Pro
+          </p>
         </div>
-      </nav>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link href="/dashboard" className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6">
-          ← Back to Dashboard
-        </Link>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Support Center</h1>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <button
-              onClick={handleEmailClick}
-              className="block p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition text-left"
-            >
-              <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">📧 Email Support</h3>
-              <p className="text-sm text-blue-800 dark:text-blue-400">
-                Get help via email at lightlisterai@outlook.com
-              </p>
-            </button>
-
-            <Link href="/dashboard/beta" className="block p-6 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition">
-              <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-2">🐛 Report an Issue</h3>
-              <p className="text-sm text-purple-800 dark:text-purple-400">
-                Found a bug? Let us know through our beta program
-              </p>
-            </Link>
-          </div>
-
-          {/* FAQs */}
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Frequently Asked Questions</h2>
-            
-            <div className="space-y-4">
-              <details className="group">
-                <summary className="cursor-pointer list-none p-4 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
-                  <span className="font-medium text-gray-900 dark:text-white">How do credits work?</span>
-                </summary>
-                <div className="mt-2 px-4 pb-4 text-gray-600 dark:text-gray-300">
-                  Each analysis uses 1 credit. New users get 5 free credits to try the service. You can purchase more credits or subscribe to a monthly plan.
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Contact Form */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center">
+                <MessageCircle className="h-5 w-5 mr-2 text-blue-600" />
+                Contact Support
+              </h2>
+              
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={user?.emailAddresses?.[0]?.emailAddress || ''}
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                  />
                 </div>
-              </details>
-
-              <details className="group">
-                <summary className="cursor-pointer list-none p-4 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
-                  <span className="font-medium text-gray-900 dark:text-white">What images can I upload?</span>
-                </summary>
-                <div className="mt-2 px-4 pb-4 text-gray-600 dark:text-gray-300">
-                  You can upload JPG, PNG, or WEBP images up to 10MB. For best results, use clear, well-lit photos of your items.
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Subject
+                  </label>
+                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option>Technical Issue</option>
+                    <option>Billing Question</option>
+                    <option>Feature Request</option>
+                    <option>Other</option>
+                  </select>
                 </div>
-              </details>
-
-              <details className="group">
-                <summary className="cursor-pointer list-none p-4 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
-                  <span className="font-medium text-gray-900 dark:text-white">How accurate is the AI?</span>
-                </summary>
-                <div className="mt-2 px-4 pb-4 text-gray-600 dark:text-gray-300">
-                  Our AI is trained on thousands of successful listings. While highly accurate, we recommend reviewing and adjusting the generated content to match your specific item.
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Message
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Describe your issue or question..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
                 </div>
-              </details>
+                
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
+                >
+                  {submitted ? (
+                    <>
+                      <CheckCircle className="h-5 w-5 mr-2" />
+                      Sent!
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-5 w-5 mr-2" />
+                      Send Message
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* FAQs */}
+            <div className="bg-white rounded-lg shadow-md p-6 mt-8">
+              <h2 className="text-xl font-semibold mb-4 flex items-center">
+                <HelpCircle className="h-5 w-5 mr-2 text-blue-600" />
+                Frequently Asked Questions
+              </h2>
+              
+              <div className="space-y-4">
+                {faqs.map((faq, index) => (
+                  <details key={index} className="group">
+                    <summary className="cursor-pointer font-medium text-gray-900 hover:text-blue-600">
+                      {faq.question}
+                    </summary>
+                    <p className="mt-2 text-gray-600 pl-4">
+                      {faq.answer}
+                    </p>
+                  </details>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-900 rounded-lg">
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Contact Us</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              Email: <a href="mailto:lightlisterai@outlook.com" className="text-blue-600 dark:text-blue-400 hover:underline">lightlisterai@outlook.com</a>
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Response time: Within 24-48 hours
-            </p>
+          {/* Quick Links */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+              
+              <div className="space-y-3">
+                
+                  href="/dashboard/tutorial"
+                  className="flex items-center text-gray-700 hover:text-blue-600"
+                >
+                  <Book className="h-5 w-5 mr-2" />
+                  Getting Started Guide
+                </a>
+                
+                
+                  href="mailto:support@fashionanalyzerpro.com"
+                  className="flex items-center text-gray-700 hover:text-blue-600"
+                >
+                  <Mail className="h-5 w-5 mr-2" />
+                  support@fashionanalyzerpro.com
+                </a>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-6 mt-6">
+              <h3 className="text-lg font-semibold mb-2">Need Immediate Help?</h3>
+              <p className="text-gray-700 text-sm mb-4">
+                Our support team typically responds within 24 hours.
+              </p>
+              <p className="text-sm text-gray-600">
+                Business hours: Mon-Fri, 9AM-5PM EST
+              </p>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 }
-
-export default SupportPage;
