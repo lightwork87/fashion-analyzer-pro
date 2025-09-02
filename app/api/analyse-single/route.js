@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30; // Maximum allowed duration for Vercel Hobby plan
+export const maxDuration = 30;
 
 export async function POST(request) {
   try {
