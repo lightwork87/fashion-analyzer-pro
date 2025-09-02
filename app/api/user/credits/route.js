@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 // app/api/user/credits/route.js - COMPLETE FIXED VERSION
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
