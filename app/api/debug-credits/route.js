@@ -1,12 +1,18 @@
 export const dynamic = 'force-dynamic';
 
-import { auth } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+function createSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 export async function GET() {
   try {
@@ -16,6 +22,8 @@ export async function GET() {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const supabase = createSupabaseClient();
+    
     const { data: userData, error } = await supabase
       .from('users')
       .select('credits_remaining')
