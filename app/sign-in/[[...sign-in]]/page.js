@@ -12,9 +12,7 @@ export default function SignInPage() {
             card: "bg-white shadow-xl",
           }
         }}
-        routing="path"
-        path="/sign-in"
-        fallbackRedirectUrl="/dashboard"
+        fallbackRedirectUrl="/dashboard"  // UPDATED PROP
         signUpUrl="/sign-up"
       />
     </div>
