@@ -1,8 +1,7 @@
-import { ClerkProvider } from '@clerk/nextjs';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { CreditsProvider } from './contexts/CreditsContext';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ClerkProvider } from '@clerk/nextjs';
+import Header from '@/components/Header';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,11 +15,10 @@ export default function RootLayout({ children }) {
     <ClerkProvider>
       <html lang="en">
         <body className={inter.className}>
-          <ThemeProvider>
-            <CreditsProvider>
-              {children}
-            </CreditsProvider>
-          </ThemeProvider>
+          <Header />
+          <main className="min-h-screen">
+            {children}
+          </main>
         </body>
       </html>
     </ClerkProvider>
