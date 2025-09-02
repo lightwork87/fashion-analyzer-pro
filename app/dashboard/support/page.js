@@ -151,18 +151,12 @@ export default function SupportPage() {
               <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
               
               <div className="space-y-3">
-                
-                  href="/dashboard/tutorial"
-                  className="flex items-center text-gray-700 hover:text-blue-600"
-                >
+                <a href="/dashboard/tutorial" className="flex items-center text-gray-700 hover:text-blue-600">
                   <Book className="h-5 w-5 mr-2" />
                   Getting Started Guide
                 </a>
                 
-                
-                  href="mailto:support@fashionanalyzerpro.com"
-                  className="flex items-center text-gray-700 hover:text-blue-600"
-                >
+                <a href="mailto:support@fashionanalyzerpro.com" className="flex items-center text-gray-700 hover:text-blue-600">
                   <Mail className="h-5 w-5 mr-2" />
                   support@fashionanalyzerpro.com
                 </a>
