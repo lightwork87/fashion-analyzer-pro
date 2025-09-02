@@ -2,15 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 
 export const dynamic = 'force-dynamic';
-
-// Increase body size limit for this route
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
-};
+export const maxDuration = 30; // Maximum allowed duration for Vercel Hobby plan
 
 export async function POST(request) {
   try {
@@ -23,8 +15,27 @@ export async function POST(request) {
       );
     }
 
-    // Parse the request body
-    const formData = await request.formData();
+    // Check content length header to prevent large uploads early
+    const contentLength = request.headers.get('content-length');
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    
+    if (contentLength && parseInt(contentLength) > MAX_SIZE) {
+      return NextResponse.json(
+        { error: 'Request too large. Maximum size is 10MB' },
+        { status: 413 }
+      );
+    }
+
+    let formData;
+    try {
+      formData = await request.formData();
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Invalid form data' },
+        { status: 400 }
+      );
+    }
+
     const file = formData.get('image');
     
     if (!file) {
@@ -34,8 +45,7 @@ export async function POST(request) {
       );
     }
 
-    // Check file size (10MB limit)
-    const MAX_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    // Check file size
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
         { error: 'Image too large. Maximum size is 10MB' },
