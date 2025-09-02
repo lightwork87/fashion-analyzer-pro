@@ -1,7 +1,7 @@
+'use client';
+
 // app/dashboard/tutorial/page.js
 // TUTORIAL PAGE
-
-'use client';
 
 import Link from 'next/link';
 import { ArrowLeft, Camera, Upload, Tag, PoundSterling } from 'lucide-react';

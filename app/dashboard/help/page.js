@@ -1,7 +1,7 @@
+'use client';
+
 // app/dashboard/help/page.js
 // HELP PAGE - FIXED SYNTAX
-
-'use client';
 
 import Link from 'next/link';
 import { ArrowLeft, HelpCircle, Mail, FileText, Video } from 'lucide-react';

@@ -1,7 +1,7 @@
+'use client';
+
 // app/sign-up/[[...sign-up]]/page.js
 // COMPLETE FILE - Copy this entire file
-
-'use client';
 
 import { SignUp } from '@clerk/nextjs';
 

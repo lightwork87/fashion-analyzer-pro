@@ -1,6 +1,6 @@
-// app/test-auth/page.js
 'use client';
 
+// app/test-auth/page.js
 function TestAuth() {
   return (
     <div style={{ padding: '50px', background: '#f0f0f0', minHeight: '100vh' }}>

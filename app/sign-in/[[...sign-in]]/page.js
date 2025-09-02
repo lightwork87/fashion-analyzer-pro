@@ -1,6 +1,6 @@
-// app/sign-in/[[...sign-in]]/page.js
 'use client';
 
+// app/sign-in/[[...sign-in]]/page.js
 import { SignIn } from '@clerk/nextjs';
 
 function SignInPage() {

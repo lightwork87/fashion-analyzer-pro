@@ -1,42 +1,28 @@
-'use client';
-import { useState, useEffect } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { ClerkProvider } from '@clerk/nextjs';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { CreditsProvider } from './contexts/CreditsContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
-export function CreditsDisplay() {
-  const { user } = useUser();
-  const [credits, setCredits] = useState(0);
-  const [loading, setLoading] = useState(true);
+const inter = Inter({ subsets: ['latin'] });
 
-  useEffect(() => {
-    const fetchCredits = async () => {
-      if (!user) return;
-      
-      try {
-        const response = await fetch('/api/user/credits');
-        if (response.ok) {
-          const data = await response.json();
-          setCredits(data.credits_remaining || 0);
-        }
-      } catch (error) {
-        console.error('Error fetching credits:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+export const metadata = {
+  title: 'Fashion Analyzer Pro',
+  description: 'AI-powered fashion item analysis and listing creation',
+};
 
-    fetchCredits();
-  }, [user]);
-
-  if (loading) return <span>Loading...</span>;
-
+export default function RootLayout({ children }) {
   return (
-    <div className="flex items-center space-x-2">
-      <span className="text-sm">
-        {credits.toLocaleString()} credits
-      </span>
-      <button className="text-blue-600 text-sm hover:underline">
-        Get More
-      </button>
-    </div>
+    <ClerkProvider>
+      <html lang="en">
+        <body className={inter.className}>
+          <ThemeProvider>
+            <CreditsProvider>
+              {children}
+            </CreditsProvider>
+          </ThemeProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
